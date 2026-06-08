@@ -1,3 +1,7 @@
+plugins {
+    alias(libs.plugins.springboot)
+}
+
 dependencies {
     implementation(project(":users:users-application"))
     implementation(project(":users:users-web"))
