@@ -148,9 +148,10 @@ public class Java26BytecodeAttributeTest {
 
     // --- Sealed class bytecode ---
 
-    sealed interface UpgradeStatus permits UpgradeStatus.Success, UpgradeStatus.Failure {}
-    record Success(String version) implements UpgradeStatus {}
-    record Failure(String reason) implements UpgradeStatus {}
+    sealed interface UpgradeStatus {
+        record Success(String version) implements UpgradeStatus {}
+        record Failure(String reason) implements UpgradeStatus {}
+    }
 
     @Test
     void sealedInterface_shouldBeLoadable_onJava26() {
