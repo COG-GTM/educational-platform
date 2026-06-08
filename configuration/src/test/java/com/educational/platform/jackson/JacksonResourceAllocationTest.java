@@ -413,6 +413,83 @@ class JacksonResourceAllocationTest {
         return sb.toString();
     }
 
+    @Test
+    void maxDocumentLength_canBeConfiguredExplicitly() {
+        var restrictedMapper = new ObjectMapper();
+        restrictedMapper.getFactory().setStreamReadConstraints(
+                StreamReadConstraints.builder()
+                        .maxDocumentLength(5000)
+                        .build()
+        );
+
+        var constraints = restrictedMapper.getFactory().streamReadConstraints();
+
+        assertThat(constraints.hasMaxDocumentLength()).isTrue();
+        assertThat(constraints.getMaxDocumentLength()).isEqualTo(5000);
+    }
+
+    @Test
+    void maxDocumentLength_customLimit_exceedingThreshold_throwsException() {
+        var restrictedMapper = new ObjectMapper();
+        restrictedMapper.getFactory().setStreamReadConstraints(
+                StreamReadConstraints.builder()
+                        .maxDocumentLength(100)
+                        .build()
+        );
+
+        var longJson = "{\"value\": \"" + "x".repeat(200) + "\"}";
+
+        assertThatThrownBy(() -> restrictedMapper.readTree(longJson))
+                .isInstanceOf(StreamConstraintsException.class);
+    }
+
+    @Test
+    void maxDocumentLength_withinCustomLimit_parsesSuccessfully() throws Exception {
+        var restrictedMapper = new ObjectMapper();
+        restrictedMapper.getFactory().setStreamReadConstraints(
+                StreamReadConstraints.builder()
+                        .maxDocumentLength(1000)
+                        .build()
+        );
+
+        var json = "{\"value\": \"" + "x".repeat(50) + "\"}";
+
+        var node = restrictedMapper.readTree(json);
+        assertThat(node.get("value").asText()).hasSize(50);
+    }
+
+    @Test
+    void allConstraints_combinedWithDocumentLength_enforced() {
+        var restrictedMapper = new ObjectMapper();
+        restrictedMapper.getFactory().setStreamReadConstraints(
+                StreamReadConstraints.builder()
+                        .maxNestingDepth(10)
+                        .maxNumberLength(50)
+                        .maxStringLength(100)
+                        .maxDocumentLength(500)
+                        .build()
+        );
+
+        var longDocJson = "{\"value\": \"" + "y".repeat(600) + "\"}";
+        assertThatThrownBy(() -> restrictedMapper.readTree(longDocJson))
+                .isInstanceOf(StreamConstraintsException.class);
+    }
+
+    @Test
+    void streamReadConstraints_builder_preservesAllCustomValues() {
+        var constraints = StreamReadConstraints.builder()
+                .maxNestingDepth(42)
+                .maxNumberLength(99)
+                .maxStringLength(5000)
+                .maxDocumentLength(10000)
+                .build();
+
+        assertThat(constraints.getMaxNestingDepth()).isEqualTo(42);
+        assertThat(constraints.getMaxNumberLength()).isEqualTo(99);
+        assertThat(constraints.getMaxStringLength()).isEqualTo(5000);
+        assertThat(constraints.getMaxDocumentLength()).isEqualTo(10000);
+    }
+
     private String buildDeeplyNestedArrayJson(int depth) {
         var sb = new StringBuilder();
         for (int i = 0; i < depth; i++) {
