@@ -1,11 +1,16 @@
 package com.educational.platform.jackson;
 
 import com.fasterxml.jackson.core.StreamReadConstraints;
+import com.fasterxml.jackson.core.StreamWriteConstraints;
 import com.fasterxml.jackson.core.exc.StreamConstraintsException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -282,6 +287,128 @@ class JacksonResourceAllocationTest {
         sb.append("1");
         for (int i = 0; i < depth; i++) {
             sb.append("}");
+        }
+        return sb.toString();
+    }
+
+    @Test
+    void streamWriteConstraints_defaultMaxNestingDepth_isConfigured() {
+        var constraints = objectMapper.getFactory().streamWriteConstraints();
+
+        assertThat(constraints.getMaxNestingDepth()).isGreaterThan(0);
+    }
+
+    @Test
+    void streamWriteConstraints_customMaxNestingDepth_enforced() throws Exception {
+        var restrictedMapper = new ObjectMapper();
+        restrictedMapper.getFactory().setStreamWriteConstraints(
+                StreamWriteConstraints.builder()
+                        .maxNestingDepth(3)
+                        .build()
+        );
+
+        Map<String, Object> nested = Map.of("leaf", "value");
+        for (int i = 0; i < 10; i++) {
+            nested = Map.of("level" + i, nested);
+        }
+        final Map<String, Object> deeplyNested = nested;
+
+        assertThatThrownBy(() -> restrictedMapper.writeValueAsString(deeplyNested))
+                .hasRootCauseInstanceOf(StreamConstraintsException.class);
+    }
+
+    @Test
+    void constraintsEnforced_viaReadValue_notJustReadTree() {
+        var depth = 1500;
+        var json = buildDeeplyNestedJson(depth);
+
+        assertThatThrownBy(() -> objectMapper.readValue(json, JsonNode.class))
+                .isInstanceOf(StreamConstraintsException.class);
+    }
+
+    @Test
+    void constraintsEnforced_onInputStreamParsing() {
+        var depth = 1500;
+        var json = buildDeeplyNestedJson(depth);
+        var inputStream = new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> objectMapper.readTree(inputStream))
+                .isInstanceOf(StreamConstraintsException.class);
+    }
+
+    @Test
+    void inputStreamParsing_withinLimits_parsesSuccessfully() throws Exception {
+        var json = "{\"key\": \"value\"}";
+        var inputStream = new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
+
+        JsonNode node = objectMapper.readTree(inputStream);
+        assertThat(node.get("key").asText()).isEqualTo("value");
+    }
+
+    @Test
+    void mixedNestedObjectsAndArrays_exceedingLimit_throwsException() {
+        var json = buildMixedNestedJson(1500);
+
+        assertThatThrownBy(() -> objectMapper.readTree(json))
+                .isInstanceOf(StreamConstraintsException.class);
+    }
+
+    @Test
+    void mixedNestedObjectsAndArrays_withinLimit_parsesSuccessfully() throws Exception {
+        var json = buildMixedNestedJson(50);
+
+        JsonNode node = objectMapper.readTree(json);
+        assertThat(node).isNotNull();
+    }
+
+    @Test
+    void negativeNumber_withinLimit_parsesSuccessfully() throws Exception {
+        var json = "{\"value\": -12345}";
+
+        JsonNode node = objectMapper.readTree(json);
+        assertThat(node.get("value").asInt()).isEqualTo(-12345);
+    }
+
+    @Test
+    void floatingPointNumber_withinLimit_parsesSuccessfully() throws Exception {
+        var json = "{\"value\": 3.141592653589793}";
+
+        JsonNode node = objectMapper.readTree(json);
+        assertThat(node.get("value").asDouble()).isEqualTo(3.141592653589793);
+    }
+
+    @Test
+    void constraintsArePerFactory_notSharedAcrossMappers() {
+        var restrictedMapper = new ObjectMapper();
+        restrictedMapper.getFactory().setStreamReadConstraints(
+                StreamReadConstraints.builder()
+                        .maxNestingDepth(5)
+                        .build()
+        );
+
+        var defaultConstraints = objectMapper.getFactory().streamReadConstraints();
+        var restrictedConstraints = restrictedMapper.getFactory().streamReadConstraints();
+
+        assertThat(defaultConstraints.getMaxNestingDepth()).isEqualTo(1000);
+        assertThat(restrictedConstraints.getMaxNestingDepth()).isEqualTo(5);
+    }
+
+    private String buildMixedNestedJson(int depth) {
+        var sb = new StringBuilder();
+        for (int i = 0; i < depth; i++) {
+            if (i % 2 == 0) {
+                sb.append("{\"a\":");
+            } else {
+                sb.append("[");
+            }
+        }
+        sb.append("1");
+        for (int i = depth - 1; i >= 0; i--) {
+            if (i % 2 == 0) {
+                sb.append("}");
+            } else {
+                sb.append("]");
+            }
         }
         return sb.toString();
     }

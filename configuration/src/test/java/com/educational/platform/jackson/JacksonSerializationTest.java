@@ -14,6 +14,9 @@ import com.educational.platform.courses.CreateCourseRequest;
 import com.educational.platform.courses.CreatedCourseResponse;
 import com.educational.platform.courses.course.CourseLightDTO;
 import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
+import com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent;
+import com.educational.platform.administration.integration.event.CourseDeclinedByAdminIntegrationEvent;
+import com.educational.platform.course.enrollments.integration.event.StudentEnrolledToCourseIntegrationEvent;
 import com.educational.platform.users.RoleDTO;
 import com.educational.platform.users.UserDTO;
 import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
@@ -526,5 +529,187 @@ class JacksonSerializationTest {
 
         assertThat(deserialized.username()).isNull();
         assertThat(deserialized.email()).isNull();
+    }
+
+    @Test
+    void integrationEvent_courseApprovedByAdmin_roundTrip() throws Exception {
+        var uuid = UUID.randomUUID();
+        var original = new CourseApprovedByAdminIntegrationEvent(uuid);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, CourseApprovedByAdminIntegrationEvent.class);
+
+        assertThat(deserialized.courseId()).isEqualTo(uuid);
+    }
+
+    @Test
+    void integrationEvent_courseApprovedByAdmin_nullUuid_roundTrip() throws Exception {
+        var original = new CourseApprovedByAdminIntegrationEvent(null);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, CourseApprovedByAdminIntegrationEvent.class);
+
+        assertThat(deserialized.courseId()).isNull();
+    }
+
+    @Test
+    void integrationEvent_courseDeclinedByAdmin_roundTrip() throws Exception {
+        var uuid = UUID.randomUUID();
+        var original = new CourseDeclinedByAdminIntegrationEvent(uuid);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, CourseDeclinedByAdminIntegrationEvent.class);
+
+        assertThat(deserialized.courseId()).isEqualTo(uuid);
+    }
+
+    @Test
+    void integrationEvent_courseDeclinedByAdmin_nullUuid_roundTrip() throws Exception {
+        var original = new CourseDeclinedByAdminIntegrationEvent(null);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, CourseDeclinedByAdminIntegrationEvent.class);
+
+        assertThat(deserialized.courseId()).isNull();
+    }
+
+    @Test
+    void integrationEvent_studentEnrolledToCourse_roundTrip() throws Exception {
+        var uuid = UUID.randomUUID();
+        var original = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, StudentEnrolledToCourseIntegrationEvent.class);
+
+        assertThat(deserialized.courseId()).isEqualTo(uuid);
+        assertThat(deserialized.username()).isEqualTo("student1");
+    }
+
+    @Test
+    void integrationEvent_studentEnrolledToCourse_nullFields_roundTrip() throws Exception {
+        var original = new StudentEnrolledToCourseIntegrationEvent(null, null);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, StudentEnrolledToCourseIntegrationEvent.class);
+
+        assertThat(deserialized.courseId()).isNull();
+        assertThat(deserialized.username()).isNull();
+    }
+
+    @Test
+    void jsonPropertyOrder_doesNotAffectDeserialization() throws Exception {
+        var json = "{\"description\":\"Desc first\",\"name\":\"Name second\"}";
+
+        var deserialized = objectMapper.readValue(json, CreateCourseRequest.class);
+
+        assertThat(deserialized.name()).isEqualTo("Name second");
+        assertThat(deserialized.description()).isEqualTo("Desc first");
+    }
+
+    @Test
+    void missingFields_defaultToNullOrZero() throws Exception {
+        var json = "{\"rating\": 4.0}";
+
+        var deserialized = objectMapper.readValue(json, ReviewCourseRequest.class);
+
+        assertThat(deserialized.rating()).isEqualTo(4.0);
+        assertThat(deserialized.comment()).isNull();
+    }
+
+    @Test
+    void concurrentSerialization_isThreadSafe() throws Exception {
+        var latch = new java.util.concurrent.CountDownLatch(1);
+        var errors = new java.util.concurrent.atomic.AtomicInteger(0);
+        var threads = 10;
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(threads);
+
+        for (int i = 0; i < threads; i++) {
+            final int idx = i;
+            executor.submit(() -> {
+                try {
+                    latch.await();
+                    var request = new CreateCourseRequest("Course-" + idx, "Description-" + idx);
+                    var json = objectMapper.writeValueAsString(request);
+                    var result = objectMapper.readValue(json, CreateCourseRequest.class);
+                    assertThat(result.name()).isEqualTo("Course-" + idx);
+                } catch (Exception e) {
+                    errors.incrementAndGet();
+                }
+            });
+        }
+
+        latch.countDown();
+        executor.shutdown();
+        executor.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS);
+
+        assertThat(errors.get()).isZero();
+    }
+
+    @Test
+    void courseLightDTO_negativeNumberOfStudents_roundTrip() throws Exception {
+        var uuid = UUID.randomUUID();
+        var original = new CourseLightDTO(uuid, "Course", "Desc", -1);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, CourseLightDTO.class);
+
+        assertThat(deserialized.numberOfStudents()).isEqualTo(-1);
+    }
+
+    @Test
+    void signUpRequest_allFieldsNull_roundTrip() throws Exception {
+        var original = new SignUpRequest(null, null, null, null);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, SignUpRequest.class);
+
+        assertThat(deserialized.role()).isNull();
+        assertThat(deserialized.username()).isNull();
+        assertThat(deserialized.email()).isNull();
+        assertThat(deserialized.password()).isNull();
+    }
+
+    @Test
+    void integrationEvent_sendCourseToApprove_nullUuid_roundTrip() throws Exception {
+        var original = new SendCourseToApproveIntegrationEvent(null);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, SendCourseToApproveIntegrationEvent.class);
+
+        assertThat(deserialized.courseId()).isNull();
+    }
+
+    @Test
+    void doubleNaN_serialization_roundTrip() throws Exception {
+        var original = new ReviewCourseRequest(Double.NaN, "NaN test");
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, ReviewCourseRequest.class);
+
+        assertThat(deserialized.rating()).isNaN();
+    }
+
+    @Test
+    void courseProposalDTO_nullUuid_roundTrip() throws Exception {
+        var original = new CourseProposalDTO(null, CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, CourseProposalDTO.class);
+
+        assertThat(deserialized.uuid()).isNull();
+        assertThat(deserialized.status()).isEqualTo(CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void courseEnrollmentDTO_nullUuids_roundTrip() throws Exception {
+        var original = new CourseEnrollmentDTO(null, null, "student", CompletionStatusDTO.COMPLETED);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, CourseEnrollmentDTO.class);
+
+        assertThat(deserialized.uuid()).isNull();
+        assertThat(deserialized.course()).isNull();
+        assertThat(deserialized.student()).isEqualTo("student");
+        assertThat(deserialized.completionStatus()).isEqualTo(CompletionStatusDTO.COMPLETED);
     }
 }
