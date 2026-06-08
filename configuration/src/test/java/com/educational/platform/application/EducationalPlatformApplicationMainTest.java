@@ -7,6 +7,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * Unit tests verifying the structural requirements of the application entry point
@@ -74,5 +75,38 @@ class EducationalPlatformApplicationMainTest {
         assertThat(hasNoArg)
                 .as("Application class must have a no-arg constructor for Spring instantiation")
                 .isTrue();
+    }
+
+    @Test
+    void mainMethod_shouldHaveExactlyOneParameter() throws NoSuchMethodException {
+        Method main = EducationalPlatformApplication.class.getDeclaredMethod("main", String[].class);
+
+        assertThat(main.getParameterCount())
+                .as("main method must accept exactly one String[] parameter")
+                .isEqualTo(1);
+        assertThat(main.getParameterTypes()[0])
+                .as("main method parameter must be String[]")
+                .isEqualTo(String[].class);
+    }
+
+    @Test
+    void applicationClass_shouldNotBeFinal() {
+        assertThat(Modifier.isFinal(EducationalPlatformApplication.class.getModifiers()))
+                .as("Application class must not be final so Spring can proxy it if needed")
+                .isFalse();
+    }
+
+    @Test
+    void applicationClass_shouldNotBeAnInnerClass() {
+        assertThat(EducationalPlatformApplication.class.getEnclosingClass())
+                .as("Application class must be a top-level class for bootRun")
+                .isNull();
+    }
+
+    @Test
+    void applicationClass_shouldBeInstantiable() {
+        assertThatCode(EducationalPlatformApplication::new)
+                .as("Application class must be instantiable without arguments")
+                .doesNotThrowAnyException();
     }
 }

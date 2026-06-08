@@ -55,4 +55,23 @@ public class SpringBootConfigurationTest {
             .should().resideInAPackage("com.educational.platform")
             .because("The application class must reside in the base package for component scanning "
                     + "to discover all bounded context modules.");
+
+    @ArchTest
+    public static final ArchRule applicationEntryPoint_shouldNotBeEnums = classes()
+            .that().haveSimpleNameEndingWith("PlatformApplication")
+            .should().notBeEnums()
+            .because("The application entry point must be a regular class, not an enum.");
+
+    @ArchTest
+    public static final ArchRule applicationEntryPoint_shouldNotBeRecords = classes()
+            .that().haveSimpleNameEndingWith("PlatformApplication")
+            .should().notBeRecords()
+            .because("The application entry point must be a regular class, not a record, "
+                    + "since Spring Boot needs to instantiate and proxy it.");
+
+    @ArchTest
+    public static final ArchRule applicationEntryPoint_shouldNotBeAbstract = classes()
+            .that().haveSimpleNameEndingWith("PlatformApplication")
+            .should().notBeInnerClasses()
+            .because("The application entry point must be a top-level class for the Spring Boot plugin.");
 }

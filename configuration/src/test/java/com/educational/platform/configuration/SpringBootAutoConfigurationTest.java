@@ -67,4 +67,42 @@ class SpringBootAutoConfigurationTest {
                 .as("@EnableAsync should register at least one async-related bean in the context")
                 .isTrue();
     }
+
+    @Test
+    void applicationContext_shouldSupportEventPublishing() {
+        // ApplicationContext itself implements ApplicationEventPublisher;
+        // inter-module communication depends on this infrastructure
+        assertThat(applicationContext)
+                .as("ApplicationContext must implement ApplicationEventPublisher for integration events")
+                .isInstanceOf(org.springframework.context.ApplicationEventPublisher.class);
+    }
+
+    @Test
+    void applicationContext_shouldContainMinimumBeanDefinitions() {
+        // A correctly configured Spring Boot app with multiple modules should register many beans
+        int beanCount = applicationContext.getBeanDefinitionCount();
+        assertThat(beanCount)
+                .as("Application context should contain a non-trivial number of bean definitions")
+                .isGreaterThan(10);
+    }
+
+    @Test
+    void applicationContext_shouldHaveParentOrSelfAsRoot() {
+        assertThat(applicationContext.getParent())
+                .as("Boot application context should be the root (no parent context)")
+                .isNull();
+    }
+
+    @Test
+    void applicationContext_shouldExposeEnvironment() {
+        assertThat(applicationContext.getEnvironment())
+                .as("Spring Environment must be accessible from the application context")
+                .isNotNull();
+        assertThat(applicationContext.getEnvironment().getProperty("spring.application.name"))
+                .as("spring.application.name may be null but environment must be queryable")
+                .satisfiesAnyOf(
+                        name -> assertThat(name).isNull(),
+                        name -> assertThat(name).isNotBlank()
+                );
+    }
 }

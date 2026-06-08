@@ -30,4 +30,20 @@ class SpringBootPluginVersionTest {
                 .isNotNull()
                 .isNotBlank();
     }
+
+    @Test
+    void springBootVersion_shouldMatchExactDeclaredVersion() {
+        // libs.versions.toml declares spring = "4.0.1"
+        assertThat(SpringBootVersion.getVersion())
+                .as("Spring Boot runtime version must match the exact version declared in libs.versions.toml")
+                .isEqualTo("4.0.1");
+    }
+
+    @Test
+    void springBootVersion_shouldFollowSemanticVersioningFormat() {
+        String version = SpringBootVersion.getVersion();
+        assertThat(version)
+                .as("Spring Boot version must follow semantic versioning (major.minor.patch)")
+                .matches("\\d+\\.\\d+\\.\\d+.*");
+    }
 }
