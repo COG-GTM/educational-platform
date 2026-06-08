@@ -3,8 +3,10 @@ package com.educational.platform.java;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.lang.ArchRule;
 import org.junit.jupiter.api.Test;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
@@ -52,5 +54,44 @@ public class ArchUnitCompatibilityTest {
         assertThat(classes.size())
                 .as("Project should have a meaningful number of importable classes")
                 .isGreaterThan(10);
+    }
+
+    @Test
+    void archUnit_shouldEvaluateRules_againstJava26CompiledClasses() {
+        JavaClasses classes = new ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .importPackages("com.educational.platform");
+
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..common.exception..")
+                .should().dependOnClassesThat().resideInAPackage("..web..");
+
+        assertThatCode(() -> rule.check(classes))
+                .as("ArchUnit should evaluate architectural rules on Java 26 classes without errors")
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void archUnit_shouldDistinguish_productionAndTestClasses() {
+        JavaClasses prodClasses = new ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .importPackages("com.educational.platform");
+
+        JavaClasses allClasses = new ClassFileImporter()
+                .importPackages("com.educational.platform");
+
+        assertThat(allClasses.size())
+                .as("All classes (including tests) should be more than production classes alone")
+                .isGreaterThan(prodClasses.size());
+    }
+
+    @Test
+    void archUnit_shouldImport_itsOwnTestClass_compiledWithJava26() {
+        assertThatCode(() -> {
+            JavaClasses classes = new ClassFileImporter().importClasses(ArchUnitCompatibilityTest.class);
+            assertThat(classes).isNotEmpty();
+        })
+                .as("ArchUnit should be able to import its own test class compiled with Java 26")
+                .doesNotThrowAnyException();
     }
 }

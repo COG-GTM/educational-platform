@@ -60,4 +60,63 @@ public class JavaVersionTest {
                 .as("java.specification.version should indicate Java 26")
                 .isEqualTo("26");
     }
+
+    @Test
+    void compiledProductionClasses_shouldTarget_java26BytecodeVersion() throws IOException {
+        String classResource = "/com/educational/platform/common/exception/ResourceNotFoundException.class";
+        try (InputStream is = getClass().getResourceAsStream(classResource)) {
+            assertThat(is)
+                    .as("Production class resource should be loadable: %s", classResource)
+                    .isNotNull();
+
+            DataInputStream dis = new DataInputStream(is);
+            int magic = dis.readInt();
+            assertThat(magic)
+                    .as("Valid Java class file magic number")
+                    .isEqualTo(0xCAFEBABE);
+
+            int minorVersion = dis.readUnsignedShort();
+            int majorVersion = dis.readUnsignedShort();
+
+            assertThat(majorVersion)
+                    .as("Production class major version should be %d (Java 26)", JAVA_26_MAJOR_VERSION)
+                    .isEqualTo(JAVA_26_MAJOR_VERSION);
+
+            assertThat(minorVersion)
+                    .as("Minor version should be 0 for standard release builds")
+                    .isEqualTo(0);
+        }
+    }
+
+    @Test
+    void runtimeVersion_shouldHave_expectedVersionComponents() {
+        Runtime.Version version = Runtime.version();
+
+        assertThat(version.feature())
+                .as("Feature version")
+                .isEqualTo(EXPECTED_JAVA_FEATURE_VERSION);
+
+        assertThat(version.interim())
+                .as("Interim version should be 0 for GA releases")
+                .isEqualTo(0);
+    }
+
+    @Test
+    void javaClassFormatVersion_shouldBeConsistent_withRuntimeVersion() throws IOException {
+        String classResource = "/com/educational/platform/java/JavaVersionTest.class";
+        try (InputStream is = getClass().getResourceAsStream(classResource)) {
+            assertThat(is).isNotNull();
+
+            DataInputStream dis = new DataInputStream(is);
+            dis.readInt(); // magic
+            dis.readUnsignedShort(); // minor
+            int majorVersion = dis.readUnsignedShort();
+
+            // Class file major version = 44 + Java version
+            int expectedMajor = 44 + Runtime.version().feature();
+            assertThat(majorVersion)
+                    .as("Class file major version should equal 44 + Java feature version")
+                    .isEqualTo(expectedMajor);
+        }
+    }
 }

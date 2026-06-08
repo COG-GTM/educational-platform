@@ -7,6 +7,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -59,6 +61,88 @@ public class GradleWrapperConfigTest {
         assertThat(validateDistributionUrl)
                 .as("Distribution URL validation should be enabled for security")
                 .isEqualTo("true");
+    }
+
+    @Test
+    void gradleWrapper_shouldHave_retriesConfigured() throws IOException {
+        Path wrapperProperties = findGradleWrapperProperties();
+
+        Properties props = new Properties();
+        props.load(Files.newInputStream(wrapperProperties));
+
+        String retries = props.getProperty("retries");
+        assertThat(retries)
+                .as("Gradle wrapper retries property should be set")
+                .isNotNull();
+    }
+
+    @Test
+    void gradleWrapper_shouldHave_retryBackOffMsConfigured() throws IOException {
+        Path wrapperProperties = findGradleWrapperProperties();
+
+        Properties props = new Properties();
+        props.load(Files.newInputStream(wrapperProperties));
+
+        String retryBackOffMs = props.getProperty("retryBackOffMs");
+        assertThat(retryBackOffMs)
+                .as("Gradle wrapper retryBackOffMs property should be set")
+                .isNotNull();
+    }
+
+    @Test
+    void gradleWrapper_version_shouldBeAtLeast_minimumForJava26() throws IOException {
+        Path wrapperProperties = findGradleWrapperProperties();
+
+        Properties props = new Properties();
+        props.load(Files.newInputStream(wrapperProperties));
+
+        String distributionUrl = props.getProperty("distributionUrl");
+        assertThat(distributionUrl).isNotNull();
+
+        Pattern versionPattern = Pattern.compile("gradle-(\\d+)\\.(\\d+)\\.(\\d+)");
+        Matcher matcher = versionPattern.matcher(distributionUrl);
+        assertThat(matcher.find())
+                .as("Distribution URL should contain a parseable Gradle version")
+                .isTrue();
+
+        int major = Integer.parseInt(matcher.group(1));
+        int minor = Integer.parseInt(matcher.group(2));
+        int patch = Integer.parseInt(matcher.group(3));
+
+        // Java 26 requires Gradle >= 9.4.0
+        assertThat(major).as("Gradle major version").isGreaterThanOrEqualTo(9);
+        if (major == 9) {
+            assertThat(minor).as("Gradle minor version (when major=9)").isGreaterThanOrEqualTo(4);
+        }
+    }
+
+    @Test
+    void gradleWrapper_jarFile_shouldExist() {
+        Path wrapperProperties = findGradleWrapperProperties();
+        Path wrapperJar = wrapperProperties.getParent().resolve("gradle-wrapper.jar");
+
+        assertThat(wrapperJar)
+                .as("Gradle wrapper JAR should exist alongside wrapper properties")
+                .exists();
+    }
+
+    @Test
+    void gradleWrapper_shouldContainAllRequiredProperties() throws IOException {
+        Path wrapperProperties = findGradleWrapperProperties();
+
+        Properties props = new Properties();
+        props.load(Files.newInputStream(wrapperProperties));
+
+        assertThat(props.stringPropertyNames())
+                .as("Wrapper properties should contain all required keys")
+                .contains(
+                        "distributionBase",
+                        "distributionPath",
+                        "distributionUrl",
+                        "validateDistributionUrl",
+                        "zipStoreBase",
+                        "zipStorePath"
+                );
     }
 
     private Path findGradleWrapperProperties() {
