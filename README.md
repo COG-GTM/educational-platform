@@ -368,13 +368,13 @@ Communication between bounded contexts is performed via Spring's `ApplicationEve
 
 ### 3.14. Technology stack
 - Spring;
-- Java 25;
+- Java 26;
 - ArchUnit;
 - Gradle;
 
 ## 4. How to run
-### Install Java 21
-- Download and install Java 21
+### Install Java 26
+- Download and install Java 26
 
 ### Run application
 `./gradlew bootRun`
