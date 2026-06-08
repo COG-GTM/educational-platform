@@ -265,6 +265,37 @@ class JacksonCommandSerializationTest {
         assertThat(deserialized.username()).isEmpty();
     }
 
+    @Test
+    void registerStudentToCourseCommand_roundTrip() throws Exception {
+        var uuid = UUID.randomUUID();
+        var original = new RegisterStudentToCourseCommand(uuid);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, RegisterStudentToCourseCommand.class);
+
+        assertThat(deserialized.courseId()).isEqualTo(uuid);
+    }
+
+    @Test
+    void registerStudentToCourseCommand_nullCourseId_roundTrip() throws Exception {
+        var original = new RegisterStudentToCourseCommand(null);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, RegisterStudentToCourseCommand.class);
+
+        assertThat(deserialized.courseId()).isNull();
+    }
+
+    @Test
+    void registerStudentToCourseCommand_fromRawJson() throws Exception {
+        var uuid = UUID.randomUUID();
+        var json = "{\"courseId\":\"" + uuid + "\"}";
+
+        var deserialized = objectMapper.readValue(json, RegisterStudentToCourseCommand.class);
+
+        assertThat(deserialized.courseId()).isEqualTo(uuid);
+    }
+
     // --- Course reviews commands ---
 
     @Test

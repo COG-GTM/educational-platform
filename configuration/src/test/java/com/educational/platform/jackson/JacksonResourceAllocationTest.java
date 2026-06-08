@@ -1,5 +1,8 @@
 package com.educational.platform.jackson;
 
+import com.educational.platform.courses.CreateCourseRequest;
+import com.educational.platform.courses.course.CourseRating;
+import com.educational.platform.courses.course.NumberOfStudents;
 import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.core.StreamWriteConstraints;
 import com.fasterxml.jackson.core.exc.StreamConstraintsException;
@@ -500,5 +503,96 @@ class JacksonResourceAllocationTest {
             sb.append("]");
         }
         return sb.toString();
+    }
+
+    // --- StreamWriteConstraints default values ---
+
+    @Test
+    void streamWriteConstraints_defaultValues_matchExpectedDefaults() {
+        var constraints = objectMapper.getFactory().streamWriteConstraints();
+
+        assertThat(constraints.getMaxNestingDepth()).isEqualTo(1000);
+    }
+
+    // --- Constraint enforcement on actual project DTOs via readValue ---
+
+    @Test
+    void customStringConstraint_enforcedOnDtoReadValue() {
+        var restrictedMapper = new ObjectMapper();
+        restrictedMapper.findAndRegisterModules();
+        restrictedMapper.getFactory().setStreamReadConstraints(
+                StreamReadConstraints.builder()
+                        .maxStringLength(10)
+                        .build()
+        );
+
+        var longName = "x".repeat(500);
+        var json = "{\"name\":\"" + longName + "\",\"description\":\"short\"}";
+
+        assertThatThrownBy(() -> restrictedMapper.readValue(json, CreateCourseRequest.class))
+                .hasRootCauseInstanceOf(StreamConstraintsException.class);
+    }
+
+    @Test
+    void defaultStringConstraint_allowsNormalDtoReadValue() throws Exception {
+        var name = "Normal Course Name";
+        var json = "{\"name\":\"" + name + "\",\"description\":\"A normal description\"}";
+
+        var result = objectMapper.readValue(json, CreateCourseRequest.class);
+
+        assertThat(result.name()).isEqualTo(name);
+    }
+
+    @Test
+    void customNumberConstraint_enforcedOnPrimitiveRecordField() {
+        var restrictedMapper = new ObjectMapper();
+        restrictedMapper.findAndRegisterModules();
+        restrictedMapper.getFactory().setStreamReadConstraints(
+                StreamReadConstraints.builder()
+                        .maxNumberLength(5)
+                        .build()
+        );
+
+        var json = "{\"number\": 1234567890}";
+
+        assertThatThrownBy(() -> restrictedMapper.readValue(json, NumberOfStudents.class))
+                .isInstanceOf(StreamConstraintsException.class);
+    }
+
+    @Test
+    void defaultNumberConstraint_allowsNormalDtoValue() throws Exception {
+        var json = "{\"rating\": 4.75}";
+
+        var result = objectMapper.readValue(json, CourseRating.class);
+
+        assertThat(result.rating()).isEqualTo(4.75);
+    }
+
+    // --- Combined read+write constraints on same mapper ---
+
+    @Test
+    void combinedReadAndWriteConstraints_bothEnforced() throws Exception {
+        var restrictedMapper = new ObjectMapper();
+        restrictedMapper.findAndRegisterModules();
+        restrictedMapper.getFactory().setStreamReadConstraints(
+                StreamReadConstraints.builder()
+                        .maxNestingDepth(5)
+                        .build()
+        );
+        restrictedMapper.getFactory().setStreamWriteConstraints(
+                StreamWriteConstraints.builder()
+                        .maxNestingDepth(3)
+                        .build()
+        );
+
+        var readConstraints = restrictedMapper.getFactory().streamReadConstraints();
+        var writeConstraints = restrictedMapper.getFactory().streamWriteConstraints();
+
+        assertThat(readConstraints.getMaxNestingDepth()).isEqualTo(5);
+        assertThat(writeConstraints.getMaxNestingDepth()).isEqualTo(3);
+
+        var deepJson = buildDeeplyNestedJson(10);
+        assertThatThrownBy(() -> restrictedMapper.readTree(deepJson))
+                .isInstanceOf(StreamConstraintsException.class);
     }
 }

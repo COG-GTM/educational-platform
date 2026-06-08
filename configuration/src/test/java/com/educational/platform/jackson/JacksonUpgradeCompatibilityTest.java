@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.core.Version;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -558,5 +559,57 @@ class JacksonUpgradeCompatibilityTest {
         assertThat(deserialized).hasSize(2);
         assertThat(deserialized.get("java").number()).isEqualTo(100);
         assertThat(deserialized.get("python").number()).isEqualTo(200);
+    }
+
+    // --- Course Reviews CourseRating value object (separate from courses.CourseRating) ---
+
+    @Test
+    void courseReviewsCourseRating_roundTrip() throws Exception {
+        var original = new com.educational.platform.course.reviews.CourseRating(4.75);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, com.educational.platform.course.reviews.CourseRating.class);
+
+        assertThat(deserialized.rating()).isEqualTo(4.75);
+    }
+
+    @Test
+    void courseReviewsCourseRating_zero_roundTrip() throws Exception {
+        var original = new com.educational.platform.course.reviews.CourseRating(0.0);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, com.educational.platform.course.reviews.CourseRating.class);
+
+        assertThat(deserialized.rating()).isEqualTo(0.0);
+    }
+
+    @Test
+    void courseReviewsCourseRating_negative_roundTrip() throws Exception {
+        var original = new com.educational.platform.course.reviews.CourseRating(-2.0);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, com.educational.platform.course.reviews.CourseRating.class);
+
+        assertThat(deserialized.rating()).isEqualTo(-2.0);
+    }
+
+    @Test
+    void courseReviewsCourseRating_maxDouble_roundTrip() throws Exception {
+        var original = new com.educational.platform.course.reviews.CourseRating(Double.MAX_VALUE);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, com.educational.platform.course.reviews.CourseRating.class);
+
+        assertThat(deserialized.rating()).isEqualTo(Double.MAX_VALUE);
+    }
+
+    // --- Jackson version verification ---
+
+    @Test
+    void jacksonVersion_isAtLeast_2_21() {
+        Version version = objectMapper.version();
+
+        assertThat(version.getMajorVersion()).isEqualTo(2);
+        assertThat(version.getMinorVersion()).isGreaterThanOrEqualTo(21);
     }
 }
