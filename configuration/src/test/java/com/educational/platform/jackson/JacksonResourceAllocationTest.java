@@ -114,6 +114,88 @@ class JacksonResourceAllocationTest {
         assertThat(node.get("value")).isNotNull();
     }
 
+    @Test
+    void nestingDepthJustOverDefaultLimit_throwsException() {
+        var depth = 1001;
+        var json = buildDeeplyNestedJson(depth);
+
+        assertThatThrownBy(() -> objectMapper.readTree(json))
+                .isInstanceOf(StreamConstraintsException.class)
+                .hasMessageContaining("nesting");
+    }
+
+    @Test
+    void customStringLengthConstraint_exceedingLimit_throwsException() {
+        var restrictedMapper = new ObjectMapper();
+        restrictedMapper.getFactory().setStreamReadConstraints(
+                StreamReadConstraints.builder()
+                        .maxStringLength(100)
+                        .build()
+        );
+
+        var longValue = "x".repeat(200);
+        var json = "{\"value\": \"" + longValue + "\"}";
+
+        assertThatThrownBy(() -> restrictedMapper.readTree(json))
+                .isInstanceOf(StreamConstraintsException.class);
+    }
+
+    @Test
+    void stringWithinCustomLimit_parsesSuccessfully() throws Exception {
+        var restrictedMapper = new ObjectMapper();
+        restrictedMapper.getFactory().setStreamReadConstraints(
+                StreamReadConstraints.builder()
+                        .maxStringLength(500)
+                        .build()
+        );
+
+        var value = "x".repeat(100);
+        var json = "{\"value\": \"" + value + "\"}";
+
+        JsonNode node = restrictedMapper.readTree(json);
+        assertThat(node.get("value").asText()).hasSize(100);
+    }
+
+    @Test
+    void customNumberLengthConstraint_exceedingLimit_throwsException() {
+        var restrictedMapper = new ObjectMapper();
+        restrictedMapper.getFactory().setStreamReadConstraints(
+                StreamReadConstraints.builder()
+                        .maxNumberLength(50)
+                        .build()
+        );
+
+        var longNumber = "1" + "0".repeat(100);
+        var json = "{\"value\": " + longNumber + "}";
+
+        assertThatThrownBy(() -> restrictedMapper.readTree(json))
+                .isInstanceOf(StreamConstraintsException.class);
+    }
+
+    @Test
+    void emptyJsonObject_parsesSuccessfully() throws Exception {
+        JsonNode node = objectMapper.readTree("{}");
+        assertThat(node.isEmpty()).isTrue();
+    }
+
+    @Test
+    void emptyJsonArray_parsesSuccessfully() throws Exception {
+        JsonNode node = objectMapper.readTree("[]");
+        assertThat(node.isEmpty()).isTrue();
+    }
+
+    @Test
+    void malformedJson_throwsException() {
+        assertThatThrownBy(() -> objectMapper.readTree("{invalid json}"))
+                .isInstanceOf(Exception.class);
+    }
+
+    @Test
+    void nullInput_throwsException() {
+        assertThatThrownBy(() -> objectMapper.readTree((String) null))
+                .isInstanceOf(Exception.class);
+    }
+
     private String buildDeeplyNestedJson(int depth) {
         var sb = new StringBuilder();
         for (int i = 0; i < depth; i++) {
