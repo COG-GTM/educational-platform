@@ -69,6 +69,50 @@ public class BuildConfigVersionsTest {
                 .doesNotContain("VERSION_25");
     }
 
+    @Test
+    void buildGradle_shouldDefine_bothSourceAndTargetCompatibility() throws IOException {
+        Path buildGradle = findBuildGradle();
+        String content = Files.readString(buildGradle);
+
+        assertThat(content)
+                .as("Root build.gradle.kts should set sourceCompatibility to Java 26")
+                .containsPattern("sourceCompatibility\\s*=\\s*JavaVersion\\.VERSION_26");
+
+        assertThat(content)
+                .as("Root build.gradle.kts should set targetCompatibility to Java 26")
+                .containsPattern("targetCompatibility\\s*=\\s*JavaVersion\\.VERSION_26");
+    }
+
+    @Test
+    void versionCatalog_springBoot_shouldBeDefined() throws IOException {
+        Path catalog = findVersionCatalog();
+        String content = Files.readString(catalog);
+
+        assertThat(content)
+                .as("Version catalog should define Spring Boot version")
+                .contains("spring");
+    }
+
+    @Test
+    void configurationBuildGradle_shouldInclude_assertjTestDependency() throws IOException {
+        Path configBuild = findProjectRoot().resolve("configuration/build.gradle.kts");
+        String content = Files.readString(configBuild);
+
+        assertThat(content)
+                .as("configuration build.gradle.kts should declare assertj-core as test dependency")
+                .contains("assertj-core");
+    }
+
+    @Test
+    void configurationBuildGradle_shouldInclude_junitJupiterEngine() throws IOException {
+        Path configBuild = findProjectRoot().resolve("configuration/build.gradle.kts");
+        String content = Files.readString(configBuild);
+
+        assertThat(content)
+                .as("configuration build.gradle.kts should declare junit-jupiter-engine as testRuntimeOnly")
+                .contains("junit-jupiter-engine");
+    }
+
     private Path findVersionCatalog() {
         Path current = Paths.get(System.getProperty("user.dir"));
         while (current != null) {

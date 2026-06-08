@@ -94,4 +94,36 @@ public class ArchUnitCompatibilityTest {
                 .as("ArchUnit should be able to import its own test class compiled with Java 26")
                 .doesNotThrowAnyException();
     }
+
+    @Test
+    void archUnit_shouldParse_classesFromMultipleBoundedContexts() {
+        assertThatCode(() -> {
+            JavaClasses classes = new ClassFileImporter()
+                    .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                    .importPackages(
+                            "com.educational.platform.courses",
+                            "com.educational.platform.administration",
+                            "com.educational.platform.users"
+                    );
+
+            assertThat(classes)
+                    .as("ArchUnit should import classes from multiple bounded contexts without bytecode errors")
+                    .isNotEmpty();
+        }).doesNotThrowAnyException();
+    }
+
+    @Test
+    void archUnit_shouldEvaluate_layerRule_onJava26Classes() {
+        JavaClasses classes = new ClassFileImporter()
+                .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+                .importPackages("com.educational.platform");
+
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..domain..")
+                .should().dependOnClassesThat().resideInAPackage("..infrastructure..");
+
+        assertThatCode(() -> rule.check(classes))
+                .as("ArchUnit should evaluate layer dependency rules on Java 26 classes")
+                .doesNotThrowAnyException();
+    }
 }

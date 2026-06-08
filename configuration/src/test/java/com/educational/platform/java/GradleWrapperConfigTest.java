@@ -145,6 +145,76 @@ public class GradleWrapperConfigTest {
                 );
     }
 
+    @Test
+    void gradleWrapper_networkTimeout_shouldBeConfigured() throws IOException {
+        Path wrapperProperties = findGradleWrapperProperties();
+
+        Properties props = new Properties();
+        props.load(Files.newInputStream(wrapperProperties));
+
+        String networkTimeout = props.getProperty("networkTimeout");
+        assertThat(networkTimeout)
+                .as("Gradle wrapper networkTimeout should be set")
+                .isNotNull();
+
+        int timeout = Integer.parseInt(networkTimeout);
+        assertThat(timeout)
+                .as("networkTimeout should be a positive value in milliseconds")
+                .isGreaterThan(0);
+    }
+
+    @Test
+    void gradleWrapper_distributionUrl_shouldUseBinDistribution() throws IOException {
+        Path wrapperProperties = findGradleWrapperProperties();
+
+        Properties props = new Properties();
+        props.load(Files.newInputStream(wrapperProperties));
+
+        String distributionUrl = props.getProperty("distributionUrl");
+        assertThat(distributionUrl)
+                .as("Distribution URL should use the -bin distribution (not -all or -src)")
+                .containsPattern("gradle-[\\d.]+-bin\\.zip");
+    }
+
+    @Test
+    void gradleWrapper_retries_shouldBeZero() throws IOException {
+        Path wrapperProperties = findGradleWrapperProperties();
+
+        Properties props = new Properties();
+        props.load(Files.newInputStream(wrapperProperties));
+
+        String retries = props.getProperty("retries");
+        assertThat(retries)
+                .as("retries should be explicitly set to 0")
+                .isEqualTo("0");
+    }
+
+    @Test
+    void gradleWrapper_retryBackOffMs_shouldBe500() throws IOException {
+        Path wrapperProperties = findGradleWrapperProperties();
+
+        Properties props = new Properties();
+        props.load(Files.newInputStream(wrapperProperties));
+
+        String retryBackOffMs = props.getProperty("retryBackOffMs");
+        assertThat(retryBackOffMs)
+                .as("retryBackOffMs should be 500")
+                .isEqualTo("500");
+    }
+
+    @Test
+    void gradleWrapper_shouldNotReference_oldGradleVersion() throws IOException {
+        Path wrapperProperties = findGradleWrapperProperties();
+
+        Properties props = new Properties();
+        props.load(Files.newInputStream(wrapperProperties));
+
+        String distributionUrl = props.getProperty("distributionUrl");
+        assertThat(distributionUrl)
+                .as("Distribution URL should not reference old Gradle 9.2.1")
+                .doesNotContain("gradle-9.2.1");
+    }
+
     private Path findGradleWrapperProperties() {
         // Walk up from working directory to find the project root
         Path current = Paths.get(System.getProperty("user.dir"));

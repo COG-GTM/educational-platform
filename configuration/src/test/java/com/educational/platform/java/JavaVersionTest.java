@@ -102,6 +102,24 @@ public class JavaVersionTest {
     }
 
     @Test
+    void runtime_classVersion_shouldMatch_java26() {
+        String classVersion = System.getProperty("java.class.version");
+
+        assertThat(classVersion)
+                .as("java.class.version should be 70.0 for Java 26")
+                .isEqualTo("70.0");
+    }
+
+    @Test
+    void runtime_vmSpecVersion_shouldBe_26() {
+        String vmSpecVersion = System.getProperty("java.vm.specification.version");
+
+        assertThat(vmSpecVersion)
+                .as("java.vm.specification.version should indicate Java 26")
+                .isEqualTo("26");
+    }
+
+    @Test
     void javaClassFormatVersion_shouldBeConsistent_withRuntimeVersion() throws IOException {
         String classResource = "/com/educational/platform/java/JavaVersionTest.class";
         try (InputStream is = getClass().getResourceAsStream(classResource)) {

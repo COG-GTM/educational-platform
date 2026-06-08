@@ -50,4 +50,33 @@ public class DependencyVersionTest {
                 .as("Mockito should be loadable from classpath")
                 .doesNotThrowAnyException();
     }
+
+    @Test
+    void springBootAutoconfigure_shouldBeOnClasspath() {
+        assertThatCode(() -> Class.forName("org.springframework.boot.autoconfigure.SpringBootApplication"))
+                .as("Spring Boot Autoconfigure should be loadable from classpath for Java 26 compatibility")
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void junitPlatformEngine_shouldBeOnClasspath() {
+        assertThatCode(() -> Class.forName("org.junit.platform.engine.TestEngine"))
+                .as("JUnit Platform Engine should be loadable from classpath")
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void junitPlatformLauncher_shouldBeOnClasspath() {
+        assertThatCode(() -> Class.forName("org.junit.platform.launcher.Launcher"))
+                .as("JUnit Platform Launcher should be loadable from classpath")
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void archUnit_importedClasses_shouldContain_expectedPackages() {
+        var classes = new ClassFileImporter().importClasses(DependencyVersionTest.class);
+
+        assertThat(classes).isNotEmpty();
+        assertThat(classes.get(DependencyVersionTest.class)).isNotNull();
+    }
 }
