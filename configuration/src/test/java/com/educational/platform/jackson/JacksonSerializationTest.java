@@ -9,15 +9,19 @@ import com.educational.platform.course.reviews.CourseReviewCreatedResponse;
 import com.educational.platform.course.reviews.CourseReviewDTO;
 import com.educational.platform.course.reviews.ReviewCourseRequest;
 import com.educational.platform.course.reviews.UpdateCourseReviewRequest;
+import com.educational.platform.course.reviews.integration.event.CourseRatingRecalculatedIntegrationEvent;
 import com.educational.platform.courses.CreateCourseRequest;
 import com.educational.platform.courses.CreatedCourseResponse;
 import com.educational.platform.courses.course.CourseLightDTO;
+import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
 import com.educational.platform.users.RoleDTO;
 import com.educational.platform.users.UserDTO;
+import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
 import com.educational.platform.users.security.SignInRequest;
 import com.educational.platform.users.security.SignInResponse;
 import com.educational.platform.users.security.SignUpRequest;
 import com.educational.platform.web.handler.ErrorResponse;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +32,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies that Jackson serialization/deserialization of the project's record-based
@@ -397,5 +402,129 @@ class JacksonSerializationTest {
         assertThat(deserialized.username()).isNull();
         assertThat(deserialized.email()).isNull();
         assertThat(deserialized.role()).isNull();
+    }
+
+    @Test
+    void integrationEvent_userCreated_roundTrip() throws Exception {
+        var original = new UserCreatedIntegrationEvent("newuser", "newuser@example.com");
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, UserCreatedIntegrationEvent.class);
+
+        assertThat(deserialized.username()).isEqualTo("newuser");
+        assertThat(deserialized.email()).isEqualTo("newuser@example.com");
+    }
+
+    @Test
+    void integrationEvent_sendCourseToApprove_roundTrip() throws Exception {
+        var uuid = UUID.randomUUID();
+        var original = new SendCourseToApproveIntegrationEvent(uuid);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, SendCourseToApproveIntegrationEvent.class);
+
+        assertThat(deserialized.courseId()).isEqualTo(uuid);
+    }
+
+    @Test
+    void integrationEvent_courseRatingRecalculated_roundTrip() throws Exception {
+        var uuid = UUID.randomUUID();
+        var original = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.75);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, CourseRatingRecalculatedIntegrationEvent.class);
+
+        assertThat(deserialized.courseId()).isEqualTo(uuid);
+        assertThat(deserialized.rating()).isEqualTo(4.75);
+    }
+
+    @Test
+    void collectionOfDTOs_listOfCourseLightDTO_roundTrip() throws Exception {
+        var list = List.of(
+                new CourseLightDTO(UUID.randomUUID(), "Course A", "Desc A", 10),
+                new CourseLightDTO(UUID.randomUUID(), "Course B", "Desc B", 20),
+                new CourseLightDTO(UUID.randomUUID(), "Course C", "Desc C", 0)
+        );
+
+        var json = objectMapper.writeValueAsString(list);
+        var deserialized = objectMapper.readValue(json, new TypeReference<List<CourseLightDTO>>() {});
+
+        assertThat(deserialized).hasSize(3);
+        assertThat(deserialized.get(0).name()).isEqualTo("Course A");
+        assertThat(deserialized.get(1).numberOfStudents()).isEqualTo(20);
+        assertThat(deserialized.get(2).numberOfStudents()).isZero();
+    }
+
+    @Test
+    void collectionOfDTOs_emptyList_roundTrip() throws Exception {
+        List<CourseLightDTO> list = Collections.emptyList();
+
+        var json = objectMapper.writeValueAsString(list);
+        var deserialized = objectMapper.readValue(json, new TypeReference<List<CourseLightDTO>>() {});
+
+        assertThat(deserialized).isEmpty();
+    }
+
+    @Test
+    void negativeRating_roundTrip() throws Exception {
+        var original = new ReviewCourseRequest(-1.0, "Negative rating edge case");
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, ReviewCourseRequest.class);
+
+        assertThat(deserialized.rating()).isEqualTo(-1.0);
+        assertThat(deserialized.comment()).isEqualTo("Negative rating edge case");
+    }
+
+    @Test
+    void maxDoubleValue_roundTrip() throws Exception {
+        var original = new ReviewCourseRequest(Double.MAX_VALUE, "max");
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, ReviewCourseRequest.class);
+
+        assertThat(deserialized.rating()).isEqualTo(Double.MAX_VALUE);
+    }
+
+    @Test
+    void largeValidPayload_serializesSuccessfully() throws Exception {
+        var longDescription = "x".repeat(10_000);
+        var original = new CreateCourseRequest("Large Course", longDescription);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, CreateCourseRequest.class);
+
+        assertThat(deserialized.description()).hasSize(10_000);
+    }
+
+    @Test
+    void unknownJsonProperties_rejectedByDefault() {
+        var json = "{\"name\":\"Test\",\"description\":\"Desc\",\"extraField\":\"ignored\"}";
+
+        assertThatThrownBy(() -> objectMapper.readValue(json, CreateCourseRequest.class))
+                .isInstanceOf(com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException.class)
+                .hasMessageContaining("extraField");
+    }
+
+    @Test
+    void integrationEvent_courseRatingRecalculated_zeroRating_roundTrip() throws Exception {
+        var uuid = UUID.randomUUID();
+        var original = new CourseRatingRecalculatedIntegrationEvent(uuid, 0.0);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, CourseRatingRecalculatedIntegrationEvent.class);
+
+        assertThat(deserialized.rating()).isEqualTo(0.0);
+    }
+
+    @Test
+    void integrationEvent_userCreated_nullFields_roundTrip() throws Exception {
+        var original = new UserCreatedIntegrationEvent(null, null);
+
+        var json = objectMapper.writeValueAsString(original);
+        var deserialized = objectMapper.readValue(json, UserCreatedIntegrationEvent.class);
+
+        assertThat(deserialized.username()).isNull();
+        assertThat(deserialized.email()).isNull();
     }
 }
