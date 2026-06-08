@@ -44,6 +44,7 @@ public class BomManagedDependencyNoExplicitVersionTest {
     @ValueSource(strings = {
             "junit-jupiter-api",
             "junit-jupiter-params",
+            "junit-jupiter-engine",
             "junit-platform-engine",
             "junit-platform-launcher"
     })
@@ -111,8 +112,9 @@ public class BomManagedDependencyNoExplicitVersionTest {
         for (String line : lines) {
             String trimmed = line.trim();
             if ((trimmed.contains("junit-jupiter-api") || trimmed.contains("junit-jupiter-params")
+                    || trimmed.contains("junit-jupiter-engine")
                     || trimmed.contains("junit-platform-engine") || trimmed.contains("junit-platform-launcher"))
-                    && trimmed.startsWith("testImplementation")) {
+                    && (trimmed.startsWith("testImplementation") || trimmed.startsWith("testRuntimeOnly"))) {
                 long commaCount = trimmed.chars().filter(c -> c == ',').count();
                 assertThat(commaCount)
                         .as("BOM-managed dep line '%s' should have exactly 1 comma (group, artifact), not 2 (group, artifact, version)",
