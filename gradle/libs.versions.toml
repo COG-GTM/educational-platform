@@ -12,3 +12,4 @@ springDoc = "3.0.2"
 
 [plugins]
 springdependencies = { id = "io.spring.dependency-management", version.ref = "springDependencyManagementPlugin" }
+springboot = { id = "org.springframework.boot", version.ref = "spring" }
