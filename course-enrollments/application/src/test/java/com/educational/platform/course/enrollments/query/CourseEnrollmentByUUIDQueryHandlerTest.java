@@ -4,6 +4,7 @@ import com.educational.platform.course.enrollments.CompletionStatusDTO;
 import com.educational.platform.course.enrollments.CourseEnrollmentDTO;
 import com.educational.platform.course.enrollments.CourseEnrollmentRepository;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +38,11 @@ public class CourseEnrollmentByUUIDQueryHandlerTest {
                 new UsernamePasswordAuthenticationToken(userDetails, "password", Collections.emptyList()));
     }
 
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
     @Test
     void handle_existingEnrollment_returnsCourseEnrollmentDTO() {
         // given
@@ -53,6 +59,24 @@ public class CourseEnrollmentByUUIDQueryHandlerTest {
         assertThat(result).isPresent();
         assertThat(result.get().uuid()).isEqualTo(enrollmentUuid);
         assertThat(result.get().student()).isEqualTo("student");
+    }
+
+    @Test
+    void handle_existingEnrollment_verifyAllDTOFields() {
+        // given
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(enrollmentUuid);
+        final CourseEnrollmentDTO dto = new CourseEnrollmentDTO(enrollmentUuid, courseUuid, "student", CompletionStatusDTO.COMPLETED);
+        when(repository.query(enrollmentUuid, "student")).thenReturn(Optional.of(dto));
+
+        // when
+        final Optional<CourseEnrollmentDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().course()).isEqualTo(courseUuid);
+        assertThat(result.get().completionStatus()).isEqualTo(CompletionStatusDTO.COMPLETED);
     }
 
     @Test

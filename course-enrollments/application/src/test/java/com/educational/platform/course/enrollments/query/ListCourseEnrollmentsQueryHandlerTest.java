@@ -4,6 +4,7 @@ import com.educational.platform.course.enrollments.CompletionStatusDTO;
 import com.educational.platform.course.enrollments.CourseEnrollmentDTO;
 import com.educational.platform.course.enrollments.CourseEnrollmentRepository;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +38,11 @@ public class ListCourseEnrollmentsQueryHandlerTest {
                 new UsernamePasswordAuthenticationToken(userDetails, "password", Collections.emptyList()));
     }
 
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
     @Test
     void handle_enrollmentsExist_returnsListOfDTOs() {
         // given
@@ -53,6 +59,29 @@ public class ListCourseEnrollmentsQueryHandlerTest {
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().uuid()).isEqualTo(enrollmentUuid);
         assertThat(result.getFirst().student()).isEqualTo("student");
+        assertThat(result.getFirst().completionStatus()).isEqualTo(CompletionStatusDTO.IN_PROGRESS);
+    }
+
+    @Test
+    void handle_multipleEnrollments_returnsAllDTOs() {
+        // given
+        final ListCourseEnrollmentsQuery query = new ListCourseEnrollmentsQuery();
+        final UUID enrollmentUuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseUuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UUID enrollmentUuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+        final UUID courseUuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440004");
+        final CourseEnrollmentDTO dto1 = new CourseEnrollmentDTO(enrollmentUuid1, courseUuid1, "student", CompletionStatusDTO.IN_PROGRESS);
+        final CourseEnrollmentDTO dto2 = new CourseEnrollmentDTO(enrollmentUuid2, courseUuid2, "student", CompletionStatusDTO.COMPLETED);
+        when(repository.query("student")).thenReturn(List.of(dto1, dto2));
+
+        // when
+        final List<CourseEnrollmentDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(CourseEnrollmentDTO::uuid).containsExactly(enrollmentUuid1, enrollmentUuid2);
+        assertThat(result).extracting(CourseEnrollmentDTO::completionStatus)
+                .containsExactly(CompletionStatusDTO.IN_PROGRESS, CompletionStatusDTO.COMPLETED);
     }
 
     @Test

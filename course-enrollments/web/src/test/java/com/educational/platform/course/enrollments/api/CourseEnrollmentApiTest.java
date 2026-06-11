@@ -50,6 +50,29 @@ public class CourseEnrollmentApiTest {
     }
 
     @Test
+    void register_noAuth_unauthorized() {
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\n" +
+                        "  \"student\": \"username\"\n" +
+                        "}")
+                .when()
+                .post("/courses/{uuid}/course-enrollments", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void listCourseEnrollments_noAuth_unauthorized() {
+        given()
+                .contentType(ContentType.JSON)
+                .when()
+                .get("/course-enrollments")
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
     void listCourseEnrollments_studentAuthenticated_ok() {
         var token = SignUpHelper.signUpStudent();
 
