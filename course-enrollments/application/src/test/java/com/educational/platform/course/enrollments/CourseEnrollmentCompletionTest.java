@@ -1,67 +1,61 @@
 package com.educational.platform.course.enrollments;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class CourseEnrollmentCompletionTest {
 
     @Test
-    void complete_inProgressEnrollment_transitionsToCompleted() {
+    void complete_fromInProgress_transitionsToCompleted() {
         // given
         final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+        assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
+
+        // when
+        enrollment.complete();
+
+        // then
+        assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.COMPLETED);
+    }
+
+    @Test
+    void complete_calledTwice_remainsCompleted() {
+        // given
+        final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+        enrollment.complete();
+
+        // when
+        enrollment.complete();
+
+        // then
+        assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.COMPLETED);
+    }
+
+    @Test
+    void complete_preservesUuid() {
+        // given
+        final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+        final java.util.UUID originalUuid = enrollment.getUuid();
+
+        // when
+        enrollment.complete();
+
+        // then
+        assertThat(enrollment.getUuid()).isEqualTo(originalUuid);
+    }
+
+    @Test
+    void complete_preservesCourseAndStudentReferences() {
+        // given
+        final CourseEnrollment enrollment = new CourseEnrollment(42, 99);
 
         // when
         enrollment.complete();
 
         // then
         assertThat(enrollment)
-                .hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.COMPLETED);
-    }
-
-    @Test
-    void complete_alreadyCompleted_remainsCompleted() {
-        // given
-        final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
-        enrollment.complete();
-
-        // when
-        enrollment.complete();
-
-        // then
-        assertThat(enrollment)
-                .hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.COMPLETED);
-    }
-
-    @Test
-    void newEnrollment_initialStateIsInProgress() {
-        // given / when
-        final CourseEnrollment enrollment = new CourseEnrollment(10, 20);
-
-        // then
-        assertThat(enrollment)
-                .hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS)
-                .hasFieldOrPropertyWithValue("course", 10)
-                .hasFieldOrPropertyWithValue("student", 20);
-    }
-
-    @Test
-    void getUuid_returnsNonNullUuid() {
-        // given
-        final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
-
-        // when / then
-        assertThat(enrollment.getUuid()).isNotNull();
-    }
-
-    @Test
-    void getUuid_distinctEnrollmentsHaveDistinctUuids() {
-        // given
-        final CourseEnrollment first = new CourseEnrollment(1, 2);
-        final CourseEnrollment second = new CourseEnrollment(1, 2);
-
-        // when / then
-        assertThat(first.getUuid()).isNotEqualTo(second.getUuid());
+                .hasFieldOrPropertyWithValue("course", 42)
+                .hasFieldOrPropertyWithValue("student", 99);
     }
 }

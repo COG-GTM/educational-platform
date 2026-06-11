@@ -8,27 +8,47 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class CourseProposalExceptionsTest {
 
-    private static final UUID UUID_VALUE = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-
     @Test
-    void alreadyApprovedException_messageContainsUuidAndReason() {
+    void alreadyApprovedException_messageContainsUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
         // when
-        final CourseProposalAlreadyApprovedException exception = new CourseProposalAlreadyApprovedException(UUID_VALUE);
+        final CourseProposalAlreadyApprovedException exception = new CourseProposalAlreadyApprovedException(uuid);
 
         // then
         assertThat(exception.getMessage())
-                .contains(UUID_VALUE.toString())
+                .contains(uuid.toString())
+                .contains("cannot be approved")
                 .contains("already approved");
     }
 
     @Test
-    void alreadyDeclinedException_messageContainsUuidAndReason() {
+    void alreadyDeclinedException_messageContainsUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+
         // when
-        final CourseProposalAlreadyDeclinedException exception = new CourseProposalAlreadyDeclinedException(UUID_VALUE);
+        final CourseProposalAlreadyDeclinedException exception = new CourseProposalAlreadyDeclinedException(uuid);
 
         // then
         assertThat(exception.getMessage())
-                .contains(UUID_VALUE.toString())
+                .contains(uuid.toString())
+                .contains("cannot be declined")
                 .contains("already declined");
+    }
+
+    @Test
+    void alreadyApprovedException_isRuntimeException() {
+        final CourseProposalAlreadyApprovedException exception =
+                new CourseProposalAlreadyApprovedException(UUID.randomUUID());
+        assertThat(exception).isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void alreadyDeclinedException_isRuntimeException() {
+        final CourseProposalAlreadyDeclinedException exception =
+                new CourseProposalAlreadyDeclinedException(UUID.randomUUID());
+        assertThat(exception).isInstanceOf(RuntimeException.class);
     }
 }
