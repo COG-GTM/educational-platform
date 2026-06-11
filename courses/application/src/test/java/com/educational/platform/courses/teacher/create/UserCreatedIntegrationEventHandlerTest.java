@@ -213,4 +213,48 @@ public class UserCreatedIntegrationEventHandlerTest {
         assertThat(argument.getValue().username()).isEqualTo("teacher");
     }
 
+    @Test
+    void handleUserCreatedEvent_usernameWithNewlineChars_preservedInCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("line1\nline2\ttab", "nl@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("line1\nline2\ttab");
+    }
+
+    @Test
+    void handleUserCreatedEvent_nullEmail_usernameStillPassedToCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher", null);
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("teacher");
+    }
+
+    @Test
+    void handleUserCreatedEvent_commandContainsOnlyUsername_noEmailField() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("bob", "bob@school.edu");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        final CreateTeacherCommand command = argument.getValue();
+        assertThat(command.username()).isEqualTo("bob");
+        assertThat(command).hasNoNullFieldsOrProperties();
+    }
+
 }

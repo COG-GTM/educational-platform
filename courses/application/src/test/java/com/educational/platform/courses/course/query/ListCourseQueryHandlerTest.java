@@ -243,4 +243,54 @@ public class ListCourseQueryHandlerTest {
         assertThat(result.getFirst().description()).isNull();
     }
 
+    @Test
+    void handle_coursesWithDuplicateNames_allReturned() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO dup1 = new CourseLightDTO(UUID.randomUUID(), "same-name", "desc1", 1);
+        final CourseLightDTO dup2 = new CourseLightDTO(UUID.randomUUID(), "same-name", "desc2", 2);
+        final CourseLightDTO dup3 = new CourseLightDTO(UUID.randomUUID(), "same-name", "desc3", 3);
+        when(repository.list()).thenReturn(List.of(dup1, dup2, dup3));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(3);
+        assertThat(result).extracting(CourseLightDTO::name)
+                .containsExactly("same-name", "same-name", "same-name");
+    }
+
+    @Test
+    void handle_courseWithNegativeStudents_includedInResults() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO negativeCourse = new CourseLightDTO(UUID.randomUUID(), "negative", "desc", -5);
+        when(repository.list()).thenReturn(List.of(negativeCourse));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().numberOfStudents()).isEqualTo(-5);
+    }
+
+    @Test
+    void handle_coursesWithSameUuid_allReturned() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final UUID sharedUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440099");
+        final CourseLightDTO c1 = new CourseLightDTO(sharedUuid, "course1", "desc1", 1);
+        final CourseLightDTO c2 = new CourseLightDTO(sharedUuid, "course2", "desc2", 2);
+        when(repository.list()).thenReturn(List.of(c1, c2));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(2);
+        assertThat(result).containsExactly(c1, c2);
+    }
+
 }
