@@ -258,6 +258,24 @@ public class CourseReviewTest {
     }
 
     @Test
+    void update_emptyComment_commentUpdated() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "comment");
+        final CourseReview courseReview = new CourseReview(createCommand, 11, 22);
+        final UUID uuid = courseReview.toIdentifier();
+
+        final UpdateCourseReviewCommand updateCommand = new UpdateCourseReviewCommand(uuid, 3.0, "");
+
+        // when
+        courseReview.update(updateCommand);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("comment", new Comment(""));
+    }
+
+    @Test
     void update_multipleUpdates_lastUpdateWins() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

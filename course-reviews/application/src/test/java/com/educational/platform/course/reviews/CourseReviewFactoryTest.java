@@ -383,6 +383,29 @@ public class CourseReviewFactoryTest {
     }
 
     @Test
+    void createFrom_fractionalRating_courseReviewCreated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 3.7, "decent");
+
+        final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(uuid));
+        ReflectionTestUtils.setField(reviewableCourse, "id", 11);
+        ReflectionTestUtils.setField(reviewableCourse, "originalCourseId", uuid);
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.of(reviewableCourse));
+
+        final Reviewer reviewer = new Reviewer(new CreateReviewerCommand("username"));
+        ReflectionTestUtils.setField(reviewer, "id", 22);
+        when(currentUserAsReviewer.userAsReviewer()).thenReturn(reviewer);
+
+        // when
+        final CourseReview courseReview = sut.createFrom(command);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(3.7));
+    }
+
+    @Test
     void createFrom_courseNotFound_reviewerNotConsulted() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

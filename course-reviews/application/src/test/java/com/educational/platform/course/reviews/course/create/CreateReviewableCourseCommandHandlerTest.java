@@ -13,6 +13,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class CreateReviewableCourseCommandHandlerTest {
@@ -70,5 +71,19 @@ public class CreateReviewableCourseCommandHandlerTest {
         verify(reviewableCourseRepository).save(argument.capture());
         assertThat(argument.getValue())
                 .hasFieldOrPropertyWithValue("originalCourseId", null);
+    }
+
+    @Test
+    void handle_repositorySaveThrows_exceptionPropagates() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateReviewableCourseCommand command = new CreateReviewableCourseCommand(courseId);
+        when(reviewableCourseRepository.save(org.mockito.ArgumentMatchers.any(ReviewableCourse.class)))
+                .thenThrow(new RuntimeException("db error"));
+
+        // when/then
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> sut.handle(command))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("db error");
     }
 }

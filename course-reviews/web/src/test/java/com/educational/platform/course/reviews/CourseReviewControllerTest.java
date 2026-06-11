@@ -532,6 +532,35 @@ public class CourseReviewControllerTest {
     }
 
     @Test
+    void review_handlerThrowsRuntimeException_exceptionPropagates() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseRequest request = new ReviewCourseRequest(4.0, "comment");
+        when(reviewCourseCommandHandler.handle(any(ReviewCourseCommand.class)))
+                .thenThrow(new RuntimeException("unexpected"));
+
+        // when/then
+        assertThatThrownBy(() -> sut.review(courseUuid, request))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("unexpected");
+    }
+
+    @Test
+    void updateReview_handlerThrowsRuntimeException_exceptionPropagates() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(3.0, "updated");
+        doThrow(new RuntimeException("unexpected"))
+                .when(updateCourseReviewCommandHandler).handle(any(UpdateCourseReviewCommand.class));
+
+        // when/then
+        assertThatThrownBy(() -> sut.updateReview(courseUuid, reviewUuid, request))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("unexpected");
+    }
+
+    @Test
     void updateReview_courseUuidNotEmbeddedInCommand() {
         // given — courseUuid and reviewUuid are different; only reviewUuid should appear in the command
         final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

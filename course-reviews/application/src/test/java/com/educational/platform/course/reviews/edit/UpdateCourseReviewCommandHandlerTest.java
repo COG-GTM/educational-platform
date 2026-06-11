@@ -382,6 +382,22 @@ public class UpdateCourseReviewCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(2.5));
     }
 
+    @Test
+    void handle_repositorySaveThrows_exceptionPropagates() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, "comment");
+
+        when(courseReviewRepository.save(org.mockito.ArgumentMatchers.any(CourseReview.class)))
+                .thenThrow(new RuntimeException("db error"));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(handle).withMessage("db error");
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));

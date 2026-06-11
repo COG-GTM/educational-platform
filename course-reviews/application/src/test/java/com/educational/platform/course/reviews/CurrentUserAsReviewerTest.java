@@ -118,6 +118,24 @@ public class CurrentUserAsReviewerTest {
     }
 
     @Test
+    void userAsReviewer_calledTwice_delegatesToRepositoryEachTime() {
+        // given
+        final var userDetails = new User("repeat-user", "password", Collections.emptyList());
+        final var authentication = new UsernamePasswordAuthenticationToken(userDetails, "password");
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        final Reviewer expectedReviewer = new Reviewer(new CreateReviewerCommand("repeat-user"));
+        when(reviewerRepository.findByUsername("repeat-user")).thenReturn(expectedReviewer);
+
+        // when
+        sut.userAsReviewer();
+        sut.userAsReviewer();
+
+        // then
+        verify(reviewerRepository, org.mockito.Mockito.times(2)).findByUsername("repeat-user");
+    }
+
+    @Test
     void userAsReviewer_principalIsNotUserDetails_throwsClassCastException() {
         // given — authentication with a String principal instead of UserDetails
         final var authentication = new UsernamePasswordAuthenticationToken("plain-string-principal", "password");

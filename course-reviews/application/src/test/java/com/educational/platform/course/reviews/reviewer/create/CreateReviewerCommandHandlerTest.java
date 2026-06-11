@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class CreateReviewerCommandHandlerTest {
@@ -81,5 +82,18 @@ public class CreateReviewerCommandHandlerTest {
         verify(reviewerRepository).save(argument.capture());
         assertThat(argument.getValue())
                 .hasFieldOrPropertyWithValue("username", null);
+    }
+
+    @Test
+    void handle_repositorySaveThrows_exceptionPropagates() {
+        // given
+        final CreateReviewerCommand command = new CreateReviewerCommand("username");
+        when(reviewerRepository.save(org.mockito.ArgumentMatchers.any(Reviewer.class)))
+                .thenThrow(new RuntimeException("db error"));
+
+        // when/then
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> sut.handle(command))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("db error");
     }
 }
