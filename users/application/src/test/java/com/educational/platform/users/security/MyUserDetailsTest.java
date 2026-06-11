@@ -18,6 +18,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -209,5 +210,35 @@ public class MyUserDetailsTest {
     void myUserDetails_implementsUserDetailsService() {
         // then
         assertThat(sut).isInstanceOf(org.springframework.security.core.userdetails.UserDetailsService.class);
+    }
+
+    @Test
+    void loadUserByUsername_null_usernameNotFoundException() {
+        // given
+        when(userRepository.findByUsername(null)).thenReturn(Optional.empty());
+
+        // when / then
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> sut.loadUserByUsername(null)))
+                .isInstanceOf(UsernameNotFoundException.class);
+    }
+
+    @Test
+    void loadUserByUsername_existingUser_repositoryQueriedExactlyOnce() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("single-query")
+                .email("single@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("single-query")).thenReturn(Optional.of(user));
+
+        // when
+        sut.loadUserByUsername("single-query");
+
+        // then
+        verify(userRepository, times(1)).findByUsername("single-query");
     }
 }

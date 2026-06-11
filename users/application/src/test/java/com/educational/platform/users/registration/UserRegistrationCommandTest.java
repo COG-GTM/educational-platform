@@ -593,4 +593,78 @@ public class UserRegistrationCommandTest {
         assertThat(violations).isNotEmpty();
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("email"));
     }
+
+    @Test
+    void validate_emailMissingLocalPart_violation() {
+        // given — "@domain.com" has no local part
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("@domain.com")
+                .password("password123")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("email"));
+    }
+
+    @Test
+    void validate_emailDoubleAt_violation() {
+        // given — "user@@domain.com" is malformed
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("user@@domain.com")
+                .password("password123")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("email"));
+    }
+
+    @Test
+    void validate_emailMissingDomain_violation() {
+        // given — "user@" has no domain
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("user@")
+                .password("password123")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("email"));
+    }
+
+    @Test
+    void equality_sameUsernameAndDifferentEmail_notEqual() {
+        // given
+        final UserRegistrationCommand command1 = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("user")
+                .email("user1@example.com")
+                .password("password123")
+                .build();
+        final UserRegistrationCommand command2 = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("user")
+                .email("user2@example.com")
+                .password("password123")
+                .build();
+
+        // then
+        assertThat(command1).isNotEqualTo(command2);
+    }
 }

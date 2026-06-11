@@ -160,4 +160,24 @@ public class SignInRequestTest {
         // then
         assertThat(request).isNotEqualTo(null);
     }
+
+    @Test
+    void equality_sameUsernameDifferentPassword_notEqual() {
+        // given
+        final SignInRequest request1 = new SignInRequest("user", "pass1");
+        final SignInRequest request2 = new SignInRequest("user", "pass2");
+
+        // then
+        assertThat(request1).isNotEqualTo(request2);
+    }
+
+    @Test
+    void equality_differentUsernameSamePassword_notEqual() {
+        // given
+        final SignInRequest request1 = new SignInRequest("user1", "pass");
+        final SignInRequest request2 = new SignInRequest("user2", "pass");
+
+        // then
+        assertThat(request1).isNotEqualTo(request2);
+    }
 }

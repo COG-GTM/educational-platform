@@ -328,4 +328,50 @@ public class UserTest {
         // then
         assertThat(userDetails.getAuthorities()).hasSize(1);
     }
+
+    @Test
+    void toDTO_calledTwice_returnsEqualInstances() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("username")
+                .email("email@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User user = new User(command, passwordEncoder);
+
+        // when
+        final UserDTO dto1 = user.toDTO();
+        final UserDTO dto2 = user.toDTO();
+
+        // then
+        assertThat(dto1).isEqualTo(dto2);
+    }
+
+    @Test
+    void toUserDetails_calledTwice_returnsConsistentValues() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("username")
+                .email("email@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User user = new User(command, passwordEncoder);
+
+        // when
+        final UserDetails details1 = user.toUserDetails();
+        final UserDetails details2 = user.toUserDetails();
+
+        // then
+        assertThat(details1.getUsername()).isEqualTo(details2.getUsername());
+        assertThat(details1.getPassword()).isEqualTo(details2.getPassword());
+        assertThat(details1.getAuthorities())
+                .extracting(auth -> auth.getAuthority())
+                .containsExactlyElementsOf(
+                        details2.getAuthorities().stream()
+                                .map(auth -> auth.getAuthority())
+                                .toList()
+                );
+    }
 }
