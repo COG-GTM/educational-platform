@@ -118,4 +118,78 @@ public class CourseFactoryTest {
         assertThrows(ConstraintViolationException.class, createAction);
     }
 
+    @Test
+    void createFrom_bothFieldsNull_constraintViolationException() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name(null)
+                .description(null)
+                .build();
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(ConstraintViolationException.class, createAction);
+    }
+
+    @Test
+    void createFrom_validCourse_courseHasTeacherId() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(42);
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = sut.createFrom(command);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("teacher", 42);
+    }
+
+    @Test
+    void createFrom_validCourse_courseHasInitialState() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = sut.createFrom(command);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.NOT_SENT_FOR_APPROVAL)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0))
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(0));
+    }
+
+    @Test
+    void createFrom_validCourse_courseHasUuid() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = sut.createFrom(command);
+
+        // then
+        assertThat(course.toIdentity()).isNotNull();
+    }
+
 }

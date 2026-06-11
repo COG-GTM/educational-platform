@@ -178,6 +178,45 @@ public class QuizTest {
     }
 
     @Test
+    void constructor_nullQuestionsList_throwsNPE() {
+        // given
+        final Course course = createCourse();
+        final CreateQuizCommand command = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("text")
+                .questions(null)
+                .build();
+
+        // when / then — null questions list causes NPE on stream()
+        assertThatThrownBy(() -> new Quiz(command, 1, course))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void twoQuizzes_differentUuids() {
+        // given
+        final Course course = createCourse();
+        final CreateQuizCommand command = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("text")
+                .questions(List.of(new CreateQuestionCommand("Q1")))
+                .build();
+
+        // when
+        final Quiz quiz1 = new Quiz(command, 1, course);
+        final Quiz quiz2 = new Quiz(command, 2, course);
+
+        // then
+        assertThat(quiz1).extracting("uuid").isNotEqualTo(
+                org.springframework.test.util.ReflectionTestUtils.getField(quiz2, "uuid")
+        );
+    }
+
+    @Test
     void constructor_nullTitleAndDescription_storedAsNull() {
         // given
         final Course course = createCourse();

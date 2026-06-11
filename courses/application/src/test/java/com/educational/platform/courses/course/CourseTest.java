@@ -592,6 +592,106 @@ public class CourseTest {
     }
 
     @Test
+    void decline_waitingForApprovalCourse_declinedStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.sendToApprove();
+
+        // when
+        course.decline();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.DECLINED);
+    }
+
+    @Test
+    void decline_calledTwice_remainsDeclined() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.decline();
+        course.decline();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.DECLINED);
+    }
+
+    @Test
+    void decline_approvedCourse_declinedStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.approve();
+
+        // when
+        course.decline();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.DECLINED);
+    }
+
+    @Test
+    void publish_archivedCourseWithApproval_publishedStatus() {
+        // given — approved, published, archived, then re-published
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.approve();
+        course.publish();
+        course.archive();
+
+        // when — re-publish succeeds because approval is still APPROVED
+        course.publish();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED);
+    }
+
+    @Test
+    void fullLifecycle_decline_resend_approve_publish() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when — send, decline, re-send, approve, publish
+        course.sendToApprove();
+        assertThat(course).hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+
+        course.decline();
+        assertThat(course).hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.DECLINED);
+
+        course.sendToApprove();
+        assertThat(course).hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+
+        course.approve();
+        assertThat(course).hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+
+        course.publish();
+        assertThat(course).hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED);
+    }
+
+    @Test
     void create_withCurriculumItems_curriculumItemsPopulated() {
         // given
         final var lecture = com.educational.platform.courses.course.create.CreateLectureCommand.builder()
