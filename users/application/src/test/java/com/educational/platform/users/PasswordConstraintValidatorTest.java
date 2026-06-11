@@ -1,0 +1,104 @@
+package com.educational.platform.users;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import jakarta.validation.ConstraintValidatorContext;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
+
+public class PasswordConstraintValidatorTest {
+
+    private PasswordConstraintValidator sut;
+    private ConstraintValidatorContext context;
+
+    @BeforeEach
+    void setUp() {
+        sut = new PasswordConstraintValidator();
+        context = mock(ConstraintValidatorContext.class);
+        final ConstraintValidatorContext.ConstraintViolationBuilder builder =
+                mock(ConstraintValidatorContext.ConstraintViolationBuilder.class);
+        when(context.buildConstraintViolationWithTemplate(anyString())).thenReturn(builder);
+    }
+
+    @Test
+    void isValid_nullPassword_valid() {
+        // when
+        final boolean result = sut.isValid(null, context);
+
+        // then
+        assertThat(result).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"password", "12345678", "abcdefgh", "aBcDeFgH1234"})
+    void isValid_validPasswords_valid(String password) {
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"short", "1234567", "abc"})
+    void isValid_tooShortPasswords_invalid(String password) {
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isValid_tooLongPassword_invalid() {
+        // given
+        final String password = "a".repeat(31);
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isValid_passwordWithWhitespace_invalid() {
+        // given
+        final String password = "pass word1";
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isValid_exactMinLength_valid() {
+        // given
+        final String password = "a".repeat(8);
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    void isValid_exactMaxLength_valid() {
+        // given
+        final String password = "a".repeat(30);
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isTrue();
+    }
+}
