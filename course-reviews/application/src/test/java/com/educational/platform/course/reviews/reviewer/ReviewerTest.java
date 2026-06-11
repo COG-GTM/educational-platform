@@ -57,4 +57,15 @@ public class ReviewerTest {
         assertThat(reviewer)
                 .hasFieldOrPropertyWithValue("username", "");
     }
+
+    @Test
+    void constructor_twoDifferentCommands_differentUsernames() {
+        // given
+        final Reviewer first = new Reviewer(new CreateReviewerCommand("user1"));
+        final Reviewer second = new Reviewer(new CreateReviewerCommand("user2"));
+
+        // then
+        assertThat(first).hasFieldOrPropertyWithValue("username", "user1");
+        assertThat(second).hasFieldOrPropertyWithValue("username", "user2");
+    }
 }

@@ -236,6 +236,32 @@ public class UpdateCourseReviewCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(0.0));
     }
 
+    @Test
+    void handle_existingReviewInvalidRating_constraintViolationException() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 5.1, "comment");
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_validUpdate_saveCalledExactlyOnce() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, "comment");
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(courseReviewRepository, org.mockito.Mockito.times(1)).save(org.mockito.ArgumentMatchers.any(CourseReview.class));
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));

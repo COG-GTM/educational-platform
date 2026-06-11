@@ -40,4 +40,31 @@ public class CreateReviewerCommandHandlerTest {
                 .isNotNull()
                 .hasFieldOrPropertyWithValue("username", "username");
     }
+
+    @Test
+    void handle_emptyUsername_reviewerSavedWithEmptyUsername() {
+        // given
+        final CreateReviewerCommand command = new CreateReviewerCommand("");
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Reviewer> argument = ArgumentCaptor.forClass(Reviewer.class);
+        verify(reviewerRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("username", "");
+    }
+
+    @Test
+    void handle_validCommand_saveCalledExactlyOnce() {
+        // given
+        final CreateReviewerCommand command = new CreateReviewerCommand("username");
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(reviewerRepository, org.mockito.Mockito.times(1)).save(org.mockito.ArgumentMatchers.any(Reviewer.class));
+    }
 }

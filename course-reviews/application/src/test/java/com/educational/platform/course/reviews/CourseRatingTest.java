@@ -53,4 +53,22 @@ public class CourseRatingTest {
         // then
         assertThat(courseRating.rating()).isEqualTo(5.0);
     }
+
+    @Test
+    void constructor_negativeRating_ratingStored() {
+        // when — value object stores any value; validation is at the command level
+        final CourseRating courseRating = new CourseRating(-1.0);
+
+        // then
+        assertThat(courseRating.rating()).isEqualTo(-1.0);
+    }
+
+    @Test
+    void constructor_fractionalRating_ratingStored() {
+        // when
+        final CourseRating courseRating = new CourseRating(3.7);
+
+        // then
+        assertThat(courseRating.rating()).isEqualTo(3.7);
+    }
 }

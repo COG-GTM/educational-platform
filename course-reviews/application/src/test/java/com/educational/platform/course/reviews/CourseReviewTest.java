@@ -186,4 +186,58 @@ public class CourseReviewTest {
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(4.0))
                 .hasFieldOrPropertyWithValue("comment", new Comment("comment"));
     }
+
+    @Test
+    void update_zeroRating_ratingUpdated() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "comment");
+        final CourseReview courseReview = new CourseReview(createCommand, 11, 22);
+        final UUID uuid = courseReview.toIdentifier();
+
+        final UpdateCourseReviewCommand updateCommand = new UpdateCourseReviewCommand(uuid, 0.0, "zero");
+
+        // when
+        courseReview.update(updateCommand);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0.0));
+    }
+
+    @Test
+    void update_maxRating_ratingUpdated() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 2.0, "comment");
+        final CourseReview courseReview = new CourseReview(createCommand, 11, 22);
+        final UUID uuid = courseReview.toIdentifier();
+
+        final UpdateCourseReviewCommand updateCommand = new UpdateCourseReviewCommand(uuid, 5.0, "max");
+
+        // when
+        courseReview.update(updateCommand);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0));
+    }
+
+    @Test
+    void update_nullComment_commentUpdated() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "comment");
+        final CourseReview courseReview = new CourseReview(createCommand, 11, 22);
+        final UUID uuid = courseReview.toIdentifier();
+
+        final UpdateCourseReviewCommand updateCommand = new UpdateCourseReviewCommand(uuid, 3.0, null);
+
+        // when
+        courseReview.update(updateCommand);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("comment", new Comment(null));
+    }
 }

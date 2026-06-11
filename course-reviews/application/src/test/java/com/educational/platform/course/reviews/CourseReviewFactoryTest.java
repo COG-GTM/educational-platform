@@ -266,6 +266,19 @@ public class CourseReviewFactoryTest {
     }
 
     @Test
+    void createFrom_validationFails_repositoryNotCalled() {
+        // given
+        final ReviewCourseCommand command = new ReviewCourseCommand(null, 4.0, "comment");
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(ConstraintViolationException.class, createAction);
+        org.mockito.Mockito.verifyNoInteractions(reviewableCourseRepository);
+    }
+
+    @Test
     void createFrom_twoCalls_differentUuidsAssigned() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -80,5 +81,33 @@ public class ListCourseReviewsByCourseUUIDQueryHandlerTest {
         // then
         assertThat(result).hasSize(2);
         assertThat(result).extracting(CourseReviewDTO::username).containsExactly("user1", "user2");
+    }
+
+    @Test
+    void handle_validQuery_repositoryCalledWithCorrectUuid() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ListCourseReviewsByCourseUUIDQuery query = new ListCourseReviewsByCourseUUIDQuery(courseId);
+        when(courseReviewRepository.listCourseReviews(courseId)).thenReturn(List.of());
+
+        // when
+        sut.handle(query);
+
+        // then
+        verify(courseReviewRepository).listCourseReviews(courseId);
+    }
+
+    @Test
+    void handle_nullUuidQuery_delegatesToRepository() {
+        // given
+        final ListCourseReviewsByCourseUUIDQuery query = new ListCourseReviewsByCourseUUIDQuery(null);
+        when(courseReviewRepository.listCourseReviews(null)).thenReturn(List.of());
+
+        // when
+        final List<CourseReviewDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isEmpty();
+        verify(courseReviewRepository).listCourseReviews(null);
     }
 }
