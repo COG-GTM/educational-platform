@@ -132,4 +132,60 @@ public class DeclineCourseProposalCommandHandlerTest {
         // then
         verifyNoInteractions(eventPublisher);
     }
+
+    @Test
+    void handle_alreadyDeclinedProposal_proposalNotSaved() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "status", CourseProposalStatus.DECLINED);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        try {
+            sut.handle(command);
+        } catch (CourseProposalAlreadyDeclinedException ignored) {
+        }
+
+        // then
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void handle_invalidId_eventNotPublished() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        try {
+            sut.handle(command);
+        } catch (ResourceNotFoundException ignored) {
+        }
+
+        // then
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void handle_invalidId_proposalNotSaved() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        try {
+            sut.handle(command);
+        } catch (ResourceNotFoundException ignored) {
+        }
+
+        // then
+        verify(repository, never()).save(any());
+    }
 }

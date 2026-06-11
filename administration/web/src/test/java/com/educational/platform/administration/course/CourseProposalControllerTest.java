@@ -150,4 +150,56 @@ class CourseProposalControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString(uuid.toString())));
     }
+
+    @Test
+    void courseProposals_multipleProposals_returnsAllWithCorrectJson() throws Exception {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UUID uuid3 = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+        final CourseProposalDTO dto1 = new CourseProposalDTO(uuid1, CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
+        final CourseProposalDTO dto2 = new CourseProposalDTO(uuid2, CourseProposalStatusDTO.APPROVED);
+        final CourseProposalDTO dto3 = new CourseProposalDTO(uuid3, CourseProposalStatusDTO.DECLINED);
+        when(listCourseProposalsQueryHandler.handle(any(ListCourseProposalsQuery.class)))
+                .thenReturn(List.of(dto1, dto2, dto3));
+
+        // when / then
+        mockMvc.perform(get("/administration/course-proposals"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[0].uuid").value(uuid1.toString()))
+                .andExpect(jsonPath("$[0].status").value("WAITING_FOR_APPROVAL"))
+                .andExpect(jsonPath("$[1].uuid").value(uuid2.toString()))
+                .andExpect(jsonPath("$[1].status").value("APPROVED"))
+                .andExpect(jsonPath("$[2].uuid").value(uuid3.toString()))
+                .andExpect(jsonPath("$[2].status").value("DECLINED"));
+    }
+
+    @Test
+    void approve_existingCourseProposal_handlerNotInteractedForDecline() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+
+        // then
+        verifyNoInteractions(declineCourseProposalCommandHandler);
+    }
+
+    @Test
+    void decline_existingCourseProposal_handlerNotInteractedForApprove() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+
+        // then
+        verifyNoInteractions(approveCourseProposalCommandHandler);
+    }
 }

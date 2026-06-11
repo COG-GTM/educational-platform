@@ -40,4 +40,33 @@ class SendCourseToApproveIntegrationEventHandlerTest {
                 .hasFieldOrPropertyWithValue("uuid", uuid);
     }
 
+    @Test
+    void handleSendCourseToApproveEvent_commandUuidMatchesEventCourseId() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+
+        // when
+        sut.handleSendCourseToApproveEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateCourseProposalCommand> argument = ArgumentCaptor.forClass(CreateCourseProposalCommand.class);
+        verify(createCourseProposalCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().uuid()).isEqualTo(event.courseId());
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_nullCourseId_delegatesToHandler() {
+        // given
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(null);
+
+        // when
+        sut.handleSendCourseToApproveEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateCourseProposalCommand> argument = ArgumentCaptor.forClass(CreateCourseProposalCommand.class);
+        verify(createCourseProposalCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().uuid()).isNull();
+    }
+
 }

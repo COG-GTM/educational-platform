@@ -172,6 +172,42 @@ public class CourseProposalTest {
     }
 
     @Test
+    void toDTO_approvedAfterDeclined_approvedStatusInDTO() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(proposal, "status", CourseProposalStatus.DECLINED);
+        proposal.approve();
+
+        // when
+        final CourseProposalDTO dto = proposal.toDTO();
+
+        // then
+        assertThat(dto)
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.APPROVED);
+    }
+
+    @Test
+    void toDTO_declinedAfterApproved_declinedStatusInDTO() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(proposal, "status", CourseProposalStatus.APPROVED);
+        proposal.decline();
+
+        // when
+        final CourseProposalDTO dto = proposal.toDTO();
+
+        // then
+        assertThat(dto)
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.DECLINED);
+    }
+
+    @Test
     void approve_thenApproveAgain_throwsAlreadyApprovedException() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
