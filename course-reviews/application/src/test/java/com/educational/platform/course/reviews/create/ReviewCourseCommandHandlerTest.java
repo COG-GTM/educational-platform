@@ -465,4 +465,40 @@ public class ReviewCourseCommandHandlerTest {
         // then
         assertThatExceptionOfType(RuntimeException.class).isThrownBy(handle).withMessage("db error");
     }
+
+    @Test
+    void handle_currentUserAsReviewerThrows_exceptionPropagates() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+
+        final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
+        ReflectionTestUtils.setField(reviewableCourse, "id", 11);
+        ReflectionTestUtils.setField(reviewableCourse, "originalCourseId", courseId);
+        when(reviewableCourseRepository.findByOriginalCourseId(courseId)).thenReturn(Optional.of(reviewableCourse));
+
+        when(currentUserAsReviewer.userAsReviewer()).thenThrow(new RuntimeException("security context error"));
+
+        // when
+        final org.assertj.core.api.ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(handle).withMessage("security context error");
+        org.mockito.Mockito.verifyNoInteractions(courseReviewRepository);
+    }
+
+    @Test
+    void handle_courseNotFound_currentUserAsReviewerNotConsulted() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+        when(reviewableCourseRepository.findByOriginalCourseId(courseId)).thenReturn(Optional.empty());
+
+        // when
+        final org.assertj.core.api.ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(com.educational.platform.common.exception.RelatedResourceIsNotResolvedException.class).isThrownBy(handle);
+        org.mockito.Mockito.verifyNoInteractions(currentUserAsReviewer);
+    }
 }

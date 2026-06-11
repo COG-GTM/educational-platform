@@ -136,6 +136,21 @@ public class CurrentUserAsReviewerTest {
     }
 
     @Test
+    void userAsReviewer_repositoryThrows_exceptionPropagates() {
+        // given
+        final var userDetails = new User("error-user", "password", Collections.emptyList());
+        final var authentication = new UsernamePasswordAuthenticationToken(userDetails, "password");
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        when(reviewerRepository.findByUsername("error-user")).thenThrow(new RuntimeException("db error"));
+
+        // when/then
+        assertThatThrownBy(() -> sut.userAsReviewer())
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("db error");
+    }
+
+    @Test
     void userAsReviewer_principalIsNotUserDetails_throwsClassCastException() {
         // given — authentication with a String principal instead of UserDetails
         final var authentication = new UsernamePasswordAuthenticationToken("plain-string-principal", "password");

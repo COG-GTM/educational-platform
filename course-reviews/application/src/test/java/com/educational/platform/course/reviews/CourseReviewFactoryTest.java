@@ -463,4 +463,20 @@ public class CourseReviewFactoryTest {
         org.mockito.Mockito.verifyNoInteractions(currentUserAsReviewer);
     }
 
+    @Test
+    void createFrom_repositoryThrows_exceptionPropagates() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid))
+                .thenThrow(new RuntimeException("db connection lost"));
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(RuntimeException.class, createAction);
+        org.mockito.Mockito.verifyNoInteractions(currentUserAsReviewer);
+    }
+
 }
