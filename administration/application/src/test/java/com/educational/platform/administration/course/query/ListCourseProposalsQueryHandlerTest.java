@@ -63,4 +63,34 @@ class ListCourseProposalsQueryHandlerTest {
         verify(repository).listCourseProposals();
         assertThat(result).isEmpty();
     }
+
+    @Test
+    void handle_multipleProposalsWithDifferentStatuses_returnsAll() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UUID uuid3 = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+        final CourseProposalDTO dto1 = new CourseProposalDTO(uuid1, CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
+        final CourseProposalDTO dto2 = new CourseProposalDTO(uuid2, CourseProposalStatusDTO.APPROVED);
+        final CourseProposalDTO dto3 = new CourseProposalDTO(uuid3, CourseProposalStatusDTO.DECLINED);
+        when(repository.listCourseProposals()).thenReturn(List.of(dto1, dto2, dto3));
+        final ListCourseProposalsQuery query = new ListCourseProposalsQuery();
+
+        // when
+        final List<CourseProposalDTO> result = sut.handle(query);
+
+        // then
+        verify(repository).listCourseProposals();
+        assertThat(result)
+                .hasSize(3)
+                .extracting(CourseProposalDTO::uuid)
+                .containsExactly(uuid1, uuid2, uuid3);
+        assertThat(result)
+                .extracting(CourseProposalDTO::status)
+                .containsExactly(
+                        CourseProposalStatusDTO.WAITING_FOR_APPROVAL,
+                        CourseProposalStatusDTO.APPROVED,
+                        CourseProposalStatusDTO.DECLINED
+                );
+    }
 }

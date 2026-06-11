@@ -22,4 +22,28 @@ class CourseProposalAlreadyDeclinedExceptionTest {
                 .contains("cannot be declined")
                 .contains("already declined");
     }
+
+    @Test
+    void isRuntimeException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        final CourseProposalAlreadyDeclinedException exception = new CourseProposalAlreadyDeclinedException(uuid);
+
+        // then
+        assertThat(exception).isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void getMessage_nullUuid_doesNotThrow() {
+        // when
+        final CourseProposalAlreadyDeclinedException exception = new CourseProposalAlreadyDeclinedException(null);
+
+        // then
+        assertThat(exception.getMessage())
+                .contains("null")
+                .contains("cannot be declined")
+                .contains("already declined");
+    }
 }
