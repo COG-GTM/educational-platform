@@ -623,4 +623,19 @@ public class CourseProposalTest {
         assertThat(dto1).isEqualTo(dto2);
     }
 
+    @Test
+    void toDTO_calledTwice_returnsDifferentInstances() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+
+        // when
+        final CourseProposalDTO dto1 = proposal.toDTO();
+        final CourseProposalDTO dto2 = proposal.toDTO();
+
+        // then
+        assertThat(dto1).isNotSameAs(dto2);
+    }
+
 }

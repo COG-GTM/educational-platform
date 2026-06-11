@@ -493,6 +493,48 @@ class ApproveCourseProposalCommandHandlerTest {
     }
 
     @Test
+    void handle_existingCourseProposal_saveCalledBeforeEventPublish() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final var inOrder = inOrder(repository, eventPublisher);
+        inOrder.verify(repository).save(any(CourseProposal.class));
+        inOrder.verify(eventPublisher).publishEvent(any(CourseApprovedByAdminIntegrationEvent.class));
+    }
+
+    @Test
+    void handle_alreadyApprovedProposal_repositoryFindByUuidStillCalled() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "status", CourseProposalStatus.APPROVED);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        try {
+            sut.handle(command);
+        } catch (CourseProposalAlreadyApprovedException ignored) {
+        }
+
+        // then
+        verify(repository).findByUuid(uuid);
+    }
+
+    @Test
     void handle_multipleSequentialCommands_eachProcessedIndependently() {
         // given
         final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

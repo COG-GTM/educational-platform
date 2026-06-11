@@ -982,6 +982,38 @@ class CourseProposalControllerTest {
     }
 
     @Test
+    void decline_alreadyDeclined_conflictResponseHasNoAdditionalFields() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyDeclinedException(uuid))
+                .when(declineCourseProposalCommandHandler).handle(any(DeclineCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors").exists())
+                .andExpect(jsonPath("$.status").doesNotExist())
+                .andExpect(jsonPath("$.message").doesNotExist());
+    }
+
+    @Test
+    void courseProposals_singleProposal_responseHasOnlyUuidAndStatusFields() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposalDTO dto = new CourseProposalDTO(uuid, CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
+        when(listCourseProposalsQueryHandler.handle(any(ListCourseProposalsQuery.class))).thenReturn(List.of(dto));
+
+        // when / then
+        mockMvc.perform(get("/administration/course-proposals"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].uuid").exists())
+                .andExpect(jsonPath("$[0].status").exists())
+                .andExpect(jsonPath("$[0].id").doesNotExist())
+                .andExpect(jsonPath("$[0].name").doesNotExist());
+    }
+
+    @Test
     void courseProposals_nonEmptyList_responseContentTypeIsJson() throws Exception {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

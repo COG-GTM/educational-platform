@@ -185,6 +185,22 @@ public class CreateCourseProposalCommandHandlerTest {
     }
 
     @Test
+    void handle_savedProposalIdFieldIsNull() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseProposal> argument = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("id", null);
+    }
+
+    @Test
     void handle_multipleSequentialCommands_eachSavedSeparately() {
         // given
         final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

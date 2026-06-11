@@ -127,6 +127,17 @@ class CourseProposalDTOTest {
     }
 
     @Test
+    void recordEquality_bothNullUuids_sameStatus_equal() {
+        // when
+        final CourseProposalDTO dto1 = new CourseProposalDTO(null, CourseProposalStatusDTO.APPROVED);
+        final CourseProposalDTO dto2 = new CourseProposalDTO(null, CourseProposalStatusDTO.APPROVED);
+
+        // then
+        assertThat(dto1).isEqualTo(dto2);
+        assertThat(dto1.hashCode()).isEqualTo(dto2.hashCode());
+    }
+
+    @Test
     void toString_containsUuidAndStatus() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
