@@ -22,6 +22,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -135,5 +136,58 @@ public class CreateCourseCommandHandlerTest {
                 .extracting("curriculumItems")
                 .asList()
                 .hasSize(2);
+    }
+
+    @Test
+    void handle_validCourse_saveCalledExactlyOnce() {
+        // given
+        stubTeacher();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(repository, times(1)).save(org.mockito.ArgumentMatchers.any(Course.class));
+    }
+
+    @Test
+    void handle_twoSequentialCalls_returnDifferentUuids() {
+        // given
+        stubTeacher();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final UUID first = sut.handle(command);
+        final UUID second = sut.handle(command);
+
+        // then
+        assertThat(first).isNotNull();
+        assertThat(second).isNotNull();
+        assertThat(first).isNotEqualTo(second);
+    }
+
+    @Test
+    void handle_invalidCommand_saveNotCalled() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name(null)
+                .description(null)
+                .build();
+
+        // when / then
+        try {
+            sut.handle(command);
+        } catch (ConstraintViolationException ignored) {
+        }
+
+        // then
+        verify(repository, times(0)).save(org.mockito.ArgumentMatchers.any(Course.class));
     }
 }

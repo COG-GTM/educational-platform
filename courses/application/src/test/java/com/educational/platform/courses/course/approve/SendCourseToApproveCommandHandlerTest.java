@@ -24,6 +24,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -112,5 +114,100 @@ public class SendCourseToApproveCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(CourseAlreadyApprovedException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_invalidId_exceptionMessageContainsUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveCommand command = new SendCourseToApproveCommand(uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+                .isThrownBy(handle)
+                .withMessageContaining("123e4567-e89b-12d3-a456-426655440001");
+    }
+
+    @Test
+    void handle_declinedCourse_courseReSentForApproval() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveCommand command = new SendCourseToApproveCommand(uuid);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        correspondingCourse.decline();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        assertThat(correspondingCourse)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+        final ArgumentCaptor<SendCourseToApproveIntegrationEvent> argument = ArgumentCaptor.forClass(SendCourseToApproveIntegrationEvent.class);
+        verify(eventPublisher).publishEvent(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("courseId", uuid);
+    }
+
+    @Test
+    void handle_existingCourse_eventPublishedExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveCommand command = new SendCourseToApproveCommand(uuid);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(eventPublisher, times(1)).publishEvent(org.mockito.ArgumentMatchers.any(SendCourseToApproveIntegrationEvent.class));
+    }
+
+    @Test
+    void handle_alreadyApprovedCourse_eventNotPublished() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveCommand command = new SendCourseToApproveCommand(uuid);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        correspondingCourse.approve();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when / then
+        try {
+            sut.handle(command);
+        } catch (CourseAlreadyApprovedException ignored) {
+        }
+
+        // then
+        verify(eventPublisher, never()).publishEvent(org.mockito.ArgumentMatchers.any(SendCourseToApproveIntegrationEvent.class));
     }
 }

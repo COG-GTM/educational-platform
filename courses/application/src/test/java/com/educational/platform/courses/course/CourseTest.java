@@ -812,4 +812,135 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0));
     }
 
+    @Test
+    void increaseNumberOfStudents_calledThreeTimes_incrementedToThree() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.increaseNumberOfStudents();
+        course.increaseNumberOfStudents();
+        course.increaseNumberOfStudents();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(3));
+    }
+
+    @Test
+    void publish_alreadyPublishedCourse_remainsPublished() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.approve();
+        course.publish();
+
+        // when
+        course.publish();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED);
+    }
+
+    @Test
+    void sendToApprove_notSentStatus_transitionsToWaiting() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // pre-condition: initial state
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.NOT_SENT_FOR_APPROVAL);
+
+        // when
+        course.sendToApprove();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void create_nameAndDescriptionStoredCorrectly() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("Advanced Java Programming")
+                .description("A deep dive into Java features")
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("name", "Advanced Java Programming")
+                .hasFieldOrPropertyWithValue("description", "A deep dive into Java features");
+    }
+
+    @Test
+    void approve_afterSendToApprove_approvedStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.sendToApprove();
+
+        // when
+        course.approve();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+    }
+
+    @Test
+    void archive_calledTwice_remainsArchived() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.archive();
+        course.archive();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.ARCHIVED);
+    }
+
+    @Test
+    void updateRating_afterIncreasingStudents_bothFieldsIndependent() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.increaseNumberOfStudents();
+        course.updateRating(4.2);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(1))
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(4.2));
+    }
+
 }

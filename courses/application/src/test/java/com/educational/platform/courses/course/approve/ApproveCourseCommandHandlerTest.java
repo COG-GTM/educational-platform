@@ -157,6 +157,33 @@ public class ApproveCourseCommandHandlerTest {
     }
 
     @Test
+    void handle_waitingForApprovalCourse_courseSavedWithStatusApproved() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseCommand command = new ApproveCourseCommand(uuid);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        correspondingCourse.sendToApprove();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+    }
+
+    @Test
     void handle_declinedCourse_courseSavedWithStatusApproved() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
