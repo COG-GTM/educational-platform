@@ -90,6 +90,36 @@ public class CourseProposalTest {
     }
 
     @Test
+    void approve_declinedProposal_transitionsToApproved() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        proposal.decline();
+
+        // when
+        proposal.approve();
+
+        // then
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED);
+    }
+
+    @Test
+    void decline_approvedProposal_transitionsToDeclined() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        proposal.approve();
+
+        // when
+        proposal.decline();
+
+        // then
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED);
+    }
+
+    @Test
     void toDTO_correspondingDTOCreated() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
