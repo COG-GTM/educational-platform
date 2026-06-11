@@ -265,4 +265,36 @@ public class CourseEnrollmentControllerTest {
         assertThat(captor.getAllValues().get(0).courseId()).isEqualTo(courseUuid1);
         assertThat(captor.getAllValues().get(1).courseId()).isEqualTo(courseUuid2);
     }
+
+    @Test
+    void courseEnrollments_passesListCourseEnrollmentsQueryToHandler() {
+        // given
+        when(listHandler.handle(any(ListCourseEnrollmentsQuery.class))).thenReturn(List.of());
+
+        // when
+        sut.courseEnrollments();
+
+        // then
+        ArgumentCaptor<ListCourseEnrollmentsQuery> captor = ArgumentCaptor.forClass(ListCourseEnrollmentsQuery.class);
+        verify(listHandler).handle(captor.capture());
+        assertThat(captor.getValue()).isNotNull();
+        assertThat(captor.getValue()).isInstanceOf(ListCourseEnrollmentsQuery.class);
+    }
+
+    @Test
+    void enroll_multipleCalls_eachCallCreatesNewCommand() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(registerHandler.handle(any(RegisterStudentToCourseCommand.class))).thenReturn(UUID.randomUUID());
+
+        // when
+        sut.enroll(courseUuid, new CourseEnrollmentRequest("s1"));
+        sut.enroll(courseUuid, new CourseEnrollmentRequest("s2"));
+
+        // then — each call creates a fresh command instance
+        ArgumentCaptor<RegisterStudentToCourseCommand> captor = ArgumentCaptor.forClass(RegisterStudentToCourseCommand.class);
+        verify(registerHandler, times(2)).handle(captor.capture());
+        assertThat(captor.getAllValues().get(0).courseId()).isEqualTo(courseUuid);
+        assertThat(captor.getAllValues().get(1).courseId()).isEqualTo(courseUuid);
+    }
 }

@@ -73,4 +73,18 @@ public class RegisterStudentToCourseCommandHandlerSecurityTest {
         assertThatThrownBy(registerAction)
                 .isInstanceOf(AccessDeniedException.class);
     }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void handle_userIsAdmin_accessDeniedException() {
+        // given
+        var command = new RegisterStudentToCourseCommand(courseUuid);
+
+        // when
+        final ThrowingCallable registerAction = () -> sut.handle(command);
+
+        // then
+        assertThatThrownBy(registerAction)
+                .isInstanceOf(AccessDeniedException.class);
+    }
 }

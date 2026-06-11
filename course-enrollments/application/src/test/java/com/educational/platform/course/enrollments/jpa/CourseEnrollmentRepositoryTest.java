@@ -169,6 +169,52 @@ public class CourseEnrollmentRepositoryTest {
 		assertThat(result.getFirst().completionStatus()).isEqualTo(com.educational.platform.course.enrollments.CompletionStatusDTO.COMPLETED);
 	}
 
+	@Test
+	void findByUuid_completedEnrollment_stillReturnsEnrollment() {
+		// given
+		var enrollment = createAndSaveEnrollment(FIRST_COURSE);
+		enrollment.complete();
+		courseEnrollmentRepository.save(enrollment);
+
+		// when
+		var result = courseEnrollmentRepository.findByUuid(enrollment.getUuid());
+
+		// then
+		assertThat(result).isPresent();
+		assertThat(result.get().getUuid()).isEqualTo(enrollment.getUuid());
+	}
+
+	@Test
+	void findByUuid_multipleEnrollments_returnsCorrectOne() {
+		// given
+		var enrollment1 = createAndSaveEnrollment(FIRST_COURSE);
+		var enrollment2 = createAndSaveEnrollment(SECOND_COURSE);
+
+		// when
+		var result1 = courseEnrollmentRepository.findByUuid(enrollment1.getUuid());
+		var result2 = courseEnrollmentRepository.findByUuid(enrollment2.getUuid());
+
+		// then
+		assertThat(result1).isPresent();
+		assertThat(result1.get().getUuid()).isEqualTo(enrollment1.getUuid());
+		assertThat(result2).isPresent();
+		assertThat(result2.get().getUuid()).isEqualTo(enrollment2.getUuid());
+		assertThat(result1.get().getUuid()).isNotEqualTo(result2.get().getUuid());
+	}
+
+	@Test
+	void queryByStudent_singleEnrollment_dtoContainsStudentUsername() {
+		// given
+		createAndSaveEnrollment(FIRST_COURSE);
+
+		// when
+		var result = courseEnrollmentRepository.query(STUDENT);
+
+		// then
+		assertThat(result).hasSize(1);
+		assertThat(result.getFirst().student()).isEqualTo(STUDENT);
+	}
+
 	private CourseEnrollment createAndSaveEnrollment(UUID courseUuid) {
 		var course = enrollCourseRepository.findByUuid(courseUuid);
 		var student = studentRepository.findByUsername(STUDENT);

@@ -62,4 +62,17 @@ public class ListCourseEnrollmentsQueryHandlerSecurityTest {
 		// then
 		assertThatThrownBy(queryAction).isInstanceOf(AccessDeniedException.class);
 	}
+
+	@Test
+	@WithMockUser(roles = "ADMIN")
+	void handle_userIsAdmin_accessDeniedException() {
+		// given
+		var query = new ListCourseEnrollmentsQuery();
+
+		// when
+		final ThrowingCallable queryAction = () -> sut.handle(query);
+
+		// then
+		assertThatThrownBy(queryAction).isInstanceOf(AccessDeniedException.class);
+	}
 }

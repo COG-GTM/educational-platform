@@ -175,6 +175,29 @@ public class CourseEnrollmentApiTest {
     }
 
     @Test
+    void register_validCourse_responseBodyIsValidUuidFormat() {
+        var token = SignUpHelper.signUpStudent();
+
+        var body = given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .body("{\n" +
+                        "  \"student\": \"username\"\n" +
+                        "}")
+                .when()
+                .post("/courses/{uuid}/course-enrollments", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+                .then()
+                .statusCode(HttpStatus.CREATED.value())
+                .extract().body().asString();
+
+        // then — response body is a valid UUID
+        var parsed = UUID.fromString(body.replace("\"", ""));
+        org.assertj.core.api.Assertions.assertThat(parsed).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(parsed.toString())
+                .matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+    }
+
+    @Test
     void listCourseEnrollments_studentAuthenticated_responseContainsDTOFields() {
         var token = SignUpHelper.signUpStudent();
 

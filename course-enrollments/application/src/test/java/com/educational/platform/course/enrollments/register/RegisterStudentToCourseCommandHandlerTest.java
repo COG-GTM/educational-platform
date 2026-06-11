@@ -371,4 +371,56 @@ public class RegisterStudentToCourseCommandHandlerTest {
         // then — factory is called inside the transaction callback, not directly by handler
         verifyNoInteractions(courseEnrollmentFactory);
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void handle_validCommand_factoryCalledBeforeSaveInTransactionCallback() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment expectedEnrollment = new CourseEnrollment(1, 1);
+
+        when(courseEnrollmentFactory.createFrom(command)).thenReturn(expectedEnrollment);
+        when(transactionTemplate.execute(any(TransactionCallback.class))).thenAnswer(invocation -> {
+            TransactionCallback<CourseEnrollment> callback = invocation.getArgument(0);
+            return callback.doInTransaction(mock(TransactionStatus.class));
+        });
+
+        final Student student = new Student(new CreateStudentCommand("student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        sut.handle(command);
+
+        // then — factory must be called before save within the transaction
+        org.mockito.InOrder inOrder = inOrder(courseEnrollmentFactory, courseEnrollmentRepository);
+        inOrder.verify(courseEnrollmentFactory).createFrom(command);
+        inOrder.verify(courseEnrollmentRepository).save(expectedEnrollment);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void handle_validCommand_eventPublishedAfterTransaction() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment expectedEnrollment = new CourseEnrollment(1, 1);
+
+        when(courseEnrollmentFactory.createFrom(command)).thenReturn(expectedEnrollment);
+        when(transactionTemplate.execute(any(TransactionCallback.class))).thenAnswer(invocation -> {
+            TransactionCallback<CourseEnrollment> callback = invocation.getArgument(0);
+            return callback.doInTransaction(mock(TransactionStatus.class));
+        });
+
+        final Student student = new Student(new CreateStudentCommand("student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        sut.handle(command);
+
+        // then — event published after transaction template executes
+        org.mockito.InOrder inOrder = inOrder(transactionTemplate, eventPublisher);
+        inOrder.verify(transactionTemplate).execute(any(TransactionCallback.class));
+        inOrder.verify(eventPublisher).publishEvent(any(StudentEnrolledToCourseIntegrationEvent.class));
+    }
 }

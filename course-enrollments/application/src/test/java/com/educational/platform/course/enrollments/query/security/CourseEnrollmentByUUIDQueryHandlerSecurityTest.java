@@ -63,4 +63,17 @@ public class CourseEnrollmentByUUIDQueryHandlerSecurityTest {
 		// then
 		assertThatThrownBy(queryAction).isInstanceOf(AccessDeniedException.class);
 	}
+
+	@Test
+	@WithMockUser(roles = "ADMIN")
+	void handle_userIsAdmin_accessDeniedException() {
+		// given
+		var query = new CourseEnrollmentByUUIDQuery(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"));
+
+		// when
+		final ThrowingCallable queryAction = () -> sut.handle(query);
+
+		// then
+		assertThatThrownBy(queryAction).isInstanceOf(AccessDeniedException.class);
+	}
 }

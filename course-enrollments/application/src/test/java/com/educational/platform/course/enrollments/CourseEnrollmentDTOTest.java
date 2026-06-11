@@ -168,4 +168,33 @@ public class CourseEnrollmentDTOTest {
 		// then
 		assertThat(dto1).isNotEqualTo(dto2);
 	}
+
+	@Test
+	void bothConstructors_equivalentInputs_produceEqualDTOs() {
+		// given
+		final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+
+		// when
+		final CourseEnrollmentDTO fromDomain = new CourseEnrollmentDTO(enrollmentUuid, courseUuid, "student", CompletionStatus.IN_PROGRESS);
+		final CourseEnrollmentDTO fromDTO = new CourseEnrollmentDTO(enrollmentUuid, courseUuid, "student", CompletionStatusDTO.IN_PROGRESS);
+
+		// then
+		assertThat(fromDomain).isEqualTo(fromDTO);
+		assertThat(fromDomain.hashCode()).isEqualTo(fromDTO.hashCode());
+	}
+
+	@Test
+	void bothConstructors_completedStatus_produceEqualDTOs() {
+		// given
+		final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+
+		// when
+		final CourseEnrollmentDTO fromDomain = new CourseEnrollmentDTO(enrollmentUuid, courseUuid, "student", CompletionStatus.COMPLETED);
+		final CourseEnrollmentDTO fromDTO = new CourseEnrollmentDTO(enrollmentUuid, courseUuid, "student", CompletionStatusDTO.COMPLETED);
+
+		// then
+		assertThat(fromDomain).isEqualTo(fromDTO);
+	}
 }
