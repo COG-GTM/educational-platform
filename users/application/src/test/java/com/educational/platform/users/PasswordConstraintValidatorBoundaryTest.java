@@ -12,7 +12,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 
 /**
- * Boundary tests for the LengthRule(8, 30) and WhitespaceRule in PasswordConstraintValidator.
+ * Boundary-condition tests for {@link PasswordConstraintValidator}.
+ * Passay rules: length 8–30, no whitespace.
  */
 @ExtendWith(MockitoExtension.class)
 public class PasswordConstraintValidatorBoundaryTest {
@@ -32,32 +33,48 @@ public class PasswordConstraintValidatorBoundaryTest {
     }
 
     @Test
-    void isValid_exactlyMinLength_isValid() {
-        // 8 characters — minimum valid length
+    void isValid_exactMinLength8_isValid() {
         assertThat(sut.isValid("abcdefgh", context)).isTrue();
     }
 
     @Test
-    void isValid_exactlyMaxLength_isValid() {
-        // 30 characters — maximum valid length
-        assertThat(sut.isValid("aaaaabbbbbcccccdddddeeeeefffff", context)).isTrue();
+    void isValid_exactMaxLength30_isValid() {
+        assertThat(sut.isValid("a".repeat(30), context)).isTrue();
     }
 
     @Test
-    void isValid_oneBelowMinLength_isInvalid() {
-        // 7 characters — one below minimum
+    void isValid_belowMinLength7_isInvalid() {
         assertThat(sut.isValid("abcdefg", context)).isFalse();
     }
 
     @Test
-    void isValid_oneAboveMaxLength_isInvalid() {
-        // 31 characters — one above maximum
-        assertThat(sut.isValid("aaaaabbbbbcccccdddddeeeeefffffg", context)).isFalse();
+    void isValid_aboveMaxLength31_isInvalid() {
+        assertThat(sut.isValid("a".repeat(31), context)).isFalse();
     }
 
     @Test
     void isValid_emptyString_isInvalid() {
         assertThat(sut.isValid("", context)).isFalse();
+    }
+
+    @Test
+    void isValid_onlyWhitespace_isInvalid() {
+        assertThat(sut.isValid("        ", context)).isFalse();
+    }
+
+    @Test
+    void isValid_leadingWhitespace_isInvalid() {
+        assertThat(sut.isValid(" password", context)).isFalse();
+    }
+
+    @Test
+    void isValid_trailingWhitespace_isInvalid() {
+        assertThat(sut.isValid("password ", context)).isFalse();
+    }
+
+    @Test
+    void isValid_middleWhitespace_isInvalid() {
+        assertThat(sut.isValid("pass word", context)).isFalse();
     }
 
     @Test
