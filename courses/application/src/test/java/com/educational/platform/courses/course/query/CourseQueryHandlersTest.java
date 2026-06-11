@@ -70,4 +70,30 @@ public class CourseQueryHandlersTest {
         // then
         assertThat(result).containsExactly(dto);
     }
+
+    @Test
+    void listCourses_noCourses_returnsEmptyList() {
+        // given
+        when(repository.list()).thenReturn(List.of());
+
+        // when
+        final List<CourseLightDTO> result = listCourseQueryHandler.handle(new ListCourseQuery());
+
+        // then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void listCourses_multipleCourses_returnsAll() {
+        // given
+        final CourseLightDTO dto1 = new CourseLightDTO(UUID.randomUUID(), "Course A", "desc A", 10);
+        final CourseLightDTO dto2 = new CourseLightDTO(UUID.randomUUID(), "Course B", "desc B", 5);
+        when(repository.list()).thenReturn(List.of(dto1, dto2));
+
+        // when
+        final List<CourseLightDTO> result = listCourseQueryHandler.handle(new ListCourseQuery());
+
+        // then
+        assertThat(result).containsExactly(dto1, dto2);
+    }
 }

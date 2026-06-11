@@ -18,7 +18,12 @@ import jakarta.validation.Validator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import com.educational.platform.users.Role;
+import java.util.Collections;
 
 @ExtendWith(MockitoExtension.class)
 public class UserRegistrationCommandHandlerTokenTest {
@@ -106,5 +111,47 @@ public class UserRegistrationCommandHandlerTokenTest {
         org.mockito.Mockito.verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().username()).isEqualTo("eventuser");
         assertThat(captor.getValue().email()).isEqualTo("event@school.com");
+    }
+
+    @Test
+    void handle_studentRole_createsTokenWithCorrectUsernameAndRole() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .email("student@school.com")
+                .username("student1")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("student1")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(jwtTokenProvider).createToken(
+                eq("student1"),
+                eq(Collections.singletonList(Role.ROLE_STUDENT)));
+    }
+
+    @Test
+    void handle_teacherRole_createsTokenWithTeacherRole() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .email("teacher@school.com")
+                .username("teacher1")
+                .password("password")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+        when(repository.existsByUsername("teacher1")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(jwtTokenProvider).createToken(
+                eq("teacher1"),
+                eq(Collections.singletonList(Role.ROLE_TEACHER)));
     }
 }
