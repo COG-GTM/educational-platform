@@ -273,4 +273,54 @@ public class CreateCourseCommandHandlerTest {
         assertThat(argument.getValue())
                 .hasFieldOrPropertyWithValue("teacher", 15);
     }
+
+    @Test
+    void handle_validCourseWithEmptyCurriculumItemsList_savedCourseHasEmptyCurriculum() {
+        // given
+        stubTeacher();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .curriculumItems(List.of())
+                .build();
+
+        // when
+        final UUID result = sut.handle(command);
+
+        // then
+        assertThat(result).isNotNull();
+        ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        final Course course = argument.getValue();
+        assertThat(course)
+                .extracting("curriculumItems")
+                .asList()
+                .isEmpty();
+    }
+
+    @Test
+    void handle_nullNameOnly_constraintViolationException() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name(null)
+                .description("valid description")
+                .build();
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.handle(command));
+    }
+
+    @Test
+    void handle_nullDescriptionOnly_constraintViolationException() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("valid name")
+                .description(null)
+                .build();
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.handle(command));
+    }
 }

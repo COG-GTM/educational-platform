@@ -1039,4 +1039,98 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(1));
     }
 
+    @Test
+    void publish_approvedCourse_calledTwice_remainsPublished() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.approve();
+
+        // when
+        course.publish();
+        course.publish();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED);
+    }
+
+    @Test
+    void increaseNumberOfStudents_fiveTimes_numberOfStudentsIsFive() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        for (int i = 0; i < 5; i++) {
+            course.increaseNumberOfStudents();
+        }
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(5));
+    }
+
+    @Test
+    void updateRating_doesNotAffectNumberOfStudents() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.increaseNumberOfStudents();
+        course.increaseNumberOfStudents();
+
+        // when
+        course.updateRating(4.2);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(2))
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(4.2));
+    }
+
+    @Test
+    void approve_doesNotAffectPublishStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.approve();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+    }
+
+    @Test
+    void sendToApprove_doesNotAffectPublishStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.sendToApprove();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+    }
+
 }

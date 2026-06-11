@@ -209,4 +209,70 @@ public class UpdateCourseRatingCommandHandlerTest {
         assertThat(lastSaved)
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(4.5));
     }
+
+    @Test
+    void handle_invalidId_saveNotCalled() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 4.0);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when / then
+        try {
+            sut.handle(command);
+        } catch (ResourceNotFoundException ignored) {
+        }
+
+        // then
+        verify(repository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any(Course.class));
+    }
+
+    @Test
+    void handle_maxRating_courseSavedWithMaxRating() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 5.0);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0));
+    }
+
+    @Test
+    void handle_existingCourse_findByUuidCalledWithCorrectUuid() {
+        // given
+        final UUID uuid = UUID.fromString("abcdef01-2345-6789-abcd-ef0123456789");
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 3.0);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(repository).findByUuid(uuid);
+    }
 }

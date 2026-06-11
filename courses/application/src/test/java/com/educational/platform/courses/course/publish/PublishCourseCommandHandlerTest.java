@@ -359,4 +359,21 @@ public class PublishCourseCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("description", "Deep dive into Java")
                 .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED);
     }
+
+    @Test
+    void handle_invalidId_saveNotCalled() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final PublishCourseCommand command = new PublishCourseCommand(uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when / then
+        try {
+            sut.handle(command);
+        } catch (ResourceNotFoundException ignored) {
+        }
+
+        // then
+        verify(repository, never()).save(org.mockito.ArgumentMatchers.any(Course.class));
+    }
 }
