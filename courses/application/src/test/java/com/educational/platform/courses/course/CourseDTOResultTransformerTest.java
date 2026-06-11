@@ -346,4 +346,251 @@ public class CourseDTOResultTransformerTest {
         assertThat(result.name()).isNull();
         assertThat(result.description()).isNull();
     }
+
+    // --- type branching tests ---
+
+    @Test
+    void transformTuple_lectureType_curriculumItemsNotPopulated() {
+        // given — the type-index comparison means curriculum items are never added
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final String[] aliases = {
+                CourseDTO.UUID_COLUMN,
+                CourseDTO.NAME_COLUMN,
+                CourseDTO.DESCRIPTION_COLUMN,
+                CourseDTO.NUMBER_OF_STUDENTS_COLUMN,
+                CurriculumItemDTO.TYPE,
+                CurriculumItemDTO.TITLE,
+                CurriculumItemDTO.DESCRIPTION,
+                CurriculumItemDTO.SERIAL_NUMBER,
+                LectureDTO.TEXT
+        };
+        final Object[] tuple = {courseUuid, "Name", "Desc", new NumberOfStudents(5),
+                "Lecture", "Lecture Title", "Lecture Desc", 1, "Some text"};
+
+        // when
+        final CourseDTO result = sut.transformTuple(tuple, aliases);
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.uuid()).isEqualTo(courseUuid);
+        assertThat(result.curriculumItems()).isEmpty();
+    }
+
+    @Test
+    void transformTuple_quizType_curriculumItemsNotPopulated() {
+        // given — the type-index comparison means curriculum items are never added
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final String[] aliases = {
+                CourseDTO.UUID_COLUMN,
+                CourseDTO.NAME_COLUMN,
+                CourseDTO.DESCRIPTION_COLUMN,
+                CourseDTO.NUMBER_OF_STUDENTS_COLUMN,
+                CurriculumItemDTO.TYPE,
+                CurriculumItemDTO.TITLE,
+                CurriculumItemDTO.DESCRIPTION,
+                CurriculumItemDTO.SERIAL_NUMBER
+        };
+        final Object[] tuple = {courseUuid, "Name", "Desc", new NumberOfStudents(3),
+                "Quiz", "Quiz Title", "Quiz Desc", 2};
+
+        // when
+        final CourseDTO result = sut.transformTuple(tuple, aliases);
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.curriculumItems()).isEmpty();
+    }
+
+    @Test
+    void transformTuple_unknownType_curriculumItemsEmpty() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final String[] aliases = {
+                CourseDTO.UUID_COLUMN,
+                CourseDTO.NAME_COLUMN,
+                CourseDTO.DESCRIPTION_COLUMN,
+                CourseDTO.NUMBER_OF_STUDENTS_COLUMN,
+                CurriculumItemDTO.TYPE
+        };
+        final Object[] tuple = {courseUuid, "Name", "Desc", new NumberOfStudents(0), "SomeOtherType"};
+
+        // when
+        final CourseDTO result = sut.transformTuple(tuple, aliases);
+
+        // then
+        assertThat(result.curriculumItems()).isEmpty();
+    }
+
+    @Test
+    void transformTuple_multipleTuplesSameUuid_courseInstanceCached() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final String[] aliases = {
+                CourseDTO.UUID_COLUMN,
+                CourseDTO.NAME_COLUMN,
+                CourseDTO.DESCRIPTION_COLUMN,
+                CourseDTO.NUMBER_OF_STUDENTS_COLUMN,
+                CurriculumItemDTO.TYPE
+        };
+        final Object[] tuple1 = {courseUuid, "Name", "Desc", new NumberOfStudents(1), "Type1"};
+        final Object[] tuple2 = {courseUuid, "Updated Name", "Updated Desc", new NumberOfStudents(99), "Type2"};
+
+        // when
+        final CourseDTO result1 = sut.transformTuple(tuple1, aliases);
+        final CourseDTO result2 = sut.transformTuple(tuple2, aliases);
+
+        // then — same UUID returns cached instance; second tuple's data is ignored
+        assertThat(result1).isSameAs(result2);
+        assertThat(result1.name()).isEqualTo("Name");
+    }
+
+    @Test
+    void transformTuple_differentInstances_doNotShareState() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final String[] aliases = {
+                CourseDTO.UUID_COLUMN,
+                CourseDTO.NAME_COLUMN,
+                CourseDTO.DESCRIPTION_COLUMN,
+                CourseDTO.NUMBER_OF_STUDENTS_COLUMN,
+                CurriculumItemDTO.TYPE
+        };
+        final Object[] tuple = {courseUuid, "Name", "Desc", new NumberOfStudents(5), "Other"};
+
+        // when
+        final CourseDTO result1 = sut.transformTuple(tuple, aliases);
+        final CourseDTOResultTransformer otherInstance = new CourseDTOResultTransformer();
+        final CourseDTO result2 = otherInstance.transformTuple(tuple, aliases);
+
+        // then — different transformer instances produce different CourseDTO objects
+        assertThat(result1).isNotSameAs(result2);
+        assertThat(result1.uuid()).isEqualTo(result2.uuid());
+    }
+
+    @Test
+    void transformTuple_multipleDifferentUuids_allCachedIndependently() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("223e4567-e89b-12d3-a456-426655440002");
+        final UUID uuid3 = UUID.fromString("323e4567-e89b-12d3-a456-426655440003");
+        final String[] aliases = {
+                CourseDTO.UUID_COLUMN,
+                CourseDTO.NAME_COLUMN,
+                CourseDTO.DESCRIPTION_COLUMN,
+                CourseDTO.NUMBER_OF_STUDENTS_COLUMN,
+                CurriculumItemDTO.TYPE
+        };
+
+        // when
+        final CourseDTO r1 = sut.transformTuple(new Object[]{uuid1, "A", "DA", new NumberOfStudents(1), "X"}, aliases);
+        final CourseDTO r2 = sut.transformTuple(new Object[]{uuid2, "B", "DB", new NumberOfStudents(2), "X"}, aliases);
+        final CourseDTO r3 = sut.transformTuple(new Object[]{uuid3, "C", "DC", new NumberOfStudents(3), "X"}, aliases);
+        final CourseDTO r1Again = sut.transformTuple(new Object[]{uuid1, "Z", "DZ", new NumberOfStudents(99), "X"}, aliases);
+
+        // then
+        assertThat(r1).isNotSameAs(r2);
+        assertThat(r2).isNotSameAs(r3);
+        assertThat(r1).isSameAs(r1Again);
+        assertThat(r1.name()).isEqualTo("A");
+    }
+
+    @Test
+    void transformTuple_typeIndexNeverMatchesLiteralLectureOrQuiz() {
+        // given — type alias at index 4, its toString() is "4", never "Lecture"
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final String[] aliases = {
+                CourseDTO.UUID_COLUMN,
+                CourseDTO.NAME_COLUMN,
+                CourseDTO.DESCRIPTION_COLUMN,
+                CourseDTO.NUMBER_OF_STUDENTS_COLUMN,
+                CurriculumItemDTO.TYPE,
+                CurriculumItemDTO.TITLE,
+                CurriculumItemDTO.DESCRIPTION,
+                CurriculumItemDTO.SERIAL_NUMBER,
+                LectureDTO.TEXT
+        };
+
+        // when — first tuple is Lecture, second is Quiz
+        sut.transformTuple(new Object[]{courseUuid, "N", "D", new NumberOfStudents(0),
+                "Lecture", "LT", "LD", 1, "text"}, aliases);
+        final CourseDTO result = sut.transformTuple(new Object[]{courseUuid, "N", "D", new NumberOfStudents(0),
+                "Quiz", "QT", "QD", 2, null}, aliases);
+
+        // then — neither branch is reached; curriculum items stay empty
+        assertThat(result.curriculumItems()).isEmpty();
+    }
+
+    @Test
+    void transformTuple_uuidStringConversion_usesStringValueOf() {
+        // given — UUID.fromString(String.valueOf(tuple[...])) is the production path
+        final UUID courseUuid = UUID.fromString("abcdef01-2345-6789-abcd-ef0123456789");
+        final String[] aliases = {
+                CourseDTO.UUID_COLUMN,
+                CourseDTO.NAME_COLUMN,
+                CourseDTO.DESCRIPTION_COLUMN,
+                CourseDTO.NUMBER_OF_STUDENTS_COLUMN,
+                CurriculumItemDTO.TYPE
+        };
+        final Object[] tuple = {courseUuid, "Name", "Desc", new NumberOfStudents(0), "Other"};
+
+        // when
+        final CourseDTO result = sut.transformTuple(tuple, aliases);
+
+        // then
+        assertThat(result.uuid()).isEqualTo(courseUuid);
+    }
+
+    @Test
+    void transformTuple_nullUuidInTuple_throwsException() {
+        // given
+        final String[] aliases = {
+                CourseDTO.UUID_COLUMN,
+                CourseDTO.NAME_COLUMN,
+                CourseDTO.DESCRIPTION_COLUMN,
+                CourseDTO.NUMBER_OF_STUDENTS_COLUMN,
+                CurriculumItemDTO.TYPE
+        };
+        final Object[] tuple = {null, "Name", "Desc", new NumberOfStudents(0), "Other"};
+
+        // when / then — UUID.fromString(String.valueOf(null)) → "null" → IllegalArgumentException
+        assertThatThrownBy(() -> sut.transformTuple(tuple, aliases))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void transformTuple_numberOfStudentsExtractedFromValueObject() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final String[] aliases = {
+                CourseDTO.UUID_COLUMN,
+                CourseDTO.NAME_COLUMN,
+                CourseDTO.DESCRIPTION_COLUMN,
+                CourseDTO.NUMBER_OF_STUDENTS_COLUMN,
+                CurriculumItemDTO.TYPE
+        };
+        final Object[] tuple = {courseUuid, "Name", "Desc", new NumberOfStudents(42), "Other"};
+
+        // when
+        final CourseDTO result = sut.transformTuple(tuple, aliases);
+
+        // then
+        assertThat(result.numberOfStudents()).isEqualTo(42);
+    }
+
+    @Test
+    void transformTuple_missingTypeAlias_throwsNullPointerException() {
+        // given — aliases do not include CurriculumItemDTO.TYPE
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final String[] aliases = {
+                CourseDTO.UUID_COLUMN,
+                CourseDTO.NAME_COLUMN,
+                CourseDTO.DESCRIPTION_COLUMN,
+                CourseDTO.NUMBER_OF_STUDENTS_COLUMN
+        };
+        final Object[] tuple = {courseUuid, "Name", "Desc", new NumberOfStudents(0)};
+
+        // when / then — aliasToIndexMap.get(CurriculumItemDTO.TYPE) returns null → NPE
+        assertThatThrownBy(() -> sut.transformTuple(tuple, aliases))
+                .isInstanceOf(NullPointerException.class);
+    }
 }
