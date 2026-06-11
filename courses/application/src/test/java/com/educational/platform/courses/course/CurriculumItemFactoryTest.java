@@ -1203,4 +1203,75 @@ public class CurriculumItemFactoryTest {
                 .doesNotHaveDuplicates();
     }
 
+    @Test
+    void createFrom_twoLecturesWithSameSerialNumber_bothCreatedIndependently() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateLectureCommand lectureCommand1 = CreateLectureCommand.builder()
+                .title("Lecture A")
+                .description("Desc A")
+                .serialNumber(1)
+                .text("Content A")
+                .build();
+        final CreateLectureCommand lectureCommand2 = CreateLectureCommand.builder()
+                .title("Lecture B")
+                .description("Desc B")
+                .serialNumber(1)
+                .text("Content B")
+                .build();
+
+        // when
+        final CurriculumItem result1 = CurriculumItemFactory.createFrom(lectureCommand1, course);
+        final CurriculumItem result2 = CurriculumItemFactory.createFrom(lectureCommand2, course);
+
+        // then
+        assertThat(result1).isInstanceOf(Lecture.class);
+        assertThat(result2).isInstanceOf(Lecture.class);
+        assertThat(result1).hasFieldOrPropertyWithValue("serialNumber", 1);
+        assertThat(result2).hasFieldOrPropertyWithValue("serialNumber", 1);
+        assertThat(result1).hasFieldOrPropertyWithValue("title", "Lecture A");
+        assertThat(result2).hasFieldOrPropertyWithValue("title", "Lecture B");
+        assertThat(result1).extracting("uuid").isNotEqualTo(result2.toString());
+    }
+
+    @Test
+    void createFrom_quizCommand_singleQuestion_contentPreserved() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz Title")
+                .description("Quiz Desc")
+                .serialNumber(1)
+                .text("Quiz Content")
+                .questions(List.of(new CreateQuestionCommand("The Only Question")))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Quiz.class);
+        assertThat(result).extracting("questions")
+                .asInstanceOf(LIST)
+                .hasSize(1)
+                .first()
+                .hasFieldOrPropertyWithValue("content", "The Only Question");
+    }
+
 }

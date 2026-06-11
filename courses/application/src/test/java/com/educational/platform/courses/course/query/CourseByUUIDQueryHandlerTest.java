@@ -409,4 +409,52 @@ public class CourseByUUIDQueryHandlerTest {
                 .hasMessage("invalid uuid");
     }
 
+    @Test
+    void handle_courseWithMinIntStudents_returnedAsIs() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440022");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        final CourseDTO courseDTO = new CourseDTO(uuid, "min-students", "desc", Integer.MIN_VALUE, List.of());
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().numberOfStudents()).isEqualTo(Integer.MIN_VALUE);
+    }
+
+    @Test
+    void handle_courseWithEmptyStringFields_returnedAsIs() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440023");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        final CourseDTO courseDTO = new CourseDTO(uuid, "", "", 0, List.of());
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().name()).isEmpty();
+        assertThat(result.get().description()).isEmpty();
+    }
+
+    @Test
+    void handle_uuidObjectPassedDirectlyToRepository_sameReference() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440024");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        sut.handle(query);
+
+        // then
+        verify(repository).findDTOByUuid(uuid);
+        verifyNoMoreInteractions(repository);
+    }
+
 }

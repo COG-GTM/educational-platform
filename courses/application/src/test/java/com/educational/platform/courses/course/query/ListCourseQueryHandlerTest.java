@@ -383,4 +383,40 @@ public class ListCourseQueryHandlerTest {
                 .hasMessage("connection closed");
     }
 
+    @Test
+    void handle_courseWithLongNameAndDescription_preservedInResults() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final String longName = "N".repeat(1000);
+        final String longDesc = "D".repeat(5000);
+        final CourseLightDTO longCourse = new CourseLightDTO(UUID.randomUUID(), longName, longDesc, 1);
+        when(repository.list()).thenReturn(List.of(longCourse));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().name()).hasSize(1000);
+        assertThat(result.getFirst().description()).hasSize(5000);
+    }
+
+    @Test
+    void handle_repositoryReturnsListWithNullElement_returnedAsIs() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final java.util.ArrayList<CourseLightDTO> listWithNull = new java.util.ArrayList<>();
+        listWithNull.add(new CourseLightDTO(UUID.randomUUID(), "course", "desc", 1));
+        listWithNull.add(null);
+        when(repository.list()).thenReturn(listWithNull);
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0)).isNotNull();
+        assertThat(result.get(1)).isNull();
+    }
+
 }

@@ -339,4 +339,52 @@ public class UserCreatedIntegrationEventHandlerTest {
                 .hasMessage("duplicate teacher");
     }
 
+    @Test
+    void handleUserCreatedEvent_emojiUsername_preservedInCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("\uD83C\uDF93teacher\uD83D\uDCDA", "emoji@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("\uD83C\uDF93teacher\uD83D\uDCDA");
+    }
+
+    @Test
+    void handleUserCreatedEvent_usernameWithLeadingTrailingSpaces_preservedInCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("  alice  ", "alice@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("  alice  ");
+    }
+
+    @Test
+    void handleUserCreatedEvent_threeSequentialEvents_allProcessedInOrder() {
+        // given
+        final UserCreatedIntegrationEvent event1 = new UserCreatedIntegrationEvent("user1", "u1@example.com");
+        final UserCreatedIntegrationEvent event2 = new UserCreatedIntegrationEvent("user2", "u2@example.com");
+        final UserCreatedIntegrationEvent event3 = new UserCreatedIntegrationEvent("user3", "u3@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event1);
+        sut.handleUserCreatedEvent(event2);
+        sut.handleUserCreatedEvent(event3);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler, times(3)).handle(argument.capture());
+        assertThat(argument.getAllValues())
+                .extracting(CreateTeacherCommand::username)
+                .containsExactly("user1", "user2", "user3");
+    }
+
 }
