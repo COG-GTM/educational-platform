@@ -22,6 +22,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -122,6 +123,27 @@ public class CourseEnrollmentFactoryTest {
 
         // then
         assertThrows(NullPointerException.class, createAction);
+    }
+
+    @Test
+    void createFrom_validCommand_queriesRepositoryWithCorrectUuid() {
+        // given
+        final UUID courseId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CreateCourseCommand createCourseCommand = new CreateCourseCommand(courseId);
+        final EnrollCourse correspondingCourse = new EnrollCourse(createCourseCommand);
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
+
+        final CreateStudentCommand createStudentCommand = new CreateStudentCommand("username");
+        final Student correspondingStudent = new Student(createStudentCommand);
+        when(currentUserAsStudent.userAsStudent()).thenReturn(correspondingStudent);
+
+        // when
+        sut.createFrom(command);
+
+        // then
+        verify(courseRepository).findByUuid(courseId);
+        verify(currentUserAsStudent).userAsStudent();
     }
 
 }

@@ -95,4 +95,35 @@ public class CourseEnrollmentTest {
 		assertThat(enrollment).hasFieldOrPropertyWithValue("student", 99);
 	}
 
+	@Test
+	void constructor_idIsNullBeforePersist() {
+		// given / when
+		final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+
+		// then
+		assertThat(enrollment).hasFieldOrPropertyWithValue("id", null);
+	}
+
+	@Test
+	void getUuid_returnsValidUuidFormat() {
+		// given / when
+		final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+
+		// then
+		assertThat(enrollment.getUuid()).isInstanceOf(UUID.class);
+		assertThat(enrollment.getUuid().toString()).matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+	}
+
+	@Test
+	void constructor_nullArguments_acceptsNulls() {
+		// given / when
+		final CourseEnrollment enrollment = new CourseEnrollment(null, null);
+
+		// then
+		assertThat(enrollment).hasFieldOrPropertyWithValue("course", null);
+		assertThat(enrollment).hasFieldOrPropertyWithValue("student", null);
+		assertThat(enrollment.getUuid()).isNotNull();
+		assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
+	}
+
 }

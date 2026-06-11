@@ -103,6 +103,42 @@ public class CourseEnrollmentRepositoryTest {
 		assertThat(result).isEmpty();
 	}
 
+	@Test
+	void queryByUuidAndStudent_nonExistingUuid_returnsEmpty() {
+		// when
+		var result = courseEnrollmentRepository.query(UUID.fromString("00000000-0000-0000-0000-000000000099"), STUDENT);
+
+		// then
+		assertThat(result).isEmpty();
+	}
+
+	@Test
+	void queryByUuidAndStudent_existingEnrollment_dtoHasInProgressStatus() {
+		// given
+		var enrollment = createAndSaveEnrollment(FIRST_COURSE);
+
+		// when
+		var result = courseEnrollmentRepository.query(enrollment.getUuid(), STUDENT);
+
+		// then
+		assertThat(result).isPresent();
+		assertThat(result.get().completionStatus()).isEqualTo(com.educational.platform.course.enrollments.CompletionStatusDTO.IN_PROGRESS);
+	}
+
+	@Test
+	void queryByStudent_multipleEnrollments_returnsAll() {
+		// given
+		createAndSaveEnrollment(FIRST_COURSE);
+		createAndSaveEnrollment(SECOND_COURSE);
+
+		// when
+		var result = courseEnrollmentRepository.query(STUDENT);
+
+		// then
+		assertThat(result).hasSize(2);
+		assertThat(result).extracting("course").containsExactlyInAnyOrder(FIRST_COURSE, SECOND_COURSE);
+	}
+
 	private CourseEnrollment createAndSaveEnrollment(UUID courseUuid) {
 		var course = enrollCourseRepository.findByUuid(courseUuid);
 		var student = studentRepository.findByUsername(STUDENT);
