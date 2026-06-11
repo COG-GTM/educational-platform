@@ -17,6 +17,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -307,6 +308,37 @@ public class CourseByUUIDQueryHandlerTest {
         // then
         assertThat(result).isPresent();
         assertThat(result.get().curriculumItems()).isEmpty();
+    }
+
+    @Test
+    void handle_repositoryThrowsException_exceptionPropagated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440016");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        when(repository.findDTOByUuid(uuid)).thenThrow(new RuntimeException("db error"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("db error");
+    }
+
+    @Test
+    void handle_sameUuidCalledTwice_bothCallsDelegated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440017");
+        final CourseDTO dto = new CourseDTO(uuid, "course", "desc", 1, List.of());
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.of(dto));
+
+        // when
+        final Optional<CourseDTO> result1 = sut.handle(new CourseByUUIDQuery(uuid));
+        final Optional<CourseDTO> result2 = sut.handle(new CourseByUUIDQuery(uuid));
+
+        // then
+        assertThat(result1).isPresent();
+        assertThat(result2).isPresent();
+        assertThat(result1.get()).isSameAs(result2.get());
+        verify(repository, times(2)).findDTOByUuid(uuid);
     }
 
 }

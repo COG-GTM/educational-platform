@@ -954,4 +954,66 @@ public class CurriculumItemFactoryTest {
         assertThat(result).hasFieldOrPropertyWithValue("description", "Detailed quiz description");
     }
 
+    @Test
+    void createFrom_quizCommand_multipleQuestions_allHaveQuizBackReference() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz Title")
+                .description("Quiz Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(List.of(
+                        new CreateQuestionCommand("Q1"),
+                        new CreateQuestionCommand("Q2"),
+                        new CreateQuestionCommand("Q3")))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Quiz.class);
+        assertThat(result).extracting("questions")
+                .asInstanceOf(LIST)
+                .hasSize(3)
+                .allSatisfy(question ->
+                        assertThat(question).extracting("quiz").isSameAs(result));
+    }
+
+    @Test
+    void createFrom_lectureCommand_descriptionFieldStored() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateLectureCommand lectureCommand = CreateLectureCommand.builder()
+                .title("Title")
+                .description("Detailed lecture description")
+                .serialNumber(1)
+                .text("Content")
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(lectureCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Lecture.class);
+        assertThat(result).hasFieldOrPropertyWithValue("description", "Detailed lecture description");
+    }
+
 }

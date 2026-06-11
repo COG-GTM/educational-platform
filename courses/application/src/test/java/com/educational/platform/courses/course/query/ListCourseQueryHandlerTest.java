@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -291,6 +292,33 @@ public class ListCourseQueryHandlerTest {
         // then
         assertThat(result).hasSize(2);
         assertThat(result).containsExactly(c1, c2);
+    }
+
+    @Test
+    void handle_repositoryThrowsException_exceptionPropagated() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        when(repository.list()).thenThrow(new RuntimeException("db error"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("db error");
+    }
+
+    @Test
+    void handle_courseWithMaxIntStudents_includedInResults() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO maxStudentsCourse = new CourseLightDTO(UUID.randomUUID(), "popular", "desc", Integer.MAX_VALUE);
+        when(repository.list()).thenReturn(List.of(maxStudentsCourse));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().numberOfStudents()).isEqualTo(Integer.MAX_VALUE);
     }
 
 }

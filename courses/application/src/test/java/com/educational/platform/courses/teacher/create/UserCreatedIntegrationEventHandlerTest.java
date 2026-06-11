@@ -11,6 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -255,6 +257,32 @@ public class UserCreatedIntegrationEventHandlerTest {
         final CreateTeacherCommand command = argument.getValue();
         assertThat(command.username()).isEqualTo("bob");
         assertThat(command).hasNoNullFieldsOrProperties();
+    }
+
+    @Test
+    void handleUserCreatedEvent_commandHandlerThrowsException_exceptionPropagated() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher", "teacher@example.com");
+        doThrow(new RuntimeException("db error")).when(createTeacherCommandHandler).handle(any(CreateTeacherCommand.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("db error");
+    }
+
+    @Test
+    void handleUserCreatedEvent_bothNullUsernameAndEmail_usernameStillPassedAsNull() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(null, null);
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isNull();
     }
 
 }
