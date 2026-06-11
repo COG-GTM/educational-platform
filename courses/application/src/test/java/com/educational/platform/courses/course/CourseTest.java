@@ -277,4 +277,123 @@ public class CourseTest {
         assertThat(course).extracting("curriculumItems").asList().hasSize(2);
     }
 
+    @Test
+    void create_nullCurriculumItems_courseCreatedWithoutItems() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .curriculumItems(null)
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("name", "name")
+                .hasFieldOrPropertyWithValue("description", "description")
+                .hasFieldOrPropertyWithValue("curriculumItems", null);
+    }
+
+    @Test
+    void archive_draftCourse_archivedStatus() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when
+        course.archive();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.ARCHIVED);
+    }
+
+    @Test
+    void sendToApprove_declinedCourse_waitingForApprovalStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.decline();
+
+        // when
+        course.sendToApprove();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void publish_declinedCourse_courseCannotBePublishedException() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+        course.decline();
+
+        // when
+        final ThrowableAssert.ThrowingCallable publish = course::publish;
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(publish);
+    }
+
+    @Test
+    void publish_waitingForApprovalCourse_courseCannotBePublishedException() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+        course.sendToApprove();
+
+        // when
+        final ThrowableAssert.ThrowingCallable publish = course::publish;
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(publish);
+    }
+
+    @Test
+    void updateRating_zeroRating_ratingUpdated() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when
+        course.updateRating(0.0);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0.0));
+    }
+
+    @Test
+    void toIdentity_twoCoursesWithSameCommand_differentUuids() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course1 = new Course(command, TEACHER_ID);
+        final Course course2 = new Course(command, TEACHER_ID);
+
+        // when / then
+        assertThat(course1.toIdentity()).isNotEqualTo(course2.toIdentity());
+    }
+
 }

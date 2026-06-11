@@ -61,4 +61,54 @@ public class CourseReviewTest {
         // then
         assertThat(identifier).isNotNull();
     }
+
+    @Test
+    void toIdentifier_twoReviews_differentUuids() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+        final CourseReview review1 = new CourseReview(command, 11, 22);
+        final CourseReview review2 = new CourseReview(command, 11, 22);
+
+        // when / then
+        assertThat(review1.toIdentifier()).isNotEqualTo(review2.toIdentifier());
+    }
+
+    @Test
+    void update_multipleUpdates_lastUpdateWins() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "initial");
+        final CourseReview sut = new CourseReview(createCommand, 11, 22);
+
+        final UUID reviewUuid = sut.toIdentifier();
+        final UpdateCourseReviewCommand firstUpdate = new UpdateCourseReviewCommand(reviewUuid, 2.0, "first update");
+        final UpdateCourseReviewCommand secondUpdate = new UpdateCourseReviewCommand(reviewUuid, 5.0, "second update");
+
+        // when
+        sut.update(firstUpdate);
+        sut.update(secondUpdate);
+
+        // then
+        assertThat(sut)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0))
+                .hasFieldOrPropertyWithValue("comment", new Comment("second update"));
+    }
+
+    @Test
+    void update_preservesIdentifier() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "comment");
+        final CourseReview sut = new CourseReview(createCommand, 11, 22);
+        final UUID originalUuid = sut.toIdentifier();
+
+        final UpdateCourseReviewCommand updateCommand = new UpdateCourseReviewCommand(originalUuid, 3.0, "updated");
+
+        // when
+        sut.update(updateCommand);
+
+        // then
+        assertThat(sut.toIdentifier()).isEqualTo(originalUuid);
+    }
 }
