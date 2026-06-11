@@ -60,4 +60,22 @@ public class CreateStudentCommandTest {
 		// then
 		assertThat(command.username()).isEqualTo("  ");
 	}
+
+	@Test
+	void toString_containsUsername() {
+		// when
+		final CreateStudentCommand command = new CreateStudentCommand("john");
+
+		// then
+		assertThat(command.toString()).contains("john");
+	}
+
+	@Test
+	void equals_null_isNotEqual() {
+		// given
+		final CreateStudentCommand command = new CreateStudentCommand("user");
+
+		// then
+		assertThat(command).isNotEqualTo(null);
+	}
 }

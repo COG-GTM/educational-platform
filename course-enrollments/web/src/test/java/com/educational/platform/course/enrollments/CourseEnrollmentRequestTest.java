@@ -1,6 +1,11 @@
 package com.educational.platform.course.enrollments;
 
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
+
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -59,5 +64,41 @@ public class CourseEnrollmentRequestTest {
 
 		// then
 		assertThat(request.student()).isEqualTo("  ");
+	}
+
+	@Test
+	void validation_validStudent_noViolations() {
+		// given
+		final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+		final CourseEnrollmentRequest request = new CourseEnrollmentRequest("username");
+
+		// when
+		final Set<ConstraintViolation<CourseEnrollmentRequest>> violations = validator.validate(request);
+
+		// then
+		assertThat(violations).isEmpty();
+	}
+
+	@Test
+	void validation_nullStudent_hasViolation() {
+		// given
+		final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+		final CourseEnrollmentRequest request = new CourseEnrollmentRequest(null);
+
+		// when
+		final Set<ConstraintViolation<CourseEnrollmentRequest>> violations = validator.validate(request);
+
+		// then
+		assertThat(violations).hasSize(1);
+		assertThat(violations.iterator().next().getPropertyPath().toString()).isEqualTo("student");
+	}
+
+	@Test
+	void toString_containsStudent() {
+		// given
+		final CourseEnrollmentRequest request = new CourseEnrollmentRequest("student-user");
+
+		// then
+		assertThat(request.toString()).contains("student-user");
 	}
 }

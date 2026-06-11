@@ -1,7 +1,11 @@
 package com.educational.platform.course.enrollments.register;
 
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
 
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -85,5 +89,32 @@ public class RegisterStudentToCourseCommandTest {
 
 		// then
 		assertThat(command).isNotEqualTo(null);
+	}
+
+	@Test
+	void validation_validCourseId_noViolations() {
+		// given
+		final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+		final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(UUID.randomUUID());
+
+		// when
+		final Set<ConstraintViolation<RegisterStudentToCourseCommand>> violations = validator.validate(command);
+
+		// then
+		assertThat(violations).isEmpty();
+	}
+
+	@Test
+	void validation_nullCourseId_hasViolation() {
+		// given
+		final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+		final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(null);
+
+		// when
+		final Set<ConstraintViolation<RegisterStudentToCourseCommand>> violations = validator.validate(command);
+
+		// then
+		assertThat(violations).hasSize(1);
+		assertThat(violations.iterator().next().getPropertyPath().toString()).isEqualTo("courseId");
 	}
 }

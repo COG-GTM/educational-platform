@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import com.educational.platform.common.domain.AggregateRoot;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class StudentTest {
 
@@ -97,5 +98,20 @@ public class StudentTest {
 
 		// then
 		assertThat(student).isInstanceOf(AggregateRoot.class);
+	}
+
+	@Test
+	void constructor_nullCommand_throwsNullPointerException() {
+		// when / then
+		assertThrows(NullPointerException.class, () -> new Student(null));
+	}
+
+	@Test
+	void toReference_returnsExactUsernameFromCommand() {
+		// given
+		final Student student = new Student(new CreateStudentCommand("user@example.com"));
+
+		// then
+		assertThat(student.toReference()).isEqualTo("user@example.com");
 	}
 }

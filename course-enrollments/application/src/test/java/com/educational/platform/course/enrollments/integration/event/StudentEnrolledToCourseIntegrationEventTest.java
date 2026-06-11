@@ -96,4 +96,22 @@ public class StudentEnrolledToCourseIntegrationEventTest {
 		assertThat(event.toString()).contains(courseId.toString());
 		assertThat(event.toString()).contains("student");
 	}
+
+	@Test
+	void equals_null_isNotEqual() {
+		// given
+		final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(UUID.randomUUID(), "student");
+
+		// then
+		assertThat(event).isNotEqualTo(null);
+	}
+
+	@Test
+	void constructor_emptyUsername_storesEmpty() {
+		// when
+		final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(UUID.randomUUID(), "");
+
+		// then
+		assertThat(event.username()).isEmpty();
+	}
 }

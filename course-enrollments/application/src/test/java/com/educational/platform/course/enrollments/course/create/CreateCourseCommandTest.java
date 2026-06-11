@@ -57,4 +57,25 @@ public class CreateCourseCommandTest {
 		assertThat(new CreateCourseCommand(uuid).hashCode())
 				.isEqualTo(new CreateCourseCommand(uuid).hashCode());
 	}
+
+	@Test
+	void toString_containsUuid() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+		// when
+		final CreateCourseCommand command = new CreateCourseCommand(uuid);
+
+		// then
+		assertThat(command.toString()).contains(uuid.toString());
+	}
+
+	@Test
+	void equals_null_isNotEqual() {
+		// given
+		final CreateCourseCommand command = new CreateCourseCommand(UUID.randomUUID());
+
+		// then
+		assertThat(command).isNotEqualTo(null);
+	}
 }

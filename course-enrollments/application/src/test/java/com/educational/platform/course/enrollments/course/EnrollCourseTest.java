@@ -9,6 +9,7 @@ import com.educational.platform.common.domain.AggregateRoot;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class EnrollCourseTest {
 
@@ -121,5 +122,11 @@ public class EnrollCourseTest {
 		// then
 		assertThat(course1.getId()).isNull();
 		assertThat(course2.getId()).isNull();
+	}
+
+	@Test
+	void constructor_nullCommand_throwsNullPointerException() {
+		// when / then
+		assertThrows(NullPointerException.class, () -> new EnrollCourse(null));
 	}
 }

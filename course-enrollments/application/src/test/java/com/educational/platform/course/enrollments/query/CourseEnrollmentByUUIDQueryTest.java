@@ -57,4 +57,25 @@ public class CourseEnrollmentByUUIDQueryTest {
 		assertThat(new CourseEnrollmentByUUIDQuery(uuid).hashCode())
 				.isEqualTo(new CourseEnrollmentByUUIDQuery(uuid).hashCode());
 	}
+
+	@Test
+	void toString_containsUuid() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+		// when
+		final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(uuid);
+
+		// then
+		assertThat(query.toString()).contains(uuid.toString());
+	}
+
+	@Test
+	void equals_null_isNotEqual() {
+		// given
+		final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(UUID.randomUUID());
+
+		// then
+		assertThat(query).isNotEqualTo(null);
+	}
 }

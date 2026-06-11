@@ -27,4 +27,22 @@ public class ListCourseEnrollmentsQueryTest {
 		assertThat(new ListCourseEnrollmentsQuery().hashCode())
 				.isEqualTo(new ListCourseEnrollmentsQuery().hashCode());
 	}
+
+	@Test
+	void toString_returnsNonNull() {
+		// when
+		final ListCourseEnrollmentsQuery query = new ListCourseEnrollmentsQuery();
+
+		// then
+		assertThat(query.toString()).isNotNull();
+	}
+
+	@Test
+	void equals_null_isNotEqual() {
+		// given
+		final ListCourseEnrollmentsQuery query = new ListCourseEnrollmentsQuery();
+
+		// then
+		assertThat(query).isNotEqualTo(null);
+	}
 }
