@@ -516,4 +516,72 @@ public class ListCourseQueryHandlerTest {
         verify(repository, org.mockito.Mockito.times(2)).list();
     }
 
+    @Test
+    void handle_courseWithOneStudent_includedInResults() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO singleStudentCourse = new CourseLightDTO(UUID.randomUUID(), "intro", "desc", 1);
+        when(repository.list()).thenReturn(List.of(singleStudentCourse));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().numberOfStudents()).isEqualTo(1);
+    }
+
+    @Test
+    void handle_twoCoursesInReverseAlphaOrder_orderPreservedFromRepository() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO zCourse = new CourseLightDTO(UUID.randomUUID(), "Zebra", "z desc", 1);
+        final CourseLightDTO aCourse = new CourseLightDTO(UUID.randomUUID(), "Alpha", "a desc", 2);
+        when(repository.list()).thenReturn(List.of(zCourse, aCourse));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).containsExactly(zCourse, aCourse);
+        assertThat(result.get(0).name()).isEqualTo("Zebra");
+        assertThat(result.get(1).name()).isEqualTo("Alpha");
+    }
+
+    @Test
+    void handle_courseWithEmptyNameNonEmptyDescription_preservedInResults() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO course = new CourseLightDTO(UUID.randomUUID(), "", "has description", 3);
+        when(repository.list()).thenReturn(List.of(course));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().name()).isEmpty();
+        assertThat(result.getFirst().description()).isEqualTo("has description");
+    }
+
+    @Test
+    void handle_consecutiveCallsReturnDifferentSizedLists_bothDelegated() {
+        // given
+        final CourseLightDTO c1 = new CourseLightDTO(UUID.randomUUID(), "c1", "d1", 1);
+        final CourseLightDTO c2 = new CourseLightDTO(UUID.randomUUID(), "c2", "d2", 2);
+        final CourseLightDTO c3 = new CourseLightDTO(UUID.randomUUID(), "c3", "d3", 3);
+        when(repository.list())
+                .thenReturn(List.of(c1))
+                .thenReturn(List.of(c1, c2, c3));
+
+        // when
+        final List<CourseLightDTO> result1 = sut.handle(new ListCourseQuery());
+        final List<CourseLightDTO> result2 = sut.handle(new ListCourseQuery());
+
+        // then
+        assertThat(result1).hasSize(1);
+        assertThat(result2).hasSize(3);
+        verify(repository, org.mockito.Mockito.times(2)).list();
+    }
+
 }

@@ -577,4 +577,72 @@ public class CourseByUUIDQueryHandlerTest {
         assertThat(result.get()).isSameAs(courseDTO);
     }
 
+    @Test
+    void handle_courseWithOneStudent_returnedAsIs() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440030");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        final CourseDTO courseDTO = new CourseDTO(uuid, "single student course", "desc", 1, List.of());
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().numberOfStudents()).isEqualTo(1);
+    }
+
+    @Test
+    void handle_courseWithNullUuidInDTO_returnedAsIs() {
+        // given
+        final UUID queryUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440031");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(queryUuid);
+        final CourseDTO courseDTO = new CourseDTO(null, "name", "desc", 5, List.of());
+        when(repository.findDTOByUuid(queryUuid)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().uuid()).isNull();
+        assertThat(result.get().name()).isEqualTo("name");
+    }
+
+    @Test
+    void handle_repositoryThrowsNullPointerException_exceptionPropagated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440032");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        when(repository.findDTOByUuid(uuid)).thenThrow(new NullPointerException("null repo"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("null repo");
+    }
+
+    @Test
+    void handle_courseWithMixedNullAndNonNullCurriculumItems_allPreserved() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440033");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        final CurriculumItemDTO item = mock(CurriculumItemDTO.class);
+        final java.util.ArrayList<CurriculumItemDTO> items = new java.util.ArrayList<>();
+        items.add(item);
+        items.add(null);
+        final CourseDTO courseDTO = new CourseDTO(uuid, "name", "desc", 2, items);
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().curriculumItems()).hasSize(2);
+        assertThat(result.get().curriculumItems().get(0)).isSameAs(item);
+        assertThat(result.get().curriculumItems().get(1)).isNull();
+    }
+
 }

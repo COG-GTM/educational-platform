@@ -482,4 +482,68 @@ public class UserCreatedIntegrationEventHandlerTest {
         assertThat(argument.getValue().username()).isEqualTo("<script>alert('xss')</script>");
     }
 
+    @Test
+    void handleUserCreatedEvent_usernameIdenticalToEmail_onlyUsernamePassed() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("shared@example.com", "shared@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("shared@example.com");
+    }
+
+    @Test
+    void handleUserCreatedEvent_afterExceptionNextCallStillProcessed() {
+        // given
+        final UserCreatedIntegrationEvent failEvent = new UserCreatedIntegrationEvent("fail", "fail@example.com");
+        final UserCreatedIntegrationEvent successEvent = new UserCreatedIntegrationEvent("success", "success@example.com");
+        doThrow(new RuntimeException("first fails"))
+                .doNothing()
+                .when(createTeacherCommandHandler).handle(any(CreateTeacherCommand.class));
+
+        // when
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(failEvent))
+                .isInstanceOf(RuntimeException.class);
+        sut.handleUserCreatedEvent(successEvent);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler, times(2)).handle(argument.capture());
+        assertThat(argument.getAllValues().get(1).username()).isEqualTo("success");
+    }
+
+    @Test
+    void handleUserCreatedEvent_zeroWidthCharsInUsername_preservedInCommand() {
+        // given
+        final String zeroWidthUsername = "user\u200B\u200Cname\u200D\uFEFF";
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(zeroWidthUsername, "zw@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo(zeroWidthUsername);
+    }
+
+    @Test
+    void handleUserCreatedEvent_veryLongEmail_onlyUsernamePassed() {
+        // given
+        final String longEmail = "a".repeat(1000) + "@" + "b".repeat(1000) + ".com";
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher", longEmail);
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("teacher");
+    }
+
 }
