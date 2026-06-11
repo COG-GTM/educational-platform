@@ -731,4 +731,68 @@ public class CourseReviewControllerTest {
         // then
         assertThat(response).isInstanceOf(CourseReviewCreatedResponse.class);
     }
+
+    @Test
+    void updateReview_longComment_delegatesWithFullComment() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final String longComment = "b".repeat(1000);
+        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(3.0, longComment);
+
+        // when
+        sut.updateReview(courseUuid, reviewUuid, request);
+
+        // then
+        final ArgumentCaptor<UpdateCourseReviewCommand> captor = ArgumentCaptor.forClass(UpdateCourseReviewCommand.class);
+        verify(updateCourseReviewCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().comment()).isEqualTo(longComment);
+    }
+
+    @Test
+    void updateReview_whitespaceComment_delegatesWithWhitespaceComment() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(3.0, "   ");
+
+        // when
+        sut.updateReview(courseUuid, reviewUuid, request);
+
+        // then
+        final ArgumentCaptor<UpdateCourseReviewCommand> captor = ArgumentCaptor.forClass(UpdateCourseReviewCommand.class);
+        verify(updateCourseReviewCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().comment()).isEqualTo("   ");
+    }
+
+    @Test
+    void updateReview_nullCourseUuid_delegatesWithOnlyReviewUuid() {
+        // given — null courseUuid should not affect the command construction
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(3.0, "comment");
+
+        // when
+        sut.updateReview(null, reviewUuid, request);
+
+        // then
+        final ArgumentCaptor<UpdateCourseReviewCommand> captor = ArgumentCaptor.forClass(UpdateCourseReviewCommand.class);
+        verify(updateCourseReviewCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().uuid()).isEqualTo(reviewUuid);
+        assertThat(captor.getValue().rating()).isEqualTo(3.0);
+        assertThat(captor.getValue().comment()).isEqualTo("comment");
+    }
+
+    @Test
+    void reviews_handlerReturnsNull_nullReturned() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(listCourseReviewsByCourseUUIDQueryHandler.handle(any(ListCourseReviewsByCourseUUIDQuery.class)))
+                .thenReturn(null);
+
+        // when
+        final List<CourseReviewDTO> result = sut.reviews(courseUuid);
+
+        // then
+        assertThat(result).isNull();
+    }
 }

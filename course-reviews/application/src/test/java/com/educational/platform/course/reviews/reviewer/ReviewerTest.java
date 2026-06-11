@@ -68,4 +68,26 @@ public class ReviewerTest {
         assertThat(first).hasFieldOrPropertyWithValue("username", "user1");
         assertThat(second).hasFieldOrPropertyWithValue("username", "user2");
     }
+
+    @Test
+    void implementsAggregateRoot() {
+        // when
+        final Reviewer reviewer = new Reviewer(new CreateReviewerCommand("testuser"));
+
+        // then
+        assertThat(reviewer).isInstanceOf(com.educational.platform.common.domain.AggregateRoot.class);
+    }
+
+    @Test
+    void constructor_whitespaceUsername_usernameStoredAsIs() {
+        // given
+        final CreateReviewerCommand command = new CreateReviewerCommand("   ");
+
+        // when
+        final Reviewer reviewer = new Reviewer(command);
+
+        // then
+        assertThat(reviewer)
+                .hasFieldOrPropertyWithValue("username", "   ");
+    }
 }

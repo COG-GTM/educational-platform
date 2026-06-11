@@ -63,4 +63,16 @@ public class ReviewableCourseTest {
         assertThat(first).hasFieldOrPropertyWithValue("originalCourseId", courseId1);
         assertThat(second).hasFieldOrPropertyWithValue("originalCourseId", courseId2);
     }
+
+    @Test
+    void implementsAggregateRoot() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
+
+        // then
+        assertThat(reviewableCourse).isInstanceOf(com.educational.platform.common.domain.AggregateRoot.class);
+    }
 }

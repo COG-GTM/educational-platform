@@ -191,4 +191,38 @@ public class CurrentUserAsReviewerTest {
         assertThatThrownBy(() -> sut.userAsReviewer())
                 .isInstanceOf(ClassCastException.class);
     }
+
+    @Test
+    void userAsReviewer_authenticatedUser_repositoryCalledExactlyOnce() {
+        // given
+        final var userDetails = new User("single-call-user", "password", Collections.emptyList());
+        final var authentication = new UsernamePasswordAuthenticationToken(userDetails, "password");
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        when(reviewerRepository.findByUsername("single-call-user")).thenReturn(null);
+
+        // when
+        sut.userAsReviewer();
+
+        // then
+        verify(reviewerRepository, org.mockito.Mockito.times(1)).findByUsername("single-call-user");
+    }
+
+    @Test
+    void userAsReviewer_usernameWithSpecialChars_delegatesToRepositoryWithExactUsername() {
+        // given
+        final var userDetails = new User("user@domain.com", "password", Collections.emptyList());
+        final var authentication = new UsernamePasswordAuthenticationToken(userDetails, "password");
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        final Reviewer expectedReviewer = new Reviewer(new CreateReviewerCommand("user@domain.com"));
+        when(reviewerRepository.findByUsername("user@domain.com")).thenReturn(expectedReviewer);
+
+        // when
+        final Reviewer result = sut.userAsReviewer();
+
+        // then
+        assertThat(result).isSameAs(expectedReviewer);
+        verify(reviewerRepository).findByUsername("user@domain.com");
+    }
 }

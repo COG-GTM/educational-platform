@@ -561,4 +561,36 @@ public class ReviewCourseCommandHandlerTest {
         assertThatExceptionOfType(com.educational.platform.common.exception.RelatedResourceIsNotResolvedException.class).isThrownBy(handle);
         org.mockito.Mockito.verifyNoInteractions(currentUserAsReviewer);
     }
+
+    @Test
+    void handle_repositoryFindByOriginalCourseIdThrows_exceptionPropagates() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+        when(reviewableCourseRepository.findByOriginalCourseId(courseId))
+                .thenThrow(new RuntimeException("db connection lost"));
+
+        // when
+        final org.assertj.core.api.ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(handle).withMessage("db connection lost");
+        org.mockito.Mockito.verifyNoInteractions(courseReviewRepository);
+    }
+
+    @Test
+    void handle_validCommand_courseNotFoundExceptionMessageHasExpectedFormat() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+        when(reviewableCourseRepository.findByOriginalCourseId(courseId)).thenReturn(Optional.empty());
+
+        // when
+        final org.assertj.core.api.ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(RelatedResourceIsNotResolvedException.class)
+                .isThrownBy(handle)
+                .withMessage("Course cannot be found by uuid = " + courseId);
+    }
 }

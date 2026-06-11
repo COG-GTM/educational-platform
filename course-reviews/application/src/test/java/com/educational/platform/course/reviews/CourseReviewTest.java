@@ -392,4 +392,42 @@ public class CourseReviewTest {
         assertThat(courseReview)
                 .hasFieldOrPropertyWithValue("comment", new Comment("   "));
     }
+
+    @Test
+    void update_multipleSequentialUpdates_lastStateWins() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "original");
+        final CourseReview courseReview = new CourseReview(createCommand, 11, 22);
+        final UUID uuid = courseReview.toIdentifier();
+
+        // when — apply three sequential updates
+        courseReview.update(new UpdateCourseReviewCommand(uuid, 1.0, "first"));
+        courseReview.update(new UpdateCourseReviewCommand(uuid, 3.0, "second"));
+        courseReview.update(new UpdateCourseReviewCommand(uuid, 5.0, "third"));
+
+        // then — only the last update state is retained
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0))
+                .hasFieldOrPropertyWithValue("comment", new Comment("third"));
+    }
+
+    @Test
+    void update_longComment_commentUpdated() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "short");
+        final CourseReview courseReview = new CourseReview(createCommand, 11, 22);
+        final UUID uuid = courseReview.toIdentifier();
+        final String longComment = "x".repeat(5000);
+
+        final UpdateCourseReviewCommand updateCommand = new UpdateCourseReviewCommand(uuid, 4.0, longComment);
+
+        // when
+        courseReview.update(updateCommand);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("comment", new Comment(longComment));
+    }
 }

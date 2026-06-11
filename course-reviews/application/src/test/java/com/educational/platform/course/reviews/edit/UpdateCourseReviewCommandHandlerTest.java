@@ -480,6 +480,38 @@ public class UpdateCourseReviewCommandHandlerTest {
                 .withMessage("Course Review with uuid: " + uuid + " not found");
     }
 
+    @Test
+    void handle_repositoryFindByUuidThrows_exceptionPropagates() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 4.0, "comment");
+        when(courseReviewRepository.findByUuid(uuid)).thenThrow(new RuntimeException("db connection lost"));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(handle).withMessage("db connection lost");
+    }
+
+    @Test
+    void handle_existingReview_savedEntityRetainsUpdatedFields() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 2.5, "revised");
+
+        // when
+        sut.handle(command);
+
+        // then — capture the entity that was saved and verify it has the updated fields
+        final ArgumentCaptor<CourseReview> captor = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(captor.capture());
+        final CourseReview saved = captor.getValue();
+        assertThat(saved)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(2.5))
+                .hasFieldOrPropertyWithValue("comment", new Comment("revised"));
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
