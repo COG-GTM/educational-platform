@@ -812,4 +812,61 @@ public class SignInCommandHandlerTest {
         // then
         verify(jwtTokenProvider, times(1)).createToken(any(), any());
     }
+
+    @Test
+    void handle_credentialsExpiredException_wrappedInUnprocessableEntityException() {
+        // given — CredentialsExpiredException is an AuthenticationException subclass
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("expiredcreds")
+                .password("password")
+                .build();
+        doThrow(new org.springframework.security.authentication.CredentialsExpiredException("User credentials have expired"))
+                .when(authenticationManager).authenticate(any());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(handle)
+                .withMessageContaining("Invalid username/password");
+    }
+
+    @Test
+    void handle_authenticationServiceException_wrappedInUnprocessableEntityException() {
+        // given — AuthenticationServiceException is an AuthenticationException subclass (server-side auth failure)
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("password")
+                .build();
+        doThrow(new org.springframework.security.authentication.AuthenticationServiceException("Authentication service unavailable"))
+                .when(authenticationManager).authenticate(any());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(handle)
+                .withMessageContaining("Invalid username/password");
+    }
+
+    @Test
+    void handle_providerNotFoundException_wrappedInUnprocessableEntityException() {
+        // given — ProviderNotFoundException is an AuthenticationException subclass
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("password")
+                .build();
+        doThrow(new org.springframework.security.authentication.ProviderNotFoundException("No AuthenticationProvider found"))
+                .when(authenticationManager).authenticate(any());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(handle)
+                .withMessageContaining("Invalid username/password");
+    }
 }

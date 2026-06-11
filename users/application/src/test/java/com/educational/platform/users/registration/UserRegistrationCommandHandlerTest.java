@@ -1072,4 +1072,80 @@ public class UserRegistrationCommandHandlerTest {
         // then
         verify(jwtTokenProvider, times(1)).createToken(any(), any());
     }
+
+    @Test
+    void handle_invalidEmail_constraintViolationContainsEmailPath() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("not-an-email")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.handle(userRegistrationCommand))
+                .satisfies(ex -> assertThat(ex.getConstraintViolations())
+                        .anyMatch(v -> v.getPropertyPath().toString().equals("email")));
+    }
+
+    @Test
+    void handle_usernameTooShort_constraintViolationContainsUsernamePath() {
+        // given — username "ab" violates @Size(min = 4)
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("ab")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.handle(userRegistrationCommand))
+                .satisfies(ex -> assertThat(ex.getConstraintViolations())
+                        .anyMatch(v -> v.getPropertyPath().toString().equals("username")));
+    }
+
+    @Test
+    void handle_passwordTooShort_constraintViolationContainsPasswordPath() {
+        // given — password "short" violates @ValidPassword (min length 8)
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("short")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.handle(userRegistrationCommand))
+                .satisfies(ex -> assertThat(ex.getConstraintViolations())
+                        .anyMatch(v -> v.getPropertyPath().toString().equals("password")));
+    }
+
+    @Test
+    void handle_multipleValidationFailures_allPropertyPathsReported() {
+        // given — all fields invalid: null role, short username, invalid email, short password
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("bad")
+                .username("ab")
+                .password("short")
+                .role(null)
+                .build();
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.handle(userRegistrationCommand))
+                .satisfies(ex -> {
+                    assertThat(ex.getConstraintViolations())
+                            .anyMatch(v -> v.getPropertyPath().toString().equals("role"));
+                    assertThat(ex.getConstraintViolations())
+                            .anyMatch(v -> v.getPropertyPath().toString().equals("username"));
+                    assertThat(ex.getConstraintViolations())
+                            .anyMatch(v -> v.getPropertyPath().toString().equals("email"));
+                    assertThat(ex.getConstraintViolations())
+                            .anyMatch(v -> v.getPropertyPath().toString().equals("password"));
+                });
+    }
 }
