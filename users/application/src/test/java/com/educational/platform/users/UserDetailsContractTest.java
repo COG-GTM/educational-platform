@@ -96,4 +96,14 @@ public class UserDetailsContractTest {
         // then
         assertThat(details.getAuthorities()).hasSize(1);
     }
+
+    @Test
+    void toUserDetails_passwordIsEncodedValue_notRawPassword() {
+        // when
+        final UserDetails details = user.toUserDetails();
+
+        // then
+        assertThat(details.getPassword()).isEqualTo("encoded-password");
+        assertThat(details.getPassword()).isNotEqualTo("password");
+    }
 }

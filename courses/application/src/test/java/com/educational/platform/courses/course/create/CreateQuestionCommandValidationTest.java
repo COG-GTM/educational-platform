@@ -1,15 +1,17 @@
 package com.educational.platform.courses.course.create;
 
+import org.junit.jupiter.api.Test;
+
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
-import org.junit.jupiter.api.Test;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Bean-validation tests for {@link CreateQuestionCommand} ensuring the
- * {@code @NotBlank} constraint on {@code content} is enforced by the
- * validator.
+ * Tests Jakarta Validation constraints on {@link CreateQuestionCommand}.
+ * The {@code content} field is annotated with {@code @NotBlank}.
  */
 public class CreateQuestionCommandValidationTest {
 
@@ -17,31 +19,61 @@ public class CreateQuestionCommandValidationTest {
 
     @Test
     void validContent_noViolations() {
+        // given
         final CreateQuestionCommand command = new CreateQuestionCommand("What is Java?");
-        assertThat(validator.validate(command)).isEmpty();
+
+        // when
+        final Set<ConstraintViolation<CreateQuestionCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isEmpty();
     }
 
     @Test
     void nullContent_hasViolation() {
+        // given
         final CreateQuestionCommand command = new CreateQuestionCommand(null);
-        assertThat(validator.validate(command)).isNotEmpty();
+
+        // when
+        final Set<ConstraintViolation<CreateQuestionCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
     }
 
     @Test
     void emptyContent_hasViolation() {
+        // given
         final CreateQuestionCommand command = new CreateQuestionCommand("");
-        assertThat(validator.validate(command)).isNotEmpty();
+
+        // when
+        final Set<ConstraintViolation<CreateQuestionCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
     }
 
     @Test
     void blankContent_hasViolation() {
+        // given
         final CreateQuestionCommand command = new CreateQuestionCommand("   ");
-        assertThat(validator.validate(command)).isNotEmpty();
+
+        // when
+        final Set<ConstraintViolation<CreateQuestionCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
     }
 
     @Test
-    void singleCharContent_noViolations() {
+    void singleCharacterContent_noViolations() {
+        // given
         final CreateQuestionCommand command = new CreateQuestionCommand("Q");
-        assertThat(validator.validate(command)).isEmpty();
+
+        // when
+        final Set<ConstraintViolation<CreateQuestionCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isEmpty();
     }
 }
