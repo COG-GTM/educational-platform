@@ -5,6 +5,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class RoleTest {
 
@@ -87,5 +88,31 @@ public class RoleTest {
 
         // then
         assertThat(roundTripped).isEqualTo(original);
+    }
+
+    @Test
+    void from_null_throwsNullPointerException() {
+        // when / then
+        assertThatThrownBy(() -> Role.from(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @ParameterizedTest
+    @EnumSource(RoleDTO.class)
+    void from_allRoleDTOValues_returnsNonNull(RoleDTO roleDTO) {
+        // when
+        final Role result = Role.from(roleDTO);
+
+        // then
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    void getAuthority_roleAdmin_returnsRoleAdmin() {
+        // when
+        final String authority = Role.ROLE_ADMIN.getAuthority();
+
+        // then
+        assertThat(authority).isEqualTo("ROLE_ADMIN");
     }
 }

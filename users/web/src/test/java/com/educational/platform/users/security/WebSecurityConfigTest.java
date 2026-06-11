@@ -64,4 +64,37 @@ public class WebSecurityConfigTest {
                 .then()
                 .statusCode(HttpStatus.FORBIDDEN.value());
     }
+
+    @Test
+    void swaggerUiEndpoint_noAuth_accessible() {
+        given()
+                .when()
+                .get("/swagger-ui/index.html")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void apiDocsEndpoint_noAuth_accessible() {
+        given()
+                .when()
+                .get("/v3/api-docs")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void protectedEndpoint_postMethod_forbidden() {
+        given()
+                .contentType("application/json")
+                .body("{}")
+
+                .when()
+                .post("/protected-resource")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
 }

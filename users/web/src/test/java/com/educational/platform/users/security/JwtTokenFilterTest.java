@@ -19,6 +19,7 @@ import jakarta.servlet.ServletException;
 import java.io.IOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -157,5 +158,56 @@ public class JwtTokenFilterTest {
 
         // then
         assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+    }
+
+    @Test
+    void doFilterInternal_invalidToken_responseContainsErrorMessage() throws ServletException, IOException {
+        // given
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        when(jwtTokenProvider.resolveToken(request)).thenReturn("invalid-token");
+        when(jwtTokenProvider.validateToken("invalid-token")).thenThrow(new JwtTokenValidationException("Expired or invalid JWT token"));
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then
+        assertThat(response.getErrorMessage()).contains("Expired or invalid JWT token");
+    }
+
+    @Test
+    void doFilterInternal_noToken_getAuthenticationNeverCalled() throws ServletException, IOException {
+        // given
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        when(jwtTokenProvider.resolveToken(request)).thenReturn(null);
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then
+        verify(jwtTokenProvider, never()).getAuthentication(any());
+        verify(jwtTokenProvider, never()).validateToken(any());
+    }
+
+    @Test
+    void doFilterInternal_invalidToken_getAuthenticationNeverCalled() throws ServletException, IOException {
+        // given
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        when(jwtTokenProvider.resolveToken(request)).thenReturn("invalid-token");
+        when(jwtTokenProvider.validateToken("invalid-token")).thenThrow(new JwtTokenValidationException("Expired or invalid JWT token"));
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then
+        verify(jwtTokenProvider, never()).getAuthentication(any());
     }
 }

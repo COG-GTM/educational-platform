@@ -18,6 +18,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -123,5 +124,48 @@ public class MyUserDetailsTest {
 
         // then
         assertThat(userDetails.getPassword()).isEqualTo("encoded-password");
+    }
+
+    @Test
+    void loadUserByUsername_existingUser_accountFlagsAllTrue() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("username")
+                .email("email@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("username")).thenReturn(Optional.of(user));
+
+        // when
+        final UserDetails userDetails = sut.loadUserByUsername("username");
+
+        // then
+        assertThat(userDetails.isAccountNonExpired()).isTrue();
+        assertThat(userDetails.isAccountNonLocked()).isTrue();
+        assertThat(userDetails.isCredentialsNonExpired()).isTrue();
+        assertThat(userDetails.isEnabled()).isTrue();
+    }
+
+    @Test
+    void loadUserByUsername_existingUser_delegatesToRepository() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("delegate-user")
+                .email("delegate@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("delegate-user")).thenReturn(Optional.of(user));
+
+        // when
+        sut.loadUserByUsername("delegate-user");
+
+        // then
+        verify(userRepository).findByUsername("delegate-user");
     }
 }

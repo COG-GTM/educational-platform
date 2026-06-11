@@ -230,4 +230,72 @@ public class JwtTokenProviderTest {
                 .first()
                 .satisfies(authority -> assertThat(authority.getAuthority()).isEqualTo("ROLE_STUDENT"));
     }
+
+    @Test
+    void getUsername_invalidToken_throwsException() {
+        // when / then
+        assertThatExceptionOfType(Exception.class)
+                .isThrownBy(() -> sut.getUsername("not-a-valid-token"));
+    }
+
+    @Test
+    void createToken_thenValidate_roundTrip() {
+        // given
+        final String token = sut.createToken("roundtrip-user", Collections.singletonList(Role.ROLE_TEACHER));
+
+        // when
+        final boolean valid = sut.validateToken(token);
+        final String username = sut.getUsername(token);
+
+        // then
+        assertThat(valid).isTrue();
+        assertThat(username).isEqualTo("roundtrip-user");
+    }
+
+    @Test
+    void resolveToken_emptyAuthorizationHeader_null() {
+        // given
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "");
+
+        // when
+        final String token = sut.resolveToken(request);
+
+        // then
+        assertThat(token).isNull();
+    }
+
+    @Test
+    void createToken_expiredToken_jwtTokenValidationException() {
+        // given
+        final MyUserDetails myUserDetails = new MyUserDetails(userRepository);
+        final JwtTokenProvider expiredProvider = new JwtTokenProvider(myUserDetails, 0, "test-secret-key");
+        final String token = expiredProvider.createToken("username", Collections.singletonList(Role.ROLE_STUDENT));
+
+        // when / then
+        assertThatExceptionOfType(JwtTokenValidationException.class)
+                .isThrownBy(() -> expiredProvider.validateToken(token));
+    }
+
+    @Test
+    void getAuthentication_validToken_credentialsEmpty() {
+        // given
+        final String token = sut.createToken("username", Collections.singletonList(Role.ROLE_STUDENT));
+
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("username")
+                .email("email@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("username")).thenReturn(Optional.of(user));
+
+        // when
+        final Authentication authentication = sut.getAuthentication(token);
+
+        // then
+        assertThat(authentication.getCredentials()).isEqualTo("");
+    }
 }

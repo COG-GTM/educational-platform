@@ -171,4 +171,51 @@ public class PasswordConstraintValidatorTest {
         verify(context).disableDefaultConstraintViolation();
         verify(context).buildConstraintViolationWithTemplate(anyString());
     }
+
+    @Test
+    void isValid_passwordWithNewline_invalid() {
+        // given
+        final String password = "pass\nword1";
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isValid_oneAboveMaxLength_invalid() {
+        // given
+        final String password = "a".repeat(31);
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isValid_validPassword_contextViolationNotSet() {
+        // given
+        final String password = "validpassword";
+
+        // when
+        sut.isValid(password, context);
+
+        // then
+        verify(context, never()).disableDefaultConstraintViolation();
+        verify(context, never()).buildConstraintViolationWithTemplate(anyString());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"P@ssw0rd!", "abcd1234", "ABCDEFGH", "12345678901234567890123456789a"})
+    void isValid_variousValidPasswords_valid(String password) {
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isTrue();
+    }
 }

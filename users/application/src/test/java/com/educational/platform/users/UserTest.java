@@ -11,6 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -153,5 +154,64 @@ public class UserTest {
                 .hasSize(1)
                 .first()
                 .satisfies(authority -> assertThat(authority.getAuthority()).isEqualTo("ROLE_TEACHER"));
+    }
+
+    @Test
+    void constructor_validCommand_passwordEncoderCalledWithRawPassword() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("username")
+                .email("email@gmail.com")
+                .password("my-raw-password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        new User(command, passwordEncoder);
+
+        // then
+        verify(passwordEncoder).encode("my-raw-password");
+    }
+
+    @Test
+    void toUserDetails_teacherUser_accountFlagsAllTrue() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("teacher")
+                .email("teacher@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+        final User user = new User(command, passwordEncoder);
+
+        // when
+        final UserDetails userDetails = user.toUserDetails();
+
+        // then
+        assertThat(userDetails.getPassword()).isEqualTo("encoded-password");
+        assertThat(userDetails.isAccountNonExpired()).isTrue();
+        assertThat(userDetails.isAccountNonLocked()).isTrue();
+        assertThat(userDetails.isCredentialsNonExpired()).isTrue();
+        assertThat(userDetails.isEnabled()).isTrue();
+    }
+
+    @Test
+    void toDTO_studentUser_dtoFieldsMatchCommand() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("user1")
+                .email("user1@example.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User user = new User(command, passwordEncoder);
+
+        // when
+        final UserDTO dto = user.toDTO();
+
+        // then
+        assertThat(dto.username()).isEqualTo("user1");
+        assertThat(dto.email()).isEqualTo("user1@example.com");
+        assertThat(dto.role()).isEqualTo(RoleDTO.ROLE_STUDENT);
     }
 }
