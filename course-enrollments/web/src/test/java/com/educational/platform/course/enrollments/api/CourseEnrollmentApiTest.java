@@ -227,4 +227,29 @@ public class CourseEnrollmentApiTest {
                 .body("[0].completionStatus", org.hamcrest.Matchers.equalTo("IN_PROGRESS"));
     }
 
+    @Test
+    void register_invalidToken_unauthorized() {
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer invalid-token-value")
+                .body("{\n" +
+                        "  \"student\": \"username\"\n" +
+                        "}")
+                .when()
+                .post("/courses/{uuid}/course-enrollments", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void listCourseEnrollments_invalidToken_unauthorized() {
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer invalid-token-value")
+                .when()
+                .get("/course-enrollments")
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
 }

@@ -75,4 +75,30 @@ public class ListCourseEnrollmentsQueryHandlerSecurityTest {
 		// then
 		assertThatThrownBy(queryAction).isInstanceOf(AccessDeniedException.class);
 	}
+
+	@Test
+	@WithMockUser(username = "student", roles = {"STUDENT", "TEACHER"})
+	void handle_userHasMultipleRolesIncludingStudent_accessAllowed() {
+		// given
+		var query = new ListCourseEnrollmentsQuery();
+
+		// when
+		final List<CourseEnrollmentDTO> result = sut.handle(query);
+
+		// then — user with STUDENT + TEACHER roles passes hasRole('STUDENT') check
+		assertThat(result).isNotNull();
+	}
+
+	@Test
+	@WithMockUser(username = "student", roles = "STUDENT")
+	void handle_noEnrollments_returnsEmptyList() {
+		// given
+		var query = new ListCourseEnrollmentsQuery();
+
+		// when
+		final List<CourseEnrollmentDTO> result = sut.handle(query);
+
+		// then
+		assertThat(result).isEmpty();
+	}
 }

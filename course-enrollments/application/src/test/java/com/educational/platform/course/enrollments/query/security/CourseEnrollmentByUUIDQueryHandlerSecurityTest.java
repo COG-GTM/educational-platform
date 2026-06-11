@@ -76,4 +76,30 @@ public class CourseEnrollmentByUUIDQueryHandlerSecurityTest {
 		// then
 		assertThatThrownBy(queryAction).isInstanceOf(AccessDeniedException.class);
 	}
+
+	@Test
+	@WithMockUser(username = "student", roles = {"STUDENT", "TEACHER"})
+	void handle_userHasMultipleRolesIncludingStudent_accessAllowed() {
+		// given
+		var query = new CourseEnrollmentByUUIDQuery(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"));
+
+		// when
+		final Optional<CourseEnrollmentDTO> result = sut.handle(query);
+
+		// then — user with STUDENT + TEACHER roles passes hasRole('STUDENT') check
+		assertThat(result).isNotNull();
+	}
+
+	@Test
+	@WithMockUser(username = "student", roles = "STUDENT")
+	void handle_nonExistingUuid_returnsEmpty() {
+		// given
+		var query = new CourseEnrollmentByUUIDQuery(UUID.fromString("00000000-0000-0000-0000-000000000099"));
+
+		// when
+		final Optional<CourseEnrollmentDTO> result = sut.handle(query);
+
+		// then
+		assertThat(result).isEmpty();
+	}
 }

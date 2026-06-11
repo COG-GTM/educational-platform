@@ -208,4 +208,37 @@ public class CourseEnrollmentTest {
 		assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
 	}
 
+	@Test
+	void constructor_negativeIds_storesNegatives() {
+		// given / when
+		final CourseEnrollment enrollment = new CourseEnrollment(-1, -5);
+
+		// then — negative IDs are accepted at the domain level (DB constraints may reject later)
+		assertThat(enrollment).hasFieldOrPropertyWithValue("course", -1);
+		assertThat(enrollment).hasFieldOrPropertyWithValue("student", -5);
+		assertThat(enrollment.getUuid()).isNotNull();
+		assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
+	}
+
+	@Test
+	void constructor_maxIntegerIds_storesMaxValues() {
+		// given / when
+		final CourseEnrollment enrollment = new CourseEnrollment(Integer.MAX_VALUE, Integer.MAX_VALUE);
+
+		// then — boundary values for Integer are accepted
+		assertThat(enrollment).hasFieldOrPropertyWithValue("course", Integer.MAX_VALUE);
+		assertThat(enrollment).hasFieldOrPropertyWithValue("student", Integer.MAX_VALUE);
+		assertThat(enrollment.getUuid()).isNotNull();
+	}
+
+	@Test
+	void constructor_minIntegerIds_storesMinValues() {
+		// given / when
+		final CourseEnrollment enrollment = new CourseEnrollment(Integer.MIN_VALUE, Integer.MIN_VALUE);
+
+		// then
+		assertThat(enrollment).hasFieldOrPropertyWithValue("course", Integer.MIN_VALUE);
+		assertThat(enrollment).hasFieldOrPropertyWithValue("student", Integer.MIN_VALUE);
+	}
+
 }

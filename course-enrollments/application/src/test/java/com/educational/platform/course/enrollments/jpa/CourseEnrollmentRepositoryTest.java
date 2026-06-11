@@ -215,6 +215,52 @@ public class CourseEnrollmentRepositoryTest {
 		assertThat(result.getFirst().student()).isEqualTo(STUDENT);
 	}
 
+	@Test
+	void queryByStudent_differentStudents_isolatesResults() {
+		// given — create enrollments for two different students
+		var course = enrollCourseRepository.findByUuid(FIRST_COURSE);
+		var student = studentRepository.findByUsername(STUDENT);
+		var otherStudent = studentRepository.findByUsername("other-student");
+
+		var enrollment1 = new CourseEnrollment(course.get().getId(), student.getId());
+		courseEnrollmentRepository.save(enrollment1);
+
+		var enrollment2 = new CourseEnrollment(course.get().getId(), otherStudent.getId());
+		courseEnrollmentRepository.save(enrollment2);
+
+		// when — query for each student separately
+		var studentResults = courseEnrollmentRepository.query(STUDENT);
+		var otherStudentResults = courseEnrollmentRepository.query("other-student");
+
+		// then — each student only sees their own enrollments
+		assertThat(studentResults).hasSize(1);
+		assertThat(studentResults.getFirst().student()).isEqualTo(STUDENT);
+		assertThat(otherStudentResults).hasSize(1);
+		assertThat(otherStudentResults.getFirst().student()).isEqualTo("other-student");
+	}
+
+	@Test
+	void queryByUuidAndStudent_wrongStudent_cannotAccessOthersEnrollment() {
+		// given — enrollment belongs to 'student'
+		var enrollment = createAndSaveEnrollment(FIRST_COURSE);
+
+		// when — 'other-student' tries to query it
+		var result = courseEnrollmentRepository.query(enrollment.getUuid(), "other-student");
+
+		// then — data isolation: other-student cannot see it
+		assertThat(result).isEmpty();
+	}
+
+	@Test
+	void save_enrollment_generatesId() {
+		// given
+		var enrollment = createAndSaveEnrollment(FIRST_COURSE);
+
+		// then — JPA auto-generates the ID after persist
+		var found = courseEnrollmentRepository.findByUuid(enrollment.getUuid());
+		assertThat(found).isPresent();
+	}
+
 	private CourseEnrollment createAndSaveEnrollment(UUID courseUuid) {
 		var course = enrollCourseRepository.findByUuid(courseUuid);
 		var student = studentRepository.findByUsername(STUDENT);

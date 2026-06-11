@@ -351,4 +351,29 @@ public class CourseEnrollmentControllerTest {
         assertThatThrownBy(() -> sut.courseEnrollments())
                 .isInstanceOf(AccessDeniedException.class);
     }
+
+    @Test
+    void enroll_handlerThrowsConstraintViolationException_propagates() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(registerHandler.handle(any(RegisterStudentToCourseCommand.class)))
+                .thenThrow(new jakarta.validation.ConstraintViolationException(java.util.Set.of()));
+
+        // when / then
+        assertThatThrownBy(() -> sut.enroll(courseUuid, new CourseEnrollmentRequest("student")))
+                .isInstanceOf(jakarta.validation.ConstraintViolationException.class);
+    }
+
+    @Test
+    void enroll_handlerThrowsRelatedResourceException_propagates() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(registerHandler.handle(any(RegisterStudentToCourseCommand.class)))
+                .thenThrow(new com.educational.platform.common.exception.RelatedResourceIsNotResolvedException("Course not found"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.enroll(courseUuid, new CourseEnrollmentRequest("student")))
+                .isInstanceOf(com.educational.platform.common.exception.RelatedResourceIsNotResolvedException.class)
+                .hasMessage("Course not found");
+    }
 }

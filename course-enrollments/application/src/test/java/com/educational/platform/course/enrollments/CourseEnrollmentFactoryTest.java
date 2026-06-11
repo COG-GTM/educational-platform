@@ -378,4 +378,24 @@ public class CourseEnrollmentFactoryTest {
         verifyNoMoreInteractions(currentUserAsStudent);
     }
 
+    @Test
+    void createFrom_validCommand_courseRepositoryQueriedBeforeStudentResolution() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final EnrollCourse correspondingCourse = new EnrollCourse(new CreateCourseCommand(courseId));
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
+
+        final Student correspondingStudent = new Student(new CreateStudentCommand("username"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(correspondingStudent);
+
+        // when
+        sut.createFrom(command);
+
+        // then — course lookup happens before student resolution (fail-fast on missing course)
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(courseRepository, currentUserAsStudent);
+        inOrder.verify(courseRepository).findByUuid(courseId);
+        inOrder.verify(currentUserAsStudent).userAsStudent();
+    }
+
 }

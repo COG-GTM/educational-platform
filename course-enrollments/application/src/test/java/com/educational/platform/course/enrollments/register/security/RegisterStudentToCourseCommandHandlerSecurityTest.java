@@ -87,4 +87,34 @@ public class RegisterStudentToCourseCommandHandlerSecurityTest {
         assertThatThrownBy(registerAction)
                 .isInstanceOf(AccessDeniedException.class);
     }
+
+    @Test
+    @WithMockUser(username = "student", roles = {"STUDENT", "TEACHER"})
+    void handle_userHasMultipleRolesIncludingStudent_accessAllowed() {
+        // given
+        var command = new RegisterStudentToCourseCommand(courseUuid);
+
+        // when
+        var result = sut.handle(command);
+
+        // then — user with STUDENT + TEACHER roles passes hasRole('STUDENT') check
+        final Optional<CourseEnrollment> saved = courseEnrollmentRepository.findByUuid(result);
+        assertThat(saved).isNotEmpty();
+    }
+
+    @Test
+    @WithMockUser(username = "student", roles = "STUDENT")
+    void handle_validCommand_enrollmentHasInProgressStatus() {
+        // given
+        var command = new RegisterStudentToCourseCommand(courseUuid);
+
+        // when
+        var result = sut.handle(command);
+
+        // then — newly created enrollment starts with IN_PROGRESS status
+        final Optional<CourseEnrollment> saved = courseEnrollmentRepository.findByUuid(result);
+        assertThat(saved).isPresent();
+        assertThat(saved.get()).hasFieldOrPropertyWithValue("completionStatus",
+                com.educational.platform.course.enrollments.CompletionStatus.IN_PROGRESS);
+    }
 }
