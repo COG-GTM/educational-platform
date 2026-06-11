@@ -12,6 +12,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.UUID;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -90,5 +93,21 @@ public class CreateCourseProposalCommandHandlerTest {
         assertThat(proposal)
                 .hasFieldOrPropertyWithValue("uuid", null)
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void class_hasTransactionalAnnotation() {
+        // then
+        assertThat(CreateCourseProposalCommandHandler.class.isAnnotationPresent(Transactional.class)).isTrue();
+    }
+
+    @Test
+    void handle_doesNotHavePreAuthorizeAnnotation() throws NoSuchMethodException {
+        // when
+        final var method = CreateCourseProposalCommandHandler.class
+                .getMethod("handle", CreateCourseProposalCommand.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(PreAuthorize.class)).isFalse();
     }
 }

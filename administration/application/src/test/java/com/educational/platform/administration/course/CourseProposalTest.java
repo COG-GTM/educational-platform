@@ -1,6 +1,7 @@
 package com.educational.platform.administration.course;
 
 import com.educational.platform.administration.course.create.CreateCourseProposalCommand;
+import com.educational.platform.common.domain.AggregateRoot;
 import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -297,6 +298,25 @@ public class CourseProposalTest {
         assertThatExceptionOfType(CourseProposalAlreadyDeclinedException.class)
                 .isThrownBy(secondDecline)
                 .withMessageContaining(uuid.toString());
+    }
+
+    @Test
+    void implementsAggregateRoot() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+
+        // when
+        final CourseProposal proposal = new CourseProposal(command);
+
+        // then
+        assertThat(proposal).isInstanceOf(AggregateRoot.class);
+    }
+
+    @Test
+    void class_hasEntityAnnotation() {
+        // then
+        assertThat(CourseProposal.class.isAnnotationPresent(jakarta.persistence.Entity.class)).isTrue();
     }
 
 }

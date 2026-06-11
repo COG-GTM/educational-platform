@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import jakarta.annotation.Nonnull;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.Collections;
@@ -114,5 +115,15 @@ class ListCourseProposalsQueryHandlerTest {
 
         // then
         assertThat(annotation.value()).contains("hasRole('ADMIN')");
+    }
+
+    @Test
+    void handle_hasNonnullAnnotation() throws NoSuchMethodException {
+        // when
+        final var method = ListCourseProposalsQueryHandler.class
+                .getMethod("handle", ListCourseProposalsQuery.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(Nonnull.class)).isTrue();
     }
 }

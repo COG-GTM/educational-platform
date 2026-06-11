@@ -329,4 +329,57 @@ class CourseProposalControllerTest {
         verifyNoInteractions(approveCourseProposalCommandHandler);
         verifyNoInteractions(declineCourseProposalCommandHandler);
     }
+
+    @Test
+    void approve_postMethod_handlerNotCalled() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        mockMvc.perform(post("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON));
+
+        // then
+        verifyNoInteractions(approveCourseProposalCommandHandler);
+    }
+
+    @Test
+    void decline_getMethod_handlerNotCalled() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        mockMvc.perform(get("/administration/course-proposals/{uuid}/approval-status", uuid));
+
+        // then
+        verifyNoInteractions(declineCourseProposalCommandHandler);
+    }
+
+    @Test
+    void approve_alreadyApproved_conflictResponseContentTypeIsJson() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyApprovedException(uuid))
+                .when(approveCourseProposalCommandHandler).handle(any(ApproveCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
+    }
+
+    @Test
+    void decline_alreadyDeclined_conflictResponseContentTypeIsJson() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyDeclinedException(uuid))
+                .when(declineCourseProposalCommandHandler).handle(any(DeclineCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
+    }
 }

@@ -279,4 +279,16 @@ public class DeclineCourseProposalCommandHandlerTest {
         // then
         assertThat(method.isAnnotationPresent(org.springframework.security.access.prepost.PreAuthorize.class)).isTrue();
     }
+
+    @Test
+    void handle_preAuthorizeAnnotation_requiresAdminRole() throws NoSuchMethodException {
+        // when
+        final var method = DeclineCourseProposalCommandHandler.class
+                .getMethod("handle", DeclineCourseProposalCommand.class);
+        final org.springframework.security.access.prepost.PreAuthorize annotation =
+                method.getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class);
+
+        // then
+        assertThat(annotation.value()).contains("hasRole('ADMIN')");
+    }
 }

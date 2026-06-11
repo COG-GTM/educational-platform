@@ -10,6 +10,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
 import java.util.UUID;
@@ -107,6 +108,12 @@ class SendCourseToApproveIntegrationEventHandlerTest {
 
         // then
         assertThat(method.isAnnotationPresent(Async.class)).isTrue();
+    }
+
+    @Test
+    void class_hasComponentAnnotation() {
+        // then
+        assertThat(SendCourseToApproveIntegrationEventHandler.class.isAnnotationPresent(Component.class)).isTrue();
     }
 
 }
