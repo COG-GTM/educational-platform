@@ -793,4 +793,50 @@ public class ListCourseQueryHandlerTest {
         assertThat(result).hasSize(1);
     }
 
+    @Test
+    void classAnnotatedWithComponent() {
+        // then
+        assertThat(ListCourseQueryHandler.class
+                .isAnnotationPresent(org.springframework.stereotype.Component.class)).isTrue();
+    }
+
+    @Test
+    void handleMethodAnnotatedWithNonnull() throws NoSuchMethodException {
+        // given
+        final java.lang.reflect.Method method = ListCourseQueryHandler.class
+                .getMethod("handle", ListCourseQuery.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(jakarta.annotation.Nonnull.class)).isTrue();
+    }
+
+    @Test
+    void constructorAcceptsSingleCourseRepositoryParameter() throws NoSuchMethodException {
+        // given
+        final var constructor = ListCourseQueryHandler.class
+                .getConstructor(com.educational.platform.courses.course.CourseRepository.class);
+
+        // then
+        assertThat(constructor).isNotNull();
+        assertThat(constructor.getParameterCount()).isEqualTo(1);
+        assertThat(constructor.getParameterTypes()[0]).isEqualTo(com.educational.platform.courses.course.CourseRepository.class);
+    }
+
+    @Test
+    void handle_repositoryReturnsCopyOnWriteArrayList_returnedDirectly() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final java.util.concurrent.CopyOnWriteArrayList<CourseLightDTO> cowList =
+                new java.util.concurrent.CopyOnWriteArrayList<>();
+        cowList.add(new CourseLightDTO(UUID.randomUUID(), "cow-course", "desc", 3));
+        when(repository.list()).thenReturn(cowList);
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(cowList);
+        assertThat(result).hasSize(1);
+    }
+
 }

@@ -2280,4 +2280,135 @@ public class CurriculumItemFactoryTest {
                                 .doesNotContain("uuid"));
     }
 
+    @Test
+    void createFrom_quizCommand_nullElementInQuestionsList_throwsNullPointerException() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(java.util.Arrays.asList(new CreateQuestionCommand("Q1"), null))
+                .build();
+
+        // when / then
+        assertThatThrownBy(() -> CurriculumItemFactory.createFrom(quizCommand, course))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void createFrom_lectureCommand_generatedUuidIsVersion4() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateLectureCommand lectureCommand = CreateLectureCommand.builder()
+                .title("Title")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(lectureCommand, course);
+
+        // then
+        assertThat(result).extracting("uuid")
+                .isNotNull()
+                .isInstanceOf(java.util.UUID.class)
+                .satisfies(obj -> assertThat(((java.util.UUID) obj).version()).isEqualTo(4));
+    }
+
+    @Test
+    void createFrom_quizCommand_generatedUuidIsVersion4() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(List.of(new CreateQuestionCommand("Q1")))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(result).extracting("uuid")
+                .isNotNull()
+                .isInstanceOf(java.util.UUID.class)
+                .satisfies(obj -> assertThat(((java.util.UUID) obj).version()).isEqualTo(4));
+    }
+
+    @Test
+    void createFrom_factoryMethodIsStatic_invocableWithoutInstantiation() throws NoSuchMethodException {
+        // when
+        final java.lang.reflect.Method method = CurriculumItemFactory.class.getMethod(
+                "createFrom",
+                com.educational.platform.courses.course.create.CreateCurriculumItemCommand.class,
+                Course.class);
+
+        // then
+        assertThat(java.lang.reflect.Modifier.isStatic(method.getModifiers())).isTrue();
+        assertThat(java.lang.reflect.Modifier.isPublic(method.getModifiers())).isTrue();
+    }
+
+    @Test
+    void createFrom_quizCommand_questionsListIsNewInstance_notSameReferenceAsInput() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final List<CreateQuestionCommand> inputQuestions = new java.util.ArrayList<>();
+        inputQuestions.add(new CreateQuestionCommand("Q1"));
+        inputQuestions.add(new CreateQuestionCommand("Q2"));
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(inputQuestions)
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then — the internal questions list is a new list of Question entities, not the input CreateQuestionCommand list
+        assertThat(result).isInstanceOf(Quiz.class);
+        assertThat(result).extracting("questions")
+                .asInstanceOf(LIST)
+                .hasSize(2)
+                .allSatisfy(q -> assertThat(q).isInstanceOf(Question.class));
+    }
+
 }

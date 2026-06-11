@@ -891,4 +891,33 @@ public class CourseByUUIDQueryHandlerTest {
         assertThat(result1.get()).isSameAs(result2.get());
     }
 
+    @Test
+    void classAnnotatedWithComponent() {
+        // then
+        assertThat(CourseByUUIDQueryHandler.class
+                .isAnnotationPresent(org.springframework.stereotype.Component.class)).isTrue();
+    }
+
+    @Test
+    void handleMethodAnnotatedWithNonnull() throws NoSuchMethodException {
+        // given
+        final java.lang.reflect.Method method = CourseByUUIDQueryHandler.class
+                .getMethod("handle", CourseByUUIDQuery.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(jakarta.annotation.Nonnull.class)).isTrue();
+    }
+
+    @Test
+    void constructorAcceptsSingleCourseRepositoryParameter() throws NoSuchMethodException {
+        // given
+        final var constructor = CourseByUUIDQueryHandler.class
+                .getConstructor(com.educational.platform.courses.course.CourseRepository.class);
+
+        // then
+        assertThat(constructor).isNotNull();
+        assertThat(constructor.getParameterCount()).isEqualTo(1);
+        assertThat(constructor.getParameterTypes()[0]).isEqualTo(com.educational.platform.courses.course.CourseRepository.class);
+    }
+
 }

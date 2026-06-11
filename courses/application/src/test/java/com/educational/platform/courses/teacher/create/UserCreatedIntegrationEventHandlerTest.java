@@ -732,4 +732,34 @@ public class UserCreatedIntegrationEventHandlerTest {
         assertThat(method.isAnnotationPresent(org.springframework.scheduling.annotation.Async.class)).isTrue();
     }
 
+    @Test
+    void classAnnotatedWithComponent() {
+        // then
+        assertThat(UserCreatedIntegrationEventHandler.class
+                .isAnnotationPresent(org.springframework.stereotype.Component.class)).isTrue();
+    }
+
+    @Test
+    void constructorAcceptsSingleCreateTeacherCommandHandlerParameter() throws NoSuchMethodException {
+        // given
+        final var constructor = UserCreatedIntegrationEventHandler.class
+                .getConstructor(CreateTeacherCommandHandler.class);
+
+        // then
+        assertThat(constructor).isNotNull();
+        assertThat(constructor.getParameterCount()).isEqualTo(1);
+        assertThat(constructor.getParameterTypes()[0]).isEqualTo(CreateTeacherCommandHandler.class);
+    }
+
+    @Test
+    void handleUserCreatedEvent_methodParameterType_isUserCreatedIntegrationEvent() throws NoSuchMethodException {
+        // given
+        final java.lang.reflect.Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+
+        // then
+        assertThat(method.getParameterCount()).isEqualTo(1);
+        assertThat(method.getParameterTypes()[0]).isEqualTo(UserCreatedIntegrationEvent.class);
+    }
+
 }
