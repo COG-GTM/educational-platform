@@ -22,6 +22,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -155,5 +156,57 @@ public class UpdateCourseRatingCommandHandlerTest {
         assertThatExceptionOfType(ResourceNotFoundException.class)
                 .isThrownBy(handle)
                 .withMessageContaining("123e4567-e89b-12d3-a456-426655440001");
+    }
+
+    @Test
+    void handle_existingCourse_saveCalledExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 4.0);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(repository, times(1)).save(correspondingCourse);
+    }
+
+    @Test
+    void handle_updateRatingTwice_secondRatingApplied() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseRatingCommand firstCommand = new UpdateCourseRatingCommand(uuid, 2.0);
+        final UpdateCourseRatingCommand secondCommand = new UpdateCourseRatingCommand(uuid, 4.5);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(firstCommand);
+        sut.handle(secondCommand);
+
+        // then
+        final ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository, times(2)).save(argument.capture());
+        final Course lastSaved = argument.getAllValues().get(1);
+        assertThat(lastSaved)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(4.5));
     }
 }

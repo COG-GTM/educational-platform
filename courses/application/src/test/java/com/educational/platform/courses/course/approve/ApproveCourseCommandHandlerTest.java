@@ -209,4 +209,21 @@ public class ApproveCourseCommandHandlerTest {
         assertThat(argument.getValue())
                 .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
     }
+
+    @Test
+    void handle_invalidId_saveNotCalled() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseCommand command = new ApproveCourseCommand(uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when / then
+        try {
+            sut.handle(command);
+        } catch (com.educational.platform.common.exception.ResourceNotFoundException ignored) {
+        }
+
+        // then
+        verify(repository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any(Course.class));
+    }
 }

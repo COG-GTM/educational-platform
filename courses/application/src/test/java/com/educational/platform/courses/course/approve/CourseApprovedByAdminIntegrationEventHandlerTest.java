@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -70,6 +71,19 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("handler error");
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_handlerCalledExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+
+        // when
+        sut.handleCourseApprovedByAdminEvent(event);
+
+        // then
+        verify(approveCourseCommandHandler, times(1)).handle(any(ApproveCourseCommand.class));
     }
 
 }

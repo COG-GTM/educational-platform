@@ -210,4 +210,47 @@ public class SendCourseToApproveCommandHandlerTest {
         // then
         verify(eventPublisher, never()).publishEvent(org.mockito.ArgumentMatchers.any(SendCourseToApproveIntegrationEvent.class));
     }
+
+    @Test
+    void handle_waitingForApprovalCourse_canBeReSentForApproval() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveCommand command = new SendCourseToApproveCommand(uuid);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        correspondingCourse.sendToApprove();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        assertThat(correspondingCourse)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+        verify(eventPublisher).publishEvent(org.mockito.ArgumentMatchers.any(SendCourseToApproveIntegrationEvent.class));
+    }
+
+    @Test
+    void handle_invalidId_eventNotPublished() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveCommand command = new SendCourseToApproveCommand(uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when / then
+        try {
+            sut.handle(command);
+        } catch (com.educational.platform.common.exception.ResourceNotFoundException ignored) {
+        }
+
+        // then
+        verify(eventPublisher, never()).publishEvent(org.mockito.ArgumentMatchers.any(SendCourseToApproveIntegrationEvent.class));
+    }
 }

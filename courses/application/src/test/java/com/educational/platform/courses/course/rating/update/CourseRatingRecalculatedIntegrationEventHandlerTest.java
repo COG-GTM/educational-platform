@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -90,6 +91,36 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("handler error");
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_differentUuid_correctUuidAndRatingPassed() {
+        // given
+        final UUID uuid = UUID.fromString("abcdef01-2345-6789-abcd-ef0123456789");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 5.0);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("rating", 5.0);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_handlerCalledExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.0);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        verify(updateCourseRatingCommandHandler, times(1)).handle(any(UpdateCourseRatingCommand.class));
     }
 
 }

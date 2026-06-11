@@ -19,6 +19,11 @@ import jakarta.validation.Validator;
 import java.util.List;
 import java.util.UUID;
 
+import com.educational.platform.courses.course.ApprovalStatus;
+import com.educational.platform.courses.course.CourseRating;
+import com.educational.platform.courses.course.NumberOfStudents;
+import com.educational.platform.courses.course.PublishStatus;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.mock;
@@ -189,5 +194,46 @@ public class CreateCourseCommandHandlerTest {
 
         // then
         verify(repository, times(0)).save(org.mockito.ArgumentMatchers.any(Course.class));
+    }
+
+    @Test
+    void handle_validCourse_savedCourseHasInitialState() {
+        // given
+        stubTeacher();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        sut.handle(command);
+
+        // then
+        ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        final Course course = argument.getValue();
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.NOT_SENT_FOR_APPROVAL)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0))
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(0));
+    }
+
+    @Test
+    void handle_validCourse_savedCourseHasNonNullUuid() {
+        // given
+        stubTeacher();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        sut.handle(command);
+
+        // then
+        ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue().toIdentity()).isNotNull();
     }
 }
