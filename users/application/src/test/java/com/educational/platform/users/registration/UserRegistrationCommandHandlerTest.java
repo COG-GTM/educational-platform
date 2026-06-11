@@ -23,9 +23,12 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 
+import java.util.Collections;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -174,5 +177,111 @@ public class UserRegistrationCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_validCommand_returnsTokenFromProvider() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("expected-jwt-token");
+
+        // when
+        final String token = sut.handle(userRegistrationCommand);
+
+        // then
+        assertThat(token).isEqualTo("expected-jwt-token");
+    }
+
+    @Test
+    void handle_teacherRole_userCreatedWithTeacherRole() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("teacher@gmail.com")
+                .username("teacher")
+                .password("password")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+        when(repository.existsByUsername("teacher")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        final ArgumentCaptor<User> argument = ArgumentCaptor.forClass(User.class);
+        verify(repository).save(argument.capture());
+        final User user = argument.getValue();
+        assertThat(user)
+                .hasFieldOrPropertyWithValue("username", "teacher")
+                .hasFieldOrPropertyWithValue("email", "teacher@gmail.com")
+                .hasFieldOrPropertyWithValue("role", Role.ROLE_TEACHER);
+    }
+
+    @Test
+    void handle_teacherRole_tokenCreatedWithTeacherRole() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("teacher@gmail.com")
+                .username("teacher")
+                .password("password")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+        when(repository.existsByUsername("teacher")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        verify(jwtTokenProvider).createToken(eq("teacher"), eq(Collections.singletonList(Role.ROLE_TEACHER)));
+    }
+
+    @Test
+    void handle_validCommand_publishesEventWithCorrectUsernameAndEmail() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("event@gmail.com")
+                .username("eventuser")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("eventuser")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        final ArgumentCaptor<UserCreatedIntegrationEvent> eventArgument = ArgumentCaptor.forClass(UserCreatedIntegrationEvent.class);
+        verify(eventPublisher).publishEvent(eventArgument.capture());
+        final UserCreatedIntegrationEvent event = eventArgument.getValue();
+        assertThat(event.username()).isEqualTo("eventuser");
+        assertThat(event.email()).isEqualTo("event@gmail.com");
+    }
+
+    @Test
+    void handle_usernameAlreadyExists_exceptionMessageContainsUsername() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("duplicate")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("duplicate")).thenReturn(true);
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(handle)
+                .withMessageContaining("duplicate");
     }
 }

@@ -1,6 +1,7 @@
 package com.educational.platform.users.login;
 
 import com.educational.platform.common.exception.UnprocessableEntityException;
+import com.educational.platform.users.Role;
 import com.educational.platform.users.RoleDTO;
 import com.educational.platform.users.User;
 import com.educational.platform.users.UserRepository;
@@ -21,9 +22,12 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.util.Optional;
 
+import java.util.Collections;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -116,5 +120,122 @@ public class SignInCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_validCommand_authenticationManagerCalledWithCorrectCredentials() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("myuser")
+                .password("mypassword")
+                .build();
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("myuser")
+                .password("mypassword")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User existingUser = new User(userRegistrationCommand, passwordEncoder);
+        when(repository.findByUsername("myuser")).thenReturn(Optional.of(existingUser));
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(signInCommand);
+
+        // then
+        verify(authenticationManager).authenticate(argThat(auth ->
+                auth.getPrincipal().equals("myuser") && auth.getCredentials().equals("mypassword")
+        ));
+    }
+
+    @Test
+    void handle_validCommand_createTokenCalledWithCorrectUsernameAndRole() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("password")
+                .build();
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User existingUser = new User(userRegistrationCommand, passwordEncoder);
+        when(repository.findByUsername("username")).thenReturn(Optional.of(existingUser));
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(signInCommand);
+
+        // then
+        verify(jwtTokenProvider).createToken(eq("username"), eq(Collections.singletonList(Role.ROLE_STUDENT)));
+    }
+
+    @Test
+    void handle_teacherUser_createTokenCalledWithTeacherRole() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("teacher")
+                .password("password")
+                .build();
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("teacher@gmail.com")
+                .username("teacher")
+                .password("password")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+        final User existingUser = new User(userRegistrationCommand, passwordEncoder);
+        when(repository.findByUsername("teacher")).thenReturn(Optional.of(existingUser));
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("teacher-token");
+
+        // when
+        final String token = sut.handle(signInCommand);
+
+        // then
+        assertThat(token).isEqualTo("teacher-token");
+        verify(jwtTokenProvider).createToken(eq("teacher"), eq(Collections.singletonList(Role.ROLE_TEACHER)));
+    }
+
+    @Test
+    void handle_validCommand_repositoryQueriedWithCorrectUsername() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("testuser")
+                .password("testpass")
+                .build();
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("test@gmail.com")
+                .username("testuser")
+                .password("testpass")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User existingUser = new User(userRegistrationCommand, passwordEncoder);
+        when(repository.findByUsername("testuser")).thenReturn(Optional.of(existingUser));
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(signInCommand);
+
+        // then
+        verify(repository).findByUsername("testuser");
+    }
+
+    @Test
+    void handle_invalidCredentials_exceptionMessageContainsDetail() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("wrong")
+                .build();
+        doThrow(BadCredentialsException.class).when(authenticationManager).authenticate(any());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(handle)
+                .withMessageContaining("Invalid username/password");
     }
 }
