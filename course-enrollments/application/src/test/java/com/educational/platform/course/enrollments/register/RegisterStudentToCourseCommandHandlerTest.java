@@ -15,6 +15,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.UUID;
@@ -203,6 +205,55 @@ public class RegisterStudentToCourseCommandHandlerTest {
 
         // then
         verify(eventPublisher, times(2)).publishEvent(any(StudentEnrolledToCourseIntegrationEvent.class));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void handle_validCommand_transactionCallbackCreatesAndSavesEnrollment() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment expectedEnrollment = new CourseEnrollment(1, 1);
+
+        when(courseEnrollmentFactory.createFrom(command)).thenReturn(expectedEnrollment);
+        when(transactionTemplate.execute(any(TransactionCallback.class))).thenAnswer(invocation -> {
+            TransactionCallback<CourseEnrollment> callback = invocation.getArgument(0);
+            return callback.doInTransaction(mock(TransactionStatus.class));
+        });
+
+        final Student student = new Student(new CreateStudentCommand("student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(courseEnrollmentFactory).createFrom(command);
+        verify(courseEnrollmentRepository).save(expectedEnrollment);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void handle_validCommand_transactionCallbackReturnsCreatedEnrollment() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment expectedEnrollment = new CourseEnrollment(1, 1);
+
+        when(courseEnrollmentFactory.createFrom(command)).thenReturn(expectedEnrollment);
+        when(transactionTemplate.execute(any(TransactionCallback.class))).thenAnswer(invocation -> {
+            TransactionCallback<CourseEnrollment> callback = invocation.getArgument(0);
+            return callback.doInTransaction(mock(TransactionStatus.class));
+        });
+
+        final Student student = new Student(new CreateStudentCommand("student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        final UUID result = sut.handle(command);
+
+        // then
+        assertThat(result).isEqualTo(expectedEnrollment.getUuid());
     }
 
     @Test

@@ -78,4 +78,27 @@ public class CurrentUserAsStudentTest {
         assertThatThrownBy(() -> sut.userAsStudent())
                 .isInstanceOf(NullPointerException.class);
     }
+
+    @Test
+    void userAsStudent_principalNotUserDetails_throwsClassCastException() {
+        // given
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("plain-string-principal", "password", Collections.emptyList()));
+
+        // when / then
+        assertThatThrownBy(() -> sut.userAsStudent())
+                .isInstanceOf(ClassCastException.class);
+    }
+
+    @Test
+    void userAsStudent_authenticatedUser_delegatesWithCorrectUsername() {
+        // given
+        when(studentRepository.findByUsername("student-user")).thenReturn(null);
+
+        // when
+        sut.userAsStudent();
+
+        // then
+        verify(studentRepository).findByUsername("student-user");
+    }
 }

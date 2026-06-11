@@ -125,4 +125,49 @@ public class CourseEnrollmentByUUIDQueryHandlerTest {
         assertThatThrownBy(() -> sut.handle(query))
                 .isInstanceOf(NullPointerException.class);
     }
+
+    @Test
+    void handle_passesExactQueryUuidToRepository() {
+        // given
+        final UUID enrollmentUuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(enrollmentUuid);
+        when(repository.query(enrollmentUuid, "student")).thenReturn(Optional.empty());
+
+        // when
+        sut.handle(query);
+
+        // then
+        verify(repository).query(enrollmentUuid, "student");
+    }
+
+    @Test
+    void handle_returnsSameOptionalFromRepository() {
+        // given
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(enrollmentUuid);
+        final Optional<CourseEnrollmentDTO> expectedResult = Optional.of(
+                new CourseEnrollmentDTO(enrollmentUuid, courseUuid, "student", CompletionStatusDTO.IN_PROGRESS));
+        when(repository.query(enrollmentUuid, "student")).thenReturn(expectedResult);
+
+        // when
+        final Optional<CourseEnrollmentDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(expectedResult);
+    }
+
+    @Test
+    void handle_principalNotUserDetails_throwsClassCastException() {
+        // given
+        SecurityContextHolder.clearContext();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("plain-string", "password", Collections.emptyList()));
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(enrollmentUuid);
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(ClassCastException.class);
+    }
 }

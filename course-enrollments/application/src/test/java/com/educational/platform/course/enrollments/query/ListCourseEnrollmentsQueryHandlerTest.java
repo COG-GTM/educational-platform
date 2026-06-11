@@ -127,4 +127,32 @@ public class ListCourseEnrollmentsQueryHandlerTest {
         assertThatThrownBy(() -> sut.handle(query))
                 .isInstanceOf(NullPointerException.class);
     }
+
+    @Test
+    void handle_returnsSameListInstanceFromRepository() {
+        // given
+        final ListCourseEnrollmentsQuery query = new ListCourseEnrollmentsQuery();
+        final List<CourseEnrollmentDTO> expectedList = List.of(
+                new CourseEnrollmentDTO(UUID.randomUUID(), UUID.randomUUID(), "student", CompletionStatusDTO.IN_PROGRESS));
+        when(repository.query("student")).thenReturn(expectedList);
+
+        // when
+        final List<CourseEnrollmentDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(expectedList);
+    }
+
+    @Test
+    void handle_principalNotUserDetails_throwsClassCastException() {
+        // given
+        SecurityContextHolder.clearContext();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("plain-string", "password", Collections.emptyList()));
+        final ListCourseEnrollmentsQuery query = new ListCourseEnrollmentsQuery();
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(ClassCastException.class);
+    }
 }

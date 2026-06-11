@@ -192,4 +192,33 @@ public class CourseEnrollmentControllerTest {
         // then
         assertThat(result).isNull();
     }
+
+    @Test
+    void enroll_nullPathUuid_createsCommandWithNullCourseId() {
+        // given
+        final UUID enrollmentUuid = UUID.randomUUID();
+        when(registerHandler.handle(any(RegisterStudentToCourseCommand.class))).thenReturn(enrollmentUuid);
+
+        // when
+        sut.enroll(null, new CourseEnrollmentRequest("student"));
+
+        // then
+        ArgumentCaptor<RegisterStudentToCourseCommand> captor = ArgumentCaptor.forClass(RegisterStudentToCourseCommand.class);
+        verify(registerHandler).handle(captor.capture());
+        assertThat(captor.getValue().courseId()).isNull();
+    }
+
+    @Test
+    void courseEnrollments_returnsSameListFromHandler() {
+        // given
+        final List<CourseEnrollmentDTO> expectedList = List.of(
+                new CourseEnrollmentDTO(UUID.randomUUID(), UUID.randomUUID(), "student", CompletionStatusDTO.IN_PROGRESS));
+        when(listHandler.handle(any(ListCourseEnrollmentsQuery.class))).thenReturn(expectedList);
+
+        // when
+        final List<CourseEnrollmentDTO> result = sut.courseEnrollments();
+
+        // then
+        assertThat(result).isSameAs(expectedList);
+    }
 }

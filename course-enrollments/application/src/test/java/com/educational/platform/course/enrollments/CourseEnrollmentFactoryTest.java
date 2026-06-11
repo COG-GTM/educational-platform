@@ -24,7 +24,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -218,6 +218,40 @@ public class CourseEnrollmentFactoryTest {
 
         // then
         assertThat(enrollment1.getUuid()).isNotEqualTo(enrollment2.getUuid());
+    }
+
+    @Test
+    void createFrom_courseIdIsNull_repositoryNeverQueried() {
+        // given
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(null);
+
+        // when
+        assertThrows(ConstraintViolationException.class, () -> sut.createFrom(command));
+
+        // then
+        verifyNoInteractions(courseRepository);
+        verifyNoInteractions(currentUserAsStudent);
+    }
+
+    @Test
+    void createFrom_validCommand_returnedEnrollmentIsNotNull() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CreateCourseCommand createCourseCommand = new CreateCourseCommand(courseId);
+        final EnrollCourse correspondingCourse = new EnrollCourse(createCourseCommand);
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
+
+        final Student correspondingStudent = new Student(new CreateStudentCommand("username"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(correspondingStudent);
+
+        // when
+        final CourseEnrollment enrollment = sut.createFrom(command);
+
+        // then
+        assertThat(enrollment).isNotNull();
+        assertThat(enrollment.getUuid()).isNotNull();
+        assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
     }
 
 }
