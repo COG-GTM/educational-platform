@@ -183,4 +183,27 @@ public class CreateCourseProposalCommandHandlerTest {
                     }
                 });
     }
+
+    @Test
+    void handle_multipleSequentialCommands_eachSavedSeparately() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CreateCourseProposalCommand command1 = new CreateCourseProposalCommand(uuid1);
+        final CreateCourseProposalCommand command2 = new CreateCourseProposalCommand(uuid2);
+
+        // when
+        sut.handle(command1);
+        sut.handle(command2);
+
+        // then
+        final ArgumentCaptor<CourseProposal> captor = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(0))
+                .hasFieldOrPropertyWithValue("uuid", uuid1)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL);
+        assertThat(captor.getAllValues().get(1))
+                .hasFieldOrPropertyWithValue("uuid", uuid2)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL);
+    }
 }

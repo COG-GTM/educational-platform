@@ -205,4 +205,24 @@ class ListCourseProposalsQueryHandlerTest {
         verify(repository).listCourseProposals();
         assertThat(result).isEmpty();
     }
+
+    @Test
+    void handle_consecutiveCalls_eachDelegatesToRepository() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposalDTO dto = new CourseProposalDTO(uuid, CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
+        when(repository.listCourseProposals())
+                .thenReturn(List.of(dto))
+                .thenReturn(Collections.emptyList());
+        final ListCourseProposalsQuery query = new ListCourseProposalsQuery();
+
+        // when
+        final List<CourseProposalDTO> firstResult = sut.handle(query);
+        final List<CourseProposalDTO> secondResult = sut.handle(query);
+
+        // then
+        verify(repository, org.mockito.Mockito.times(2)).listCourseProposals();
+        assertThat(firstResult).hasSize(1);
+        assertThat(secondResult).isEmpty();
+    }
 }

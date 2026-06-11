@@ -1,6 +1,7 @@
 package com.educational.platform.administration.course;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.UUID;
 
@@ -99,5 +100,28 @@ class CourseProposalAlreadyApprovedExceptionTest {
         // then
         assertThat(exception).isInstanceOf(RuntimeException.class);
         assertThat(exception).isNotInstanceOf(java.io.IOException.class);
+    }
+
+    @Test
+    void uuidField_preservesValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        final CourseProposalAlreadyApprovedException exception = new CourseProposalAlreadyApprovedException(uuid);
+
+        // then
+        final UUID storedUuid = (UUID) ReflectionTestUtils.getField(exception, "uuid");
+        assertThat(storedUuid).isEqualTo(uuid);
+    }
+
+    @Test
+    void uuidField_nullUuid_preservesNull() {
+        // when
+        final CourseProposalAlreadyApprovedException exception = new CourseProposalAlreadyApprovedException(null);
+
+        // then
+        final UUID storedUuid = (UUID) ReflectionTestUtils.getField(exception, "uuid");
+        assertThat(storedUuid).isNull();
     }
 }

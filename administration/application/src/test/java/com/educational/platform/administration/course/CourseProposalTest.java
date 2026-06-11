@@ -9,6 +9,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 public class CourseProposalTest {
@@ -542,6 +543,52 @@ public class CourseProposalTest {
         assertThat(dto)
                 .hasFieldOrPropertyWithValue("uuid", uuid)
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.DECLINED);
+    }
+
+    @Test
+    void approve_fromWaitingForApproval_doesNotThrow() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+
+        // when / then
+        assertThatCode(proposal::approve).doesNotThrowAnyException();
+    }
+
+    @Test
+    void decline_fromWaitingForApproval_doesNotThrow() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+
+        // when / then
+        assertThatCode(proposal::decline).doesNotThrowAnyException();
+    }
+
+    @Test
+    void approve_fromDeclined_doesNotThrow() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+        ReflectionTestUtils.setField(proposal, "status", CourseProposalStatus.DECLINED);
+
+        // when / then
+        assertThatCode(proposal::approve).doesNotThrowAnyException();
+    }
+
+    @Test
+    void decline_fromApproved_doesNotThrow() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+        ReflectionTestUtils.setField(proposal, "status", CourseProposalStatus.APPROVED);
+
+        // when / then
+        assertThatCode(proposal::decline).doesNotThrowAnyException();
     }
 
 }

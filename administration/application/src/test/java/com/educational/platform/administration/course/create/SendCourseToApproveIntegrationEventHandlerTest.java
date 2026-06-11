@@ -146,4 +146,23 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(constructor).isNotNull();
         assertThat(constructor.getParameterCount()).isEqualTo(1);
     }
+
+    @Test
+    void handleSendCourseToApproveEvent_multipleSequentialEvents_eachDelegatesToHandler() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final SendCourseToApproveIntegrationEvent event1 = new SendCourseToApproveIntegrationEvent(uuid1);
+        final SendCourseToApproveIntegrationEvent event2 = new SendCourseToApproveIntegrationEvent(uuid2);
+
+        // when
+        sut.handleSendCourseToApproveEvent(event1);
+        sut.handleSendCourseToApproveEvent(event2);
+
+        // then
+        final ArgumentCaptor<CreateCourseProposalCommand> captor = ArgumentCaptor.forClass(CreateCourseProposalCommand.class);
+        verify(createCourseProposalCommandHandler, times(2)).handle(captor.capture());
+        assertThat(captor.getAllValues().get(0).uuid()).isEqualTo(uuid1);
+        assertThat(captor.getAllValues().get(1).uuid()).isEqualTo(uuid2);
+    }
 }

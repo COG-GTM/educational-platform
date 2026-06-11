@@ -758,4 +758,81 @@ class CourseProposalControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
     }
+
+    @Test
+    void approve_postMethod_returnsNonSuccessStatus() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when / then
+        mockMvc.perform(post("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(result -> assertThat(result.getResponse().getStatus())
+                        .isGreaterThanOrEqualTo(400));
+    }
+
+    @Test
+    void decline_getMethod_returnsNonSuccessStatus() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when / then
+        mockMvc.perform(get("/administration/course-proposals/{uuid}/approval-status", uuid))
+                .andExpect(result -> assertThat(result.getResponse().getStatus())
+                        .isGreaterThanOrEqualTo(400));
+    }
+
+    @Test
+    void patchOnApprovalStatus_returnsNonSuccessStatus() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when / then
+        mockMvc.perform(patch("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(result -> assertThat(result.getResponse().getStatus())
+                        .isGreaterThanOrEqualTo(400));
+    }
+
+    @Test
+    void approve_handlerCalledExactlyOnce() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+
+        // then
+        verify(approveCourseProposalCommandHandler, times(1)).handle(any(ApproveCourseProposalCommand.class));
+    }
+
+    @Test
+    void decline_handlerCalledExactlyOnce() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+
+        // then
+        verify(declineCourseProposalCommandHandler, times(1)).handle(any(DeclineCourseProposalCommand.class));
+    }
+
+    @Test
+    void courseProposals_queryHandlerCalledExactlyOnce() throws Exception {
+        // given
+        when(listCourseProposalsQueryHandler.handle(any(ListCourseProposalsQuery.class)))
+                .thenReturn(Collections.emptyList());
+
+        // when
+        mockMvc.perform(get("/administration/course-proposals"))
+                .andExpect(status().isOk());
+
+        // then
+        verify(listCourseProposalsQueryHandler, times(1)).handle(any(ListCourseProposalsQuery.class));
+    }
 }
