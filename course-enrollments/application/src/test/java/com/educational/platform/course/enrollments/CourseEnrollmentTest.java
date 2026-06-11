@@ -14,6 +14,28 @@ import com.educational.platform.course.enrollments.student.create.CreateStudentC
 public class CourseEnrollmentTest {
 
 	@Test
+	void constructor_initializesWithUuidAndInProgressStatus() {
+		// when
+		final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+
+		// then
+		assertThat(enrollment.getUuid()).isNotNull();
+		assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
+		assertThat(enrollment).hasFieldOrPropertyWithValue("course", 1);
+		assertThat(enrollment).hasFieldOrPropertyWithValue("student", 2);
+	}
+
+	@Test
+	void constructor_eachInstanceGetsUniqueUuid() {
+		// when
+		final CourseEnrollment enrollment1 = new CourseEnrollment(1, 2);
+		final CourseEnrollment enrollment2 = new CourseEnrollment(1, 2);
+
+		// then
+		assertThat(enrollment1.getUuid()).isNotEqualTo(enrollment2.getUuid());
+	}
+
+	@Test
 	void complete_completedStatus() {
 		// given
 		final CreateCourseCommand createCourseCommand = new CreateCourseCommand(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"));

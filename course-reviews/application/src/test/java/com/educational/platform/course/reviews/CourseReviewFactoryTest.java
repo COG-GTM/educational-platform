@@ -6,24 +6,21 @@ import com.educational.platform.course.reviews.course.create.CreateReviewableCou
 import com.educational.platform.course.reviews.create.ReviewCourseCommand;
 import com.educational.platform.course.reviews.reviewer.Reviewer;
 import com.educational.platform.course.reviews.reviewer.create.CreateReviewerCommand;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.function.Executable;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import jakarta.validation.ConstraintViolationException;
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,72 +41,70 @@ public class CourseReviewFactoryTest {
     }
 
     @Test
-    void createFrom_validCourseReview_courseReviewCreated() {
+    void createFrom_validCommand_returnsCourseReview() {
         // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+        final UUID courseId = UUID.randomUUID();
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "great");
 
-        final CreateReviewableCourseCommand createCourseProposalCommand = new CreateReviewableCourseCommand(uuid);
-        final ReviewableCourse correspondingReviewableCourse = new ReviewableCourse(createCourseProposalCommand);
-        ReflectionTestUtils.setField(correspondingReviewableCourse, "id", 11);
-        ReflectionTestUtils.setField(correspondingReviewableCourse, "originalCourseId", uuid);
-        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.of(correspondingReviewableCourse));
+        final ReviewableCourse course = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
+        ReflectionTestUtils.setField(course, "id", 10);
+        when(reviewableCourseRepository.findByOriginalCourseId(courseId)).thenReturn(Optional.of(course));
 
-        final CreateReviewerCommand createReviewerCommand = new CreateReviewerCommand("username");
-        final Reviewer correspondingReviewer = new Reviewer(createReviewerCommand);
-        ReflectionTestUtils.setField(correspondingReviewer, "id", 22);
-        ReflectionTestUtils.setField(correspondingReviewer, "username", "username");
-        when(currentUserAsReviewer.userAsReviewer()).thenReturn(correspondingReviewer);
+        final Reviewer reviewer = new Reviewer(new CreateReviewerCommand("username"));
+        ReflectionTestUtils.setField(reviewer, "id", 20);
+        when(currentUserAsReviewer.userAsReviewer()).thenReturn(reviewer);
 
         // when
-        final CourseReview courseReview = sut.createFrom(command);
+        final CourseReview result = sut.createFrom(command);
 
         // then
-        // todo recheck course and reviewer references
-        assertThat(courseReview)
+        assertThat(result).isNotNull();
+        assertThat(result.toIdentifier()).isNotNull();
+        assertThat(result)
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(4.0))
-                .hasFieldOrPropertyWithValue("comment", new Comment("comment"));
+                .hasFieldOrPropertyWithValue("comment", new Comment("great"));
     }
 
+    @Test
+    void createFrom_invalidRating_constraintViolationException() {
+        // given
+        final UUID courseId = UUID.randomUUID();
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 6.0, "comment");
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.createFrom(command));
+    }
+
+    @Test
+    void createFrom_negativeRating_constraintViolationException() {
+        // given
+        final UUID courseId = UUID.randomUUID();
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, -1.0, "comment");
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.createFrom(command));
+    }
 
     @Test
     void createFrom_courseIdIsNull_constraintViolationException() {
         // given
         final ReviewCourseCommand command = new ReviewCourseCommand(null, 4.0, "comment");
 
-        // when
-        final Executable createAction = () -> sut.createFrom(command);
-
-        // then
-        assertThrows(ConstraintViolationException.class, createAction);
-    }
-
-
-    @ParameterizedTest
-    @ValueSource(doubles = {-1, 6})
-    void createFrom_invalidRating_constraintViolationException(double rating) {
-        // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, rating, "comment");
-
-        // when
-        final Executable createAction = () -> sut.createFrom(command);
-
-        // then
-        assertThrows(ConstraintViolationException.class, createAction);
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.createFrom(command));
     }
 
     @Test
-    void createFrom_emptyRating_constraintViolationException() {
+    void createFrom_nullRating_constraintViolationException() {
         // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, null, "comment");
+        final UUID courseId = UUID.randomUUID();
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, null, "comment");
 
-        // when
-        final Executable createAction = () -> sut.createFrom(command);
-
-        // then
-        assertThrows(ConstraintViolationException.class, createAction);
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.createFrom(command));
     }
-
 }

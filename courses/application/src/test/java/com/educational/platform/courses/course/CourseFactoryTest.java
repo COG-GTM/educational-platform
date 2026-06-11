@@ -1,23 +1,21 @@
 package com.educational.platform.courses.course;
 
-
 import com.educational.platform.courses.course.create.CreateCourseCommand;
+import com.educational.platform.courses.course.create.CreateLectureCommand;
 import com.educational.platform.courses.teacher.Teacher;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.function.Executable;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.mock;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,6 +23,9 @@ public class CourseFactoryTest {
 
     @Mock
     private CurrentUserAsTeacher currentUserAsTeacher;
+
+    @Mock
+    private Teacher teacher;
 
     private CourseFactory sut;
 
@@ -35,87 +36,105 @@ public class CourseFactoryTest {
     }
 
     @Test
-    void createFrom_validCourse_courseCreated() {
+    void createFrom_validCommand_returnsCourseWithCorrectFields() {
         // given
-        var teacher = mock(Teacher.class);
         when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
-        when(teacher.getId()).thenReturn(15);
+        when(teacher.getId()).thenReturn(42);
         final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("name")
-                .description("description")
+                .name("Mathematics")
+                .description("Advanced math course")
                 .build();
 
         // when
         final Course course = sut.createFrom(command);
 
         // then
+        assertThat(course).isNotNull();
+        assertThat(course.toIdentity()).isNotNull();
         assertThat(course)
-                .hasFieldOrPropertyWithValue("name", "name")
-                .hasFieldOrPropertyWithValue("description", "description");
+                .hasFieldOrPropertyWithValue("name", "Mathematics")
+                .hasFieldOrPropertyWithValue("description", "Advanced math course")
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.NOT_SENT_FOR_APPROVAL)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0))
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(0))
+                .hasFieldOrPropertyWithValue("teacher", 42);
     }
 
-
     @Test
-    void createFrom_nameIsNull_constraintViolationException() {
+    void createFrom_commandWithCurriculumItems_courseContainsItems() {
         // given
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(1);
+        final CreateLectureCommand lecture = CreateLectureCommand.builder()
+                .title("Lecture 1")
+                .description("First lecture")
+                .serialNumber(1)
+                .text("Content")
+                .build();
         final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name(null)
-                .description("description")
+                .name("Physics")
+                .description("Intro to physics")
+                .curriculumItems(List.of(lecture))
                 .build();
 
         // when
-        final Executable createAction = () -> sut.createFrom(command);
+        final Course course = sut.createFrom(command);
 
         // then
-        assertThrows(ConstraintViolationException.class, createAction);
+        assertThat(course).isNotNull();
+        assertThat(course).hasFieldOrPropertyWithValue("name", "Physics");
     }
 
-
     @Test
-    void createFrom_nameIsBlank_constraintViolationException() {
+    void createFrom_blankName_constraintViolationException() {
         // given
         final CreateCourseCommand command = CreateCourseCommand.builder()
                 .name("")
                 .description("description")
                 .build();
 
-        // when
-        final Executable createAction = () -> sut.createFrom(command);
-
-        // then
-        assertThrows(ConstraintViolationException.class, createAction);
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.createFrom(command));
     }
 
+    @Test
+    void createFrom_nullName_constraintViolationException() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name(null)
+                .description("description")
+                .build();
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.createFrom(command));
+    }
 
     @Test
-    void createFrom_descriptionIsNull_constraintViolationException() {
+    void createFrom_nullDescription_constraintViolationException() {
         // given
         final CreateCourseCommand command = CreateCourseCommand.builder()
                 .name("name")
                 .description(null)
                 .build();
 
-        // when
-        final Executable createAction = () -> sut.createFrom(command);
-
-        // then
-        assertThrows(ConstraintViolationException.class, createAction);
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.createFrom(command));
     }
 
-
     @Test
-    void createFrom_descriptionIsBlank_constraintViolationException() {
+    void createFrom_bothFieldsBlank_constraintViolationException() {
         // given
         final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("name")
+                .name("")
                 .description("")
                 .build();
 
-        // when
-        final Executable createAction = () -> sut.createFrom(command);
-
-        // then
-        assertThrows(ConstraintViolationException.class, createAction);
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.createFrom(command));
     }
-
 }

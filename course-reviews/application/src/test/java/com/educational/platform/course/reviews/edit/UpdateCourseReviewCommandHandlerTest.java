@@ -84,10 +84,36 @@ public class UpdateCourseReviewCommandHandlerTest {
     }
 
     @Test
-    void handle_ratingEmpty_resourceNotFoundException() {
+    void handle_ratingEmpty_constraintViolationException() {
         // given
         final UUID uuid = configureCourseReview();
         final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, null, "updated comment");
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_ratingExceedsMax_constraintViolationException() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 6.0, "comment");
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_negativeRating_constraintViolationException() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, -1.0, "comment");
 
         // when
         final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);

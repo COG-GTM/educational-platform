@@ -36,51 +36,45 @@ public class DeclineCourseProposalCommandHandlerTest {
     private PlatformTransactionManager transactionManager;
 
     @Mock
-    private TransactionTemplate transactionTemplate;
-
-    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private DeclineCourseProposalCommandHandler sut;
 
     @BeforeEach
     void setUp() {
-        transactionTemplate = new TransactionTemplate(transactionManager);
+        final TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
         sut = new DeclineCourseProposalCommandHandler(transactionTemplate, repository, eventPublisher);
     }
 
     @Test
-    void handle_existingCourseProposal_courseProposalSavedWithStatusDeclined() {
+    void handle_existingProposal_declinesAndPublishesEvent() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
 
-        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
-        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
-        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
-        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        ReflectionTestUtils.setField(proposal, "uuid", uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(proposal));
 
         // when
         sut.handle(command);
 
         // then
-        final ArgumentCaptor<CourseProposal> argument = ArgumentCaptor.forClass(CourseProposal.class);
-        verify(repository).save(argument.capture());
-        final CourseProposal proposal = argument.getValue();
-        assertThat(proposal)
+        final ArgumentCaptor<CourseProposal> proposalCaptor = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository).save(proposalCaptor.capture());
+        assertThat(proposalCaptor.getValue())
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED);
 
-        final ArgumentCaptor<CourseDeclinedByAdminIntegrationEvent> eventArgument = ArgumentCaptor.forClass(CourseDeclinedByAdminIntegrationEvent.class);
-        verify(eventPublisher).publishEvent(eventArgument.capture());
-        final CourseDeclinedByAdminIntegrationEvent event = eventArgument.getValue();
-        assertThat(event)
-                .hasFieldOrPropertyWithValue("courseId", uuid);
+        final ArgumentCaptor<CourseDeclinedByAdminIntegrationEvent> captor =
+                ArgumentCaptor.forClass(CourseDeclinedByAdminIntegrationEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().courseId()).isEqualTo(uuid);
     }
 
     @Test
-    void handle_invalidId_resourceNotFoundException() {
+    void handle_proposalNotFound_resourceNotFoundException() {
         // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid = UUID.randomUUID();
         final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
         when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
 
