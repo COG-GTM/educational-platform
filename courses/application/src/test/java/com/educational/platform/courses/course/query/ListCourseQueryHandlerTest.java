@@ -14,6 +14,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -160,6 +161,53 @@ public class ListCourseQueryHandlerTest {
         assertThat(result1).hasSize(1);
         assertThat(result2).hasSize(1);
         verify(repository, org.mockito.Mockito.times(2)).list();
+    }
+
+    @Test
+    void handle_repositoryCalledExactlyOnce_noExtraInteractions() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        when(repository.list()).thenReturn(List.of());
+
+        // when
+        sut.handle(query);
+
+        // then
+        verify(repository).list();
+        verifyNoMoreInteractions(repository);
+    }
+
+    @Test
+    void handle_courseWithZeroStudents_includedInResults() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO zeroStudentsCourse = new CourseLightDTO(UUID.randomUUID(), "new course", "just created", 0);
+        when(repository.list()).thenReturn(List.of(zeroStudentsCourse));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().numberOfStudents()).isZero();
+    }
+
+    @Test
+    void handle_largeCourseList_allItemsReturned() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final List<CourseLightDTO> courses = java.util.stream.IntStream.rangeClosed(1, 100)
+                .mapToObj(i -> new CourseLightDTO(UUID.randomUUID(), "course-" + i, "desc-" + i, i))
+                .toList();
+        when(repository.list()).thenReturn(courses);
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(100);
+        assertThat(result.getFirst().name()).isEqualTo("course-1");
+        assertThat(result.getLast().name()).isEqualTo("course-100");
     }
 
 }

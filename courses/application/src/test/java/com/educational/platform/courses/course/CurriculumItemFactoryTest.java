@@ -495,4 +495,189 @@ public class CurriculumItemFactoryTest {
         assertThat(result).hasFieldOrPropertyWithValue("serialNumber", 0);
     }
 
+    @Test
+    void createFrom_quizCommand_nullFields_fieldsAreNull() {
+        // given
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title(null)
+                .description(null)
+                .serialNumber(null)
+                .text(null)
+                .questions(List.of())
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, null);
+
+        // then
+        assertThat(result).isInstanceOf(Quiz.class);
+        assertThat(result)
+                .hasFieldOrPropertyWithValue("title", null)
+                .hasFieldOrPropertyWithValue("description", null)
+                .hasFieldOrPropertyWithValue("serialNumber", null);
+    }
+
+    @Test
+    void createFrom_twoQuizzesFromSameCourse_eachHasDistinctUuid() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand1 = CreateQuizCommand.builder()
+                .title("Quiz 1")
+                .description("Desc 1")
+                .serialNumber(1)
+                .text("Content 1")
+                .questions(List.of(new CreateQuestionCommand("Q1")))
+                .build();
+        final CreateQuizCommand quizCommand2 = CreateQuizCommand.builder()
+                .title("Quiz 2")
+                .description("Desc 2")
+                .serialNumber(2)
+                .text("Content 2")
+                .questions(List.of(new CreateQuestionCommand("Q2")))
+                .build();
+
+        // when
+        final CurriculumItem result1 = CurriculumItemFactory.createFrom(quizCommand1, course);
+        final CurriculumItem result2 = CurriculumItemFactory.createFrom(quizCommand2, course);
+
+        // then
+        assertThat(List.of(result1, result2))
+                .extracting("uuid")
+                .doesNotContainNull()
+                .doesNotHaveDuplicates();
+    }
+
+    @Test
+    void createFrom_lectureCommand_negativeSerialNumber_accepted() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateLectureCommand lectureCommand = CreateLectureCommand.builder()
+                .title("Title")
+                .description("Desc")
+                .serialNumber(-1)
+                .text("Content")
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(lectureCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Lecture.class);
+        assertThat(result).hasFieldOrPropertyWithValue("serialNumber", -1);
+    }
+
+    @Test
+    void createFrom_lectureAndQuizFromSameCourse_bothHaveDistinctUuids() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateLectureCommand lectureCommand = CreateLectureCommand.builder()
+                .title("Lecture")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .build();
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(2)
+                .text("Content")
+                .questions(List.of(new CreateQuestionCommand("Q1")))
+                .build();
+
+        // when
+        final CurriculumItem lecture = CurriculumItemFactory.createFrom(lectureCommand, course);
+        final CurriculumItem quiz = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(List.of(lecture, quiz))
+                .extracting("uuid")
+                .doesNotContainNull()
+                .doesNotHaveDuplicates();
+    }
+
+    @Test
+    void createFrom_quizCommand_serialNumberZero_accepted() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(0)
+                .text("Content")
+                .questions(List.of(new CreateQuestionCommand("Q1")))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Quiz.class);
+        assertThat(result).hasFieldOrPropertyWithValue("serialNumber", 0);
+    }
+
+    @Test
+    void createFrom_quizCommand_questionsOrderPreserved() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(List.of(
+                        new CreateQuestionCommand("Zebra"),
+                        new CreateQuestionCommand("Apple"),
+                        new CreateQuestionCommand("Mango")))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(result).extracting("questions")
+                .asInstanceOf(LIST)
+                .extracting("content")
+                .containsExactly("Zebra", "Apple", "Mango");
+    }
+
 }

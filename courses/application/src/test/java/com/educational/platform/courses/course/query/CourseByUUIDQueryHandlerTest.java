@@ -162,4 +162,62 @@ public class CourseByUUIDQueryHandlerTest {
         verify(repository).findDTOByUuid(uuid2);
     }
 
+    @Test
+    void handle_existingCourseWithMultipleCurriculumItems_allItemsPreserved() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440008");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        final CurriculumItemDTO item1 = mock(CurriculumItemDTO.class);
+        final CurriculumItemDTO item2 = mock(CurriculumItemDTO.class);
+        final CurriculumItemDTO item3 = mock(CurriculumItemDTO.class);
+        final CourseDTO courseDTO = new CourseDTO(uuid, "name", "desc", 10, List.of(item1, item2, item3));
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().curriculumItems()).hasSize(3);
+        assertThat(result.get().curriculumItems()).containsExactly(item1, item2, item3);
+    }
+
+    @Test
+    void handle_courseWithZeroStudents_returnsCorrectly() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440009");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        final CourseDTO courseDTO = new CourseDTO(uuid, "empty course", "no students", 0, List.of());
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().numberOfStudents()).isZero();
+        assertThat(result.get().name()).isEqualTo("empty course");
+    }
+
+    @Test
+    void handle_existingCourse_allRecordFieldsAccessible() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440010");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        final CourseDTO courseDTO = new CourseDTO(uuid, "Java 101", "Intro to Java", 42, List.of());
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        final CourseDTO returned = result.get();
+        assertThat(returned.uuid()).isEqualTo(uuid);
+        assertThat(returned.name()).isEqualTo("Java 101");
+        assertThat(returned.description()).isEqualTo("Intro to Java");
+        assertThat(returned.numberOfStudents()).isEqualTo(42);
+        assertThat(returned.curriculumItems()).isEmpty();
+    }
+
 }
