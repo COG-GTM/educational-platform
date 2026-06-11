@@ -126,4 +126,17 @@ public class CourseEnrollmentTest {
 		assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
 	}
 
+	@Test
+	void getUuid_multipleCalls_returnsSameValue() {
+		// given
+		final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+
+		// when
+		final UUID first = enrollment.getUuid();
+		final UUID second = enrollment.getUuid();
+
+		// then
+		assertThat(first).isEqualTo(second);
+	}
+
 }

@@ -52,4 +52,27 @@ public class StudentTest {
 		// when / then
 		assertThat(student.getId()).isNull();
 	}
+
+	@Test
+	void toReference_multipleCalls_returnsSameValue() {
+		// given
+		final Student student = new Student(new CreateStudentCommand("john"));
+
+		// when
+		final String ref1 = student.toReference();
+		final String ref2 = student.toReference();
+
+		// then
+		assertThat(ref1).isEqualTo(ref2);
+	}
+
+	@Test
+	void constructor_differentUsernames_produceDifferentReferences() {
+		// given
+		final Student student1 = new Student(new CreateStudentCommand("alice"));
+		final Student student2 = new Student(new CreateStudentCommand("bob"));
+
+		// then
+		assertThat(student1.toReference()).isNotEqualTo(student2.toReference());
+	}
 }

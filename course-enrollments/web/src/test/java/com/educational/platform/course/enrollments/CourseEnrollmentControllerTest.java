@@ -111,4 +111,35 @@ public class CourseEnrollmentControllerTest {
         verify(registerHandler).handle(captor.capture());
         assertThat(captor.getValue().courseId()).isEqualTo(pathUuid);
     }
+
+    @Test
+    void courseEnrollments_multipleEnrollments_returnsAll() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UUID course1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+        final UUID course2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440004");
+        final CourseEnrollmentDTO dto1 = new CourseEnrollmentDTO(uuid1, course1, "student", CompletionStatusDTO.IN_PROGRESS);
+        final CourseEnrollmentDTO dto2 = new CourseEnrollmentDTO(uuid2, course2, "student", CompletionStatusDTO.COMPLETED);
+        when(listHandler.handle(any(ListCourseEnrollmentsQuery.class))).thenReturn(List.of(dto1, dto2));
+
+        // when
+        final List<CourseEnrollmentDTO> result = sut.courseEnrollments();
+
+        // then
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(CourseEnrollmentDTO::uuid).containsExactly(uuid1, uuid2);
+    }
+
+    @Test
+    void enroll_handlerThrowsException_propagatesToCaller() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(registerHandler.handle(any(RegisterStudentToCourseCommand.class)))
+                .thenThrow(new RuntimeException("enrollment failed"));
+
+        // when / then
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> sut.enroll(courseUuid, new CourseEnrollmentRequest("student")));
+    }
 }

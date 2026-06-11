@@ -184,4 +184,19 @@ public class CourseEnrollmentFactoryTest {
         assertThat(enrollment.getUuid()).isNotNull();
     }
 
+    @Test
+    void createFrom_courseNotFound_exceptionContainsCourseUuid() {
+        // given
+        final UUID courseId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.empty());
+
+        // when
+        final RelatedResourceIsNotResolvedException exception = assertThrows(
+                RelatedResourceIsNotResolvedException.class, () -> sut.createFrom(command));
+
+        // then
+        assertThat(exception.getMessage()).contains(courseId.toString());
+    }
+
 }

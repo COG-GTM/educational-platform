@@ -59,4 +59,18 @@ public class EnrollCourseTest {
 		// then
 		assertThat(reference).isEqualTo(uuid);
 	}
+
+	@Test
+	void constructor_differentUuids_produceDifferentReferences() {
+		// given
+		final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final UUID uuid2 = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+
+		// when
+		final EnrollCourse course1 = new EnrollCourse(new CreateCourseCommand(uuid1));
+		final EnrollCourse course2 = new EnrollCourse(new CreateCourseCommand(uuid2));
+
+		// then
+		assertThat(course1.toReference()).isNotEqualTo(course2.toReference());
+	}
 }

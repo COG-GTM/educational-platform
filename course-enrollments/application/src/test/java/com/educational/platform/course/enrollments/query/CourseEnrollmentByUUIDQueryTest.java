@@ -37,4 +37,14 @@ public class CourseEnrollmentByUUIDQueryTest {
 		// when / then
 		assertThat(new CourseEnrollmentByUUIDQuery(uuid)).isEqualTo(new CourseEnrollmentByUUIDQuery(uuid));
 	}
+
+	@Test
+	void equals_differentUuid_areNotEqual() {
+		// given
+		final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final UUID uuid2 = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+
+		// when / then
+		assertThat(new CourseEnrollmentByUUIDQuery(uuid1)).isNotEqualTo(new CourseEnrollmentByUUIDQuery(uuid2));
+	}
 }

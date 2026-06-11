@@ -37,4 +37,14 @@ public class CreateCourseCommandTest {
 		// when / then
 		assertThat(new CreateCourseCommand(uuid)).isEqualTo(new CreateCourseCommand(uuid));
 	}
+
+	@Test
+	void equals_differentUuid_areNotEqual() {
+		// given
+		final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final UUID uuid2 = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+
+		// when / then
+		assertThat(new CreateCourseCommand(uuid1)).isNotEqualTo(new CreateCourseCommand(uuid2));
+	}
 }

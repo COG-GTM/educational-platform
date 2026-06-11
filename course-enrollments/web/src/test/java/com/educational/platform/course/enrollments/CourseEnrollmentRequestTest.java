@@ -38,4 +38,10 @@ public class CourseEnrollmentRequestTest {
 		// when / then
 		assertThat(new CourseEnrollmentRequest("user")).isEqualTo(new CourseEnrollmentRequest("user"));
 	}
+
+	@Test
+	void equals_differentStudent_areNotEqual() {
+		// when / then
+		assertThat(new CourseEnrollmentRequest("alice")).isNotEqualTo(new CourseEnrollmentRequest("bob"));
+	}
 }

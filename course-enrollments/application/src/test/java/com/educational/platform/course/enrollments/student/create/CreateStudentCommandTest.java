@@ -38,4 +38,10 @@ public class CreateStudentCommandTest {
 		// when / then
 		assertThat(new CreateStudentCommand("user")).isEqualTo(new CreateStudentCommand("user"));
 	}
+
+	@Test
+	void equals_differentUsername_areNotEqual() {
+		// when / then
+		assertThat(new CreateStudentCommand("alice")).isNotEqualTo(new CreateStudentCommand("bob"));
+	}
 }
