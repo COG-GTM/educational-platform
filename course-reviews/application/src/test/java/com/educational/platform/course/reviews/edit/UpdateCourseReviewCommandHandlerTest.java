@@ -142,6 +142,52 @@ public class UpdateCourseReviewCommandHandlerTest {
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
     }
 
+    @Test
+    void handle_validUpdate_courseAndReviewerUnchanged() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
+        ReflectionTestUtils.setField(reviewableCourse, "id", 11);
+        when(reviewableCourseRepository.findByOriginalCourseId(courseId)).thenReturn(Optional.of(reviewableCourse));
+
+        final Reviewer reviewer = new Reviewer(new CreateReviewerCommand("username"));
+        ReflectionTestUtils.setField(reviewer, "id", 22);
+        when(currentUserAsReviewer.userAsReviewer()).thenReturn(reviewer);
+
+        final ReviewCourseCommand reviewCourseCommand = new ReviewCourseCommand(courseId, 4.0, "comment");
+        final CourseReview courseReview = courseReviewFactory.createFrom(reviewCourseCommand);
+        final UUID uuid = (UUID) ReflectionTestUtils.getField(courseReview, "uuid");
+        when(courseReviewRepository.findByUuid(uuid)).thenReturn(Optional.of(courseReview));
+
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 2.0, "changed");
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("course", 11)
+                .hasFieldOrPropertyWithValue("reviewer", 22);
+    }
+
+    @Test
+    void handle_nullComment_reviewSaved() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, null);
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("comment", new Comment(null));
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
