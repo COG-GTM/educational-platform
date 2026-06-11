@@ -291,4 +291,48 @@ public class CourseEnrollmentFactoryTest {
         assertThat(enrollment).hasFieldOrPropertyWithValue("id", null);
     }
 
+    @Test
+    void createFrom_courseIdIsNull_courseRepositoryNeverCalled() {
+        // given
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(null);
+
+        // when
+        assertThrows(ConstraintViolationException.class, () -> sut.createFrom(command));
+
+        // then — validation short-circuits before any repository interaction
+        verifyNoInteractions(courseRepository);
+    }
+
+    @Test
+    void createFrom_validCommand_enrollmentUuidIsVersion4() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final EnrollCourse correspondingCourse = new EnrollCourse(new CreateCourseCommand(courseId));
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
+
+        final Student correspondingStudent = new Student(new CreateStudentCommand("username"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(correspondingStudent);
+
+        // when
+        final CourseEnrollment enrollment = sut.createFrom(command);
+
+        // then — UUID.randomUUID() produces version 4 UUIDs
+        assertThat(enrollment.getUuid().version()).isEqualTo(4);
+    }
+
+    @Test
+    void createFrom_courseNotFound_studentNeverResolved() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.empty());
+
+        // when
+        assertThrows(RelatedResourceIsNotResolvedException.class, () -> sut.createFrom(command));
+
+        // then — student is never resolved when course lookup fails
+        verifyNoInteractions(currentUserAsStudent);
+    }
+
 }

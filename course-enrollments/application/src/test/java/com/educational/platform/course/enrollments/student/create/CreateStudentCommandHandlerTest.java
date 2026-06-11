@@ -113,4 +113,31 @@ public class CreateStudentCommandHandlerTest {
         verify(studentRepository).save(captor.capture());
         assertThat(captor.getValue().getId()).isNull();
     }
+
+    @Test
+    void handle_validCommand_noOtherRepositoryInteractions() {
+        // given
+        final CreateStudentCommand command = new CreateStudentCommand("user");
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(studentRepository).save(any(Student.class));
+        org.mockito.Mockito.verifyNoMoreInteractions(studentRepository);
+    }
+
+    @Test
+    void handle_specialCharactersInUsername_studentSavedWithSpecialChars() {
+        // given
+        final CreateStudentCommand command = new CreateStudentCommand("user@domain.com");
+
+        // when
+        sut.handle(command);
+
+        // then
+        ArgumentCaptor<Student> captor = ArgumentCaptor.forClass(Student.class);
+        verify(studentRepository).save(captor.capture());
+        assertThat(captor.getValue().toReference()).isEqualTo("user@domain.com");
+    }
 }

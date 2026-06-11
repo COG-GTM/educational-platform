@@ -65,4 +65,25 @@ public class RegisterStudentToCourseCommandTest {
 		assertThat(new RegisterStudentToCourseCommand(courseId).hashCode())
 				.isEqualTo(new RegisterStudentToCourseCommand(courseId).hashCode());
 	}
+
+	@Test
+	void toString_containsCourseId() {
+		// given
+		final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+		// when
+		final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+
+		// then
+		assertThat(command.toString()).contains(courseId.toString());
+	}
+
+	@Test
+	void equals_nullCommand_notEqual() {
+		// given
+		final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(UUID.randomUUID());
+
+		// then
+		assertThat(command).isNotEqualTo(null);
+	}
 }

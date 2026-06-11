@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doThrow;
 
 @ExtendWith(MockitoExtension.class)
 public class RegisterStudentToCourseCommandHandlerTest {
@@ -311,5 +312,63 @@ public class RegisterStudentToCourseCommandHandlerTest {
         // then
         assertThat(result).isNotNull();
         assertThat(result.toString()).matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+    }
+
+    @Test
+    void handle_eventPublisherThrows_exceptionPropagates() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment courseEnrollment = new CourseEnrollment(1, 1);
+
+        when(transactionTemplate.execute(any())).thenReturn(courseEnrollment);
+
+        final Student student = new Student(new CreateStudentCommand("student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+        doThrow(new RuntimeException("event publish failed"))
+                .when(eventPublisher).publishEvent(any(StudentEnrolledToCourseIntegrationEvent.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(command))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("event publish failed");
+    }
+
+    @Test
+    void handle_validCommand_doesNotInteractWithRepositoryDirectly() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment courseEnrollment = new CourseEnrollment(1, 1);
+
+        when(transactionTemplate.execute(any())).thenReturn(courseEnrollment);
+
+        final Student student = new Student(new CreateStudentCommand("student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        sut.handle(command);
+
+        // then — handler delegates persistence to transactionTemplate callback, not directly
+        verifyNoInteractions(courseEnrollmentRepository);
+    }
+
+    @Test
+    void handle_validCommand_doesNotInteractWithFactoryDirectly() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment courseEnrollment = new CourseEnrollment(1, 1);
+
+        when(transactionTemplate.execute(any())).thenReturn(courseEnrollment);
+
+        final Student student = new Student(new CreateStudentCommand("student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        sut.handle(command);
+
+        // then — factory is called inside the transaction callback, not directly by handler
+        verifyNoInteractions(courseEnrollmentFactory);
     }
 }

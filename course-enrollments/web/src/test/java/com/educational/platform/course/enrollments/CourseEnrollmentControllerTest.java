@@ -17,6 +17,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -220,5 +221,48 @@ public class CourseEnrollmentControllerTest {
 
         // then
         assertThat(result).isSameAs(expectedList);
+    }
+
+    @Test
+    void enroll_doesNotInteractWithListHandler() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(registerHandler.handle(any(RegisterStudentToCourseCommand.class))).thenReturn(UUID.randomUUID());
+
+        // when
+        sut.enroll(courseUuid, new CourseEnrollmentRequest("student"));
+
+        // then
+        verifyNoInteractions(listHandler);
+    }
+
+    @Test
+    void courseEnrollments_doesNotInteractWithRegisterHandler() {
+        // given
+        when(listHandler.handle(any(ListCourseEnrollmentsQuery.class))).thenReturn(List.of());
+
+        // when
+        sut.courseEnrollments();
+
+        // then
+        verifyNoInteractions(registerHandler);
+    }
+
+    @Test
+    void enroll_differentCourseUuids_passedCorrectly() {
+        // given
+        final UUID courseUuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseUuid2 = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        when(registerHandler.handle(any(RegisterStudentToCourseCommand.class))).thenReturn(UUID.randomUUID());
+
+        // when
+        sut.enroll(courseUuid1, new CourseEnrollmentRequest("s1"));
+        sut.enroll(courseUuid2, new CourseEnrollmentRequest("s2"));
+
+        // then
+        ArgumentCaptor<RegisterStudentToCourseCommand> captor = ArgumentCaptor.forClass(RegisterStudentToCourseCommand.class);
+        verify(registerHandler, times(2)).handle(captor.capture());
+        assertThat(captor.getAllValues().get(0).courseId()).isEqualTo(courseUuid1);
+        assertThat(captor.getAllValues().get(1).courseId()).isEqualTo(courseUuid2);
     }
 }

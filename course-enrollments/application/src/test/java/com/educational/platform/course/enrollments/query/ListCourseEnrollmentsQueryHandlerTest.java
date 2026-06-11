@@ -186,4 +186,33 @@ public class ListCourseEnrollmentsQueryHandlerTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("query failed");
     }
+
+    @Test
+    void handle_repositoryReturnsNull_returnsNull() {
+        // given
+        final ListCourseEnrollmentsQuery query = new ListCourseEnrollmentsQuery();
+        when(repository.query("student")).thenReturn(null);
+
+        // when
+        final List<CourseEnrollmentDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void handle_enrollmentsContainMixedStatuses_allPreserved() {
+        // given
+        final ListCourseEnrollmentsQuery query = new ListCourseEnrollmentsQuery();
+        final CourseEnrollmentDTO inProgress = new CourseEnrollmentDTO(UUID.randomUUID(), UUID.randomUUID(), "student", CompletionStatusDTO.IN_PROGRESS);
+        final CourseEnrollmentDTO completed = new CourseEnrollmentDTO(UUID.randomUUID(), UUID.randomUUID(), "student", CompletionStatusDTO.COMPLETED);
+        when(repository.query("student")).thenReturn(List.of(inProgress, completed));
+
+        // when
+        final List<CourseEnrollmentDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).extracting(CourseEnrollmentDTO::completionStatus)
+                .containsExactly(CompletionStatusDTO.IN_PROGRESS, CompletionStatusDTO.COMPLETED);
+    }
 }

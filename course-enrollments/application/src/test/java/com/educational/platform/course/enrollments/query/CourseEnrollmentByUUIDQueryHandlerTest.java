@@ -198,4 +198,31 @@ public class CourseEnrollmentByUUIDQueryHandlerTest {
         // then
         assertThat(result).isNotPresent();
     }
+
+    @Test
+    void handle_repositoryThrows_exceptionPropagates() {
+        // given
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(enrollmentUuid);
+        when(repository.query(enrollmentUuid, "student")).thenThrow(new RuntimeException("query failed"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("query failed");
+    }
+
+    @Test
+    void handle_repositoryReturnsNull_returnsNull() {
+        // given
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(enrollmentUuid);
+        when(repository.query(enrollmentUuid, "student")).thenReturn(null);
+
+        // when
+        final Optional<CourseEnrollmentDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isNull();
+    }
 }

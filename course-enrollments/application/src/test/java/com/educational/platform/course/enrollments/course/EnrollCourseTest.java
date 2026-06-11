@@ -98,4 +98,28 @@ public class EnrollCourseTest {
 		// then
 		assertThat(course).isInstanceOf(AggregateRoot.class);
 	}
+
+	@Test
+	void constructor_samUuidInMultipleInstances_sameReference() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+		// when
+		final EnrollCourse course1 = new EnrollCourse(new CreateCourseCommand(uuid));
+		final EnrollCourse course2 = new EnrollCourse(new CreateCourseCommand(uuid));
+
+		// then
+		assertThat(course1.toReference()).isEqualTo(course2.toReference());
+	}
+
+	@Test
+	void getId_multipleInstances_allNullBeforePersist() {
+		// given / when
+		final EnrollCourse course1 = new EnrollCourse(new CreateCourseCommand(UUID.randomUUID()));
+		final EnrollCourse course2 = new EnrollCourse(new CreateCourseCommand(UUID.randomUUID()));
+
+		// then
+		assertThat(course1.getId()).isNull();
+		assertThat(course2.getId()).isNull();
+	}
 }

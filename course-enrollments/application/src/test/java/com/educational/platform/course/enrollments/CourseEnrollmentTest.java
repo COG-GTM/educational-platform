@@ -174,4 +174,26 @@ public class CourseEnrollmentTest {
 		assertThat(enrollment).isInstanceOf(AggregateRoot.class);
 	}
 
+	@Test
+	void getUuid_returnsVersion4Uuid() {
+		// given / when
+		final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+
+		// then — UUID.randomUUID() always returns version 4
+		assertThat(enrollment.getUuid().version()).isEqualTo(4);
+	}
+
+	@Test
+	void complete_doesNotMutateCourseOrStudentReferences() {
+		// given
+		final CourseEnrollment enrollment = new CourseEnrollment(42, 99);
+
+		// when
+		enrollment.complete();
+
+		// then — course and student references remain unchanged after state transition
+		assertThat(enrollment).hasFieldOrPropertyWithValue("course", 42);
+		assertThat(enrollment).hasFieldOrPropertyWithValue("student", 99);
+	}
+
 }

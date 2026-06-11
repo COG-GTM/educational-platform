@@ -101,4 +101,35 @@ public class CurrentUserAsStudentTest {
         // then
         verify(studentRepository).findByUsername("student-user");
     }
+
+    @Test
+    void userAsStudent_multipleCalls_delegatesEachTime() {
+        // given
+        final Student expectedStudent = new Student(new CreateStudentCommand("student-user"));
+        when(studentRepository.findByUsername("student-user")).thenReturn(expectedStudent);
+
+        // when
+        sut.userAsStudent();
+        sut.userAsStudent();
+
+        // then — no caching; repository is consulted each time
+        org.mockito.Mockito.verify(studentRepository, org.mockito.Mockito.times(2)).findByUsername("student-user");
+    }
+
+    @Test
+    void userAsStudent_differentAuthenticatedUser_delegatesWithNewUsername() {
+        // given
+        SecurityContextHolder.clearContext();
+        UserDetails userDetails = new User("another-user", "password", Collections.emptyList());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(userDetails, "password", Collections.emptyList()));
+        when(studentRepository.findByUsername("another-user")).thenReturn(null);
+
+        // when
+        final Student result = sut.userAsStudent();
+
+        // then
+        assertThat(result).isNull();
+        verify(studentRepository).findByUsername("another-user");
+    }
 }
