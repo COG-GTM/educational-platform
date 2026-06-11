@@ -427,6 +427,22 @@ public class UpdateCourseReviewCommandHandlerTest {
         verify(courseReviewRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any(CourseReview.class));
     }
 
+    @Test
+    void handle_reviewNotFound_exceptionMessageContainsUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, "comment");
+        when(courseReviewRepository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+                .isThrownBy(handle)
+                .withMessageContaining(uuid.toString());
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));

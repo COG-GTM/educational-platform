@@ -449,6 +449,22 @@ public class CourseReviewFactoryTest {
     }
 
     @Test
+    void createFrom_courseNotFound_exceptionMessageContainsUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        final RelatedResourceIsNotResolvedException exception =
+                assertThrows(RelatedResourceIsNotResolvedException.class, createAction);
+        assertThat(exception.getMessage()).contains(uuid.toString());
+    }
+
+    @Test
     void createFrom_courseNotFound_reviewerNotConsulted() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

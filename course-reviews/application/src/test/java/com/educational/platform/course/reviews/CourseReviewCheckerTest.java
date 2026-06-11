@@ -100,6 +100,26 @@ public class CourseReviewCheckerTest {
     }
 
     @Test
+    void hasAccess_differentReviewIds_delegatesCorrectIdToRepository() {
+        // given
+        final UUID reviewId1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID reviewId2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        when(authentication.getName()).thenReturn("user");
+        when(courseReviewRepository.isReviewer(reviewId1, "user")).thenReturn(true);
+        when(courseReviewRepository.isReviewer(reviewId2, "user")).thenReturn(false);
+
+        // when
+        final boolean result1 = sut.hasAccess(authentication, reviewId1);
+        final boolean result2 = sut.hasAccess(authentication, reviewId2);
+
+        // then
+        assertThat(result1).isTrue();
+        assertThat(result2).isFalse();
+        verify(courseReviewRepository).isReviewer(reviewId1, "user");
+        verify(courseReviewRepository).isReviewer(reviewId2, "user");
+    }
+
+    @Test
     void hasAccess_nullAuthentication_throwsNullPointerException() {
         // given
         final UUID reviewId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

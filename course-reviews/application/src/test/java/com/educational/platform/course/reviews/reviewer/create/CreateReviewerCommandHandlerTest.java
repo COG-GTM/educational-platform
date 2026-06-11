@@ -85,6 +85,25 @@ public class CreateReviewerCommandHandlerTest {
     }
 
     @Test
+    void handle_twoDifferentCommands_separateEntitiesSaved() {
+        // given
+        final CreateReviewerCommand command1 = new CreateReviewerCommand("user1");
+        final CreateReviewerCommand command2 = new CreateReviewerCommand("user2");
+
+        // when
+        sut.handle(command1);
+        sut.handle(command2);
+
+        // then
+        final ArgumentCaptor<Reviewer> argument = ArgumentCaptor.forClass(Reviewer.class);
+        verify(reviewerRepository, org.mockito.Mockito.times(2)).save(argument.capture());
+        assertThat(argument.getAllValues().get(0))
+                .hasFieldOrPropertyWithValue("username", "user1");
+        assertThat(argument.getAllValues().get(1))
+                .hasFieldOrPropertyWithValue("username", "user2");
+    }
+
+    @Test
     void handle_repositorySaveThrows_exceptionPropagates() {
         // given
         final CreateReviewerCommand command = new CreateReviewerCommand("username");

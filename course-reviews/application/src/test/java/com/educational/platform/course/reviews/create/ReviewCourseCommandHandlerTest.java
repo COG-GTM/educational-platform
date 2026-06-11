@@ -488,6 +488,22 @@ public class ReviewCourseCommandHandlerTest {
     }
 
     @Test
+    void handle_courseNotFound_exceptionMessageContainsUuid() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+        when(reviewableCourseRepository.findByOriginalCourseId(courseId)).thenReturn(Optional.empty());
+
+        // when
+        final org.assertj.core.api.ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(RelatedResourceIsNotResolvedException.class)
+                .isThrownBy(handle)
+                .withMessageContaining(courseId.toString());
+    }
+
+    @Test
     void handle_courseNotFound_currentUserAsReviewerNotConsulted() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

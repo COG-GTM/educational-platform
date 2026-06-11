@@ -294,6 +294,23 @@ public class CourseReviewTest {
     }
 
     @Test
+    void update_multipleUpdates_uuidPreservedThroughout() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "original");
+        final CourseReview courseReview = new CourseReview(createCommand, 11, 22);
+        final UUID originalUuid = courseReview.toIdentifier();
+
+        // when
+        courseReview.update(new UpdateCourseReviewCommand(originalUuid, 1.0, "first update"));
+        courseReview.update(new UpdateCourseReviewCommand(originalUuid, 5.0, "second update"));
+        courseReview.update(new UpdateCourseReviewCommand(originalUuid, 3.0, "third update"));
+
+        // then
+        assertThat(courseReview.toIdentifier()).isEqualTo(originalUuid);
+    }
+
+    @Test
     void update_multipleUpdates_lastUpdateWins() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

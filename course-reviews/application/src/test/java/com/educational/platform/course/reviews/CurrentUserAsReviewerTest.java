@@ -136,6 +136,37 @@ public class CurrentUserAsReviewerTest {
     }
 
     @Test
+    void userAsReviewer_userChangedBetweenCalls_usesLatestSecurityContext() {
+        // given — first call as "user-a", then security context switches to "user-b"
+        final var userDetailsA = new User("user-a", "password", Collections.emptyList());
+        final var authA = new UsernamePasswordAuthenticationToken(userDetailsA, "password");
+        SecurityContextHolder.getContext().setAuthentication(authA);
+
+        final Reviewer reviewerA = new Reviewer(new CreateReviewerCommand("user-a"));
+        when(reviewerRepository.findByUsername("user-a")).thenReturn(reviewerA);
+
+        // when — first call
+        final Reviewer resultA = sut.userAsReviewer();
+
+        // switch context to user-b
+        final var userDetailsB = new User("user-b", "password", Collections.emptyList());
+        final var authB = new UsernamePasswordAuthenticationToken(userDetailsB, "password");
+        SecurityContextHolder.getContext().setAuthentication(authB);
+
+        final Reviewer reviewerB = new Reviewer(new CreateReviewerCommand("user-b"));
+        when(reviewerRepository.findByUsername("user-b")).thenReturn(reviewerB);
+
+        // when — second call
+        final Reviewer resultB = sut.userAsReviewer();
+
+        // then — each call used the respective current context
+        assertThat(resultA).hasFieldOrPropertyWithValue("username", "user-a");
+        assertThat(resultB).hasFieldOrPropertyWithValue("username", "user-b");
+        verify(reviewerRepository).findByUsername("user-a");
+        verify(reviewerRepository).findByUsername("user-b");
+    }
+
+    @Test
     void userAsReviewer_repositoryThrows_exceptionPropagates() {
         // given
         final var userDetails = new User("error-user", "password", Collections.emptyList());

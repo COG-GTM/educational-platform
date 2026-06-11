@@ -597,6 +597,21 @@ public class CourseReviewControllerTest {
     }
 
     @Test
+    void reviews_nullUuid_delegatesWithNullUuid() {
+        // given
+        when(listCourseReviewsByCourseUUIDQueryHandler.handle(any(ListCourseReviewsByCourseUUIDQuery.class)))
+                .thenReturn(List.of());
+
+        // when
+        sut.reviews(null);
+
+        // then
+        final ArgumentCaptor<ListCourseReviewsByCourseUUIDQuery> captor = ArgumentCaptor.forClass(ListCourseReviewsByCourseUUIDQuery.class);
+        verify(listCourseReviewsByCourseUUIDQueryHandler).handle(captor.capture());
+        assertThat(captor.getValue().uuid()).isNull();
+    }
+
+    @Test
     void updateReview_courseUuidNotEmbeddedInCommand() {
         // given — courseUuid and reviewUuid are different; only reviewUuid should appear in the command
         final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
