@@ -74,6 +74,27 @@ public class CreateReviewableCourseCommandHandlerTest {
     }
 
     @Test
+    void handle_twoDifferentCommands_separateEntitiesSaved() {
+        // given
+        final UUID courseId1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseId2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CreateReviewableCourseCommand command1 = new CreateReviewableCourseCommand(courseId1);
+        final CreateReviewableCourseCommand command2 = new CreateReviewableCourseCommand(courseId2);
+
+        // when
+        sut.handle(command1);
+        sut.handle(command2);
+
+        // then
+        final ArgumentCaptor<ReviewableCourse> argument = ArgumentCaptor.forClass(ReviewableCourse.class);
+        verify(reviewableCourseRepository, org.mockito.Mockito.times(2)).save(argument.capture());
+        assertThat(argument.getAllValues().get(0))
+                .hasFieldOrPropertyWithValue("originalCourseId", courseId1);
+        assertThat(argument.getAllValues().get(1))
+                .hasFieldOrPropertyWithValue("originalCourseId", courseId2);
+    }
+
+    @Test
     void handle_repositorySaveThrows_exceptionPropagates() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

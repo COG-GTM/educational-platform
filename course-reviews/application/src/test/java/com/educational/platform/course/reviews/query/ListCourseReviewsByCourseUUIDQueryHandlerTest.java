@@ -112,6 +112,20 @@ public class ListCourseReviewsByCourseUUIDQueryHandlerTest {
     }
 
     @Test
+    void handle_repositoryThrows_exceptionPropagates() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ListCourseReviewsByCourseUUIDQuery query = new ListCourseReviewsByCourseUUIDQuery(courseId);
+        when(courseReviewRepository.listCourseReviews(courseId))
+                .thenThrow(new RuntimeException("db error"));
+
+        // when/then
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("db error");
+    }
+
+    @Test
     void handle_returnsExactListFromRepository() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

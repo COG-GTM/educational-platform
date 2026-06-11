@@ -383,6 +383,49 @@ public class CourseReviewFactoryTest {
     }
 
     @Test
+    void createFrom_reviewerNotPersistedNullId_courseReviewCreatedWithNullReviewerRef() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+
+        final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(uuid));
+        ReflectionTestUtils.setField(reviewableCourse, "id", 11);
+        ReflectionTestUtils.setField(reviewableCourse, "originalCourseId", uuid);
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.of(reviewableCourse));
+
+        // reviewer was never persisted — getId() returns null
+        final Reviewer reviewer = new Reviewer(new CreateReviewerCommand("username"));
+        when(currentUserAsReviewer.userAsReviewer()).thenReturn(reviewer);
+
+        // when
+        final CourseReview courseReview = sut.createFrom(command);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("reviewer", null);
+    }
+
+    @Test
+    void createFrom_currentUserAsReviewerThrows_exceptionPropagates() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+
+        final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(uuid));
+        ReflectionTestUtils.setField(reviewableCourse, "id", 11);
+        ReflectionTestUtils.setField(reviewableCourse, "originalCourseId", uuid);
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.of(reviewableCourse));
+
+        when(currentUserAsReviewer.userAsReviewer()).thenThrow(new RuntimeException("security context error"));
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(RuntimeException.class, createAction);
+    }
+
+    @Test
     void createFrom_fractionalRating_courseReviewCreated() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

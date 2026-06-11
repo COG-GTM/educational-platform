@@ -276,6 +276,24 @@ public class CourseReviewTest {
     }
 
     @Test
+    void update_fractionalRating_ratingUpdated() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "comment");
+        final CourseReview courseReview = new CourseReview(createCommand, 11, 22);
+        final UUID uuid = courseReview.toIdentifier();
+
+        final UpdateCourseReviewCommand updateCommand = new UpdateCourseReviewCommand(uuid, 3.7, "decent");
+
+        // when
+        courseReview.update(updateCommand);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(3.7));
+    }
+
+    @Test
     void update_multipleUpdates_lastUpdateWins() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

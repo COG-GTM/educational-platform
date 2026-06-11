@@ -561,6 +561,42 @@ public class CourseReviewControllerTest {
     }
 
     @Test
+    void reviews_singleReview_allDTOFieldsReturnedCorrectly() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseReviewDTO dto = new CourseReviewDTO(reviewUuid, courseUuid, "reviewer-user", "detailed comment", 3.7);
+        when(listCourseReviewsByCourseUUIDQueryHandler.handle(any(ListCourseReviewsByCourseUUIDQuery.class)))
+                .thenReturn(List.of(dto));
+
+        // when
+        final List<CourseReviewDTO> result = sut.reviews(courseUuid);
+
+        // then
+        assertThat(result).hasSize(1);
+        final CourseReviewDTO returned = result.getFirst();
+        assertThat(returned.uuid()).isEqualTo(reviewUuid);
+        assertThat(returned.course()).isEqualTo(courseUuid);
+        assertThat(returned.username()).isEqualTo("reviewer-user");
+        assertThat(returned.comment()).isEqualTo("detailed comment");
+        assertThat(returned.rating()).isEqualTo(3.7);
+    }
+
+    @Test
+    void updateReview_handlerThrowsRelatedResourceNotResolved_exceptionPropagates() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(3.0, "updated");
+        doThrow(new RelatedResourceIsNotResolvedException("Course not found"))
+                .when(updateCourseReviewCommandHandler).handle(any(UpdateCourseReviewCommand.class));
+
+        // when/then
+        assertThatThrownBy(() -> sut.updateReview(courseUuid, reviewUuid, request))
+                .isInstanceOf(RelatedResourceIsNotResolvedException.class);
+    }
+
+    @Test
     void updateReview_courseUuidNotEmbeddedInCommand() {
         // given — courseUuid and reviewUuid are different; only reviewUuid should appear in the command
         final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

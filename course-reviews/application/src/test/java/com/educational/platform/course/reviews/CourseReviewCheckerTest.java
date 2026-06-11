@@ -86,6 +86,20 @@ public class CourseReviewCheckerTest {
     }
 
     @Test
+    void hasAccess_repositoryThrows_exceptionPropagates() {
+        // given
+        final UUID reviewId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(authentication.getName()).thenReturn("user");
+        when(courseReviewRepository.isReviewer(reviewId, "user"))
+                .thenThrow(new RuntimeException("db error"));
+
+        // when/then
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> sut.hasAccess(authentication, reviewId))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("db error");
+    }
+
+    @Test
     void hasAccess_nullAuthentication_throwsNullPointerException() {
         // given
         final UUID reviewId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
