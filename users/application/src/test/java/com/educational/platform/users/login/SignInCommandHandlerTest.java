@@ -527,4 +527,63 @@ public class SignInCommandHandlerTest {
         // then
         assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
     }
+
+    @Test
+    void handle_validCommand_tokenIsNotBlank() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("password")
+                .build();
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User existingUser = new User(userRegistrationCommand, passwordEncoder);
+        when(repository.findByUsername("username")).thenReturn(Optional.of(existingUser));
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("a-valid-token");
+
+        // when
+        final String token = sut.handle(signInCommand);
+
+        // then
+        assertThat(token).isNotNull().isNotBlank();
+    }
+
+    @Test
+    void handle_bothFieldsBlank_constraintViolationException() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("   ")
+                .password("   ")
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_validationFails_noSideEffects() {
+        // given — both null triggers validation failure
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username(null)
+                .password(null)
+                .build();
+
+        // when
+        try {
+            sut.handle(signInCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(authenticationManager, never()).authenticate(any());
+        verify(repository, never()).findByUsername(any());
+        verify(jwtTokenProvider, never()).createToken(any(), any());
+    }
 }

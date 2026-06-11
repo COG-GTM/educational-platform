@@ -235,4 +235,23 @@ public class SignUpRequestTest {
         assertThat(violations).isNotEmpty();
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("email"));
     }
+
+    @Test
+    void hashCode_differentValues_notEqual() {
+        // given
+        final SignUpRequest request1 = new SignUpRequest(RoleDTO.ROLE_STUDENT, "user1", "user1@example.com", "pass1");
+        final SignUpRequest request2 = new SignUpRequest(RoleDTO.ROLE_TEACHER, "user2", "user2@example.com", "pass2");
+
+        // then
+        assertThat(request1.hashCode()).isNotEqualTo(request2.hashCode());
+    }
+
+    @Test
+    void equality_nullComparison_notEqual() {
+        // given
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "user", "user@example.com", "pass");
+
+        // then
+        assertThat(request).isNotEqualTo(null);
+    }
 }

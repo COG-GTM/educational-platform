@@ -159,4 +159,22 @@ public class UserDTOTest {
         // then
         assertThat(dto).isNotEqualTo(null);
     }
+
+    @Test
+    void hashCode_differentValues_notEqual() {
+        // given
+        final UserDTO dto1 = UserDTO.builder()
+                .username("user1")
+                .email("user1@example.com")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final UserDTO dto2 = UserDTO.builder()
+                .username("user2")
+                .email("user2@example.com")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+
+        // then
+        assertThat(dto1.hashCode()).isNotEqualTo(dto2.hashCode());
+    }
 }

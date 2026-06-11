@@ -272,4 +272,60 @@ public class UserTest {
         assertThat(userDetails.getUsername()).isEqualTo("specific-user");
         assertThat(userDetails.getUsername()).isNotEqualTo("different-user");
     }
+
+    @Test
+    void toDTO_studentUser_roleIsNotNull() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("username")
+                .email("email@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User user = new User(command, passwordEncoder);
+
+        // when
+        final UserDTO dto = user.toDTO();
+
+        // then — important: ROLE_ADMIN.toDTO() returns null, so verify student/teacher always returns non-null
+        assertThat(dto.role()).isNotNull();
+        assertThat(dto.role()).isEqualTo(RoleDTO.ROLE_STUDENT);
+    }
+
+    @Test
+    void toDTO_teacherUser_roleIsNotNull() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("teacher")
+                .email("teacher@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+        final User user = new User(command, passwordEncoder);
+
+        // when
+        final UserDTO dto = user.toDTO();
+
+        // then
+        assertThat(dto.role()).isNotNull();
+        assertThat(dto.role()).isEqualTo(RoleDTO.ROLE_TEACHER);
+    }
+
+    @Test
+    void toUserDetails_studentUser_singleAuthority() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("username")
+                .email("email@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User user = new User(command, passwordEncoder);
+
+        // when
+        final UserDetails userDetails = user.toUserDetails();
+
+        // then
+        assertThat(userDetails.getAuthorities()).hasSize(1);
+    }
 }

@@ -204,4 +204,10 @@ public class MyUserDetailsTest {
         // then
         verify(userRepository).findByUsername("ghost");
     }
+
+    @Test
+    void myUserDetails_implementsUserDetailsService() {
+        // then
+        assertThat(sut).isInstanceOf(org.springframework.security.core.userdetails.UserDetailsService.class);
+    }
 }

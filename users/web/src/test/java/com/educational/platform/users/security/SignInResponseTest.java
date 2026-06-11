@@ -74,4 +74,23 @@ public class SignInResponseTest {
         // then
         assertThat(response1.hashCode()).isEqualTo(response2.hashCode());
     }
+
+    @Test
+    void hashCode_differentValues_notEqual() {
+        // given
+        final SignInResponse response1 = new SignInResponse("token1");
+        final SignInResponse response2 = new SignInResponse("token2");
+
+        // then
+        assertThat(response1.hashCode()).isNotEqualTo(response2.hashCode());
+    }
+
+    @Test
+    void equality_nullComparison_notEqual() {
+        // given
+        final SignInResponse response = new SignInResponse("token");
+
+        // then
+        assertThat(response).isNotEqualTo(null);
+    }
 }

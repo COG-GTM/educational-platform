@@ -68,4 +68,23 @@ public class UserCreatedIntegrationEventTest {
         // then
         assertThat(event1.hashCode()).isEqualTo(event2.hashCode());
     }
+
+    @Test
+    void hashCode_differentValues_notEqual() {
+        // given
+        final UserCreatedIntegrationEvent event1 = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final UserCreatedIntegrationEvent event2 = new UserCreatedIntegrationEvent("user2", "user2@example.com");
+
+        // then
+        assertThat(event1.hashCode()).isNotEqualTo(event2.hashCode());
+    }
+
+    @Test
+    void equality_nullComparison_notEqual() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user", "user@example.com");
+
+        // then
+        assertThat(event).isNotEqualTo(null);
+    }
 }

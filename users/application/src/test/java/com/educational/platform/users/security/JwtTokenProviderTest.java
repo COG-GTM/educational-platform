@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -538,5 +539,66 @@ public class JwtTokenProviderTest {
 
         // then
         verify(userRepository).findByUsername("username");
+    }
+
+    @Test
+    void getAuthentication_validToken_returnsUsernamePasswordAuthenticationToken() {
+        // given
+        final String token = sut.createToken("username", Collections.singletonList(Role.ROLE_STUDENT));
+
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("username")
+                .email("email@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("username")).thenReturn(Optional.of(user));
+
+        // when
+        final Authentication authentication = sut.getAuthentication(token);
+
+        // then
+        assertThat(authentication).isInstanceOf(UsernamePasswordAuthenticationToken.class);
+    }
+
+    @Test
+    void createToken_validInput_tokenHasThreeParts() {
+        // given — JWT tokens have three Base64 segments separated by dots
+        final String token = sut.createToken("username", Collections.singletonList(Role.ROLE_STUDENT));
+
+        // then
+        assertThat(token.split("\\.")).hasSize(3);
+    }
+
+    @Test
+    void createToken_thenGetAuthentication_roundTrip() {
+        // given
+        final String token = sut.createToken("roundtrip", Collections.singletonList(Role.ROLE_TEACHER));
+
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("roundtrip")
+                .email("roundtrip@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("roundtrip")).thenReturn(Optional.of(user));
+
+        // when
+        final boolean valid = sut.validateToken(token);
+        final String username = sut.getUsername(token);
+        final Authentication auth = sut.getAuthentication(token);
+
+        // then
+        assertThat(valid).isTrue();
+        assertThat(username).isEqualTo("roundtrip");
+        assertThat(auth.getName()).isEqualTo("roundtrip");
+        assertThat(auth.getAuthorities())
+                .hasSize(1)
+                .first()
+                .satisfies(a -> assertThat(a.getAuthority()).isEqualTo("ROLE_TEACHER"));
     }
 }

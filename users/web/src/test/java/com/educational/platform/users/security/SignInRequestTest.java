@@ -141,4 +141,23 @@ public class SignInRequestTest {
         assertThat(str).contains("testuser");
         assertThat(str).contains("testpass");
     }
+
+    @Test
+    void hashCode_differentValues_notEqual() {
+        // given
+        final SignInRequest request1 = new SignInRequest("user1", "pass1");
+        final SignInRequest request2 = new SignInRequest("user2", "pass2");
+
+        // then
+        assertThat(request1.hashCode()).isNotEqualTo(request2.hashCode());
+    }
+
+    @Test
+    void equality_nullComparison_notEqual() {
+        // given
+        final SignInRequest request = new SignInRequest("user", "pass");
+
+        // then
+        assertThat(request).isNotEqualTo(null);
+    }
 }

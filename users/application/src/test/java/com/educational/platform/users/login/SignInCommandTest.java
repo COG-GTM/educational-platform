@@ -248,4 +248,32 @@ public class SignInCommandTest {
         // then
         assertThat(command1.hashCode()).isEqualTo(command2.hashCode());
     }
+
+    @Test
+    void hashCode_differentValues_notEqual() {
+        // given
+        final SignInCommand command1 = SignInCommand.builder()
+                .username("user1")
+                .password("pass1")
+                .build();
+        final SignInCommand command2 = SignInCommand.builder()
+                .username("user2")
+                .password("pass2")
+                .build();
+
+        // then
+        assertThat(command1.hashCode()).isNotEqualTo(command2.hashCode());
+    }
+
+    @Test
+    void equality_nullComparison_notEqual() {
+        // given
+        final SignInCommand command = SignInCommand.builder()
+                .username("user")
+                .password("pass")
+                .build();
+
+        // then
+        assertThat(command).isNotEqualTo(null);
+    }
 }

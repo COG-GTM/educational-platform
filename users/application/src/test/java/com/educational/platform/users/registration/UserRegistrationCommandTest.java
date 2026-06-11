@@ -432,4 +432,24 @@ public class UserRegistrationCommandTest {
         assertThat(str).contains("test@example.com");
         assertThat(str).contains("ROLE_STUDENT");
     }
+
+    @Test
+    void hashCode_differentValues_notEqual() {
+        // given
+        final UserRegistrationCommand command1 = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("user1")
+                .email("user1@example.com")
+                .password("password1")
+                .build();
+        final UserRegistrationCommand command2 = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_TEACHER)
+                .username("user2")
+                .email("user2@example.com")
+                .password("password2")
+                .build();
+
+        // then
+        assertThat(command1.hashCode()).isNotEqualTo(command2.hashCode());
+    }
 }
