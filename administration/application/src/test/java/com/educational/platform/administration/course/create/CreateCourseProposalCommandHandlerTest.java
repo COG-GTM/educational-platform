@@ -2,8 +2,7 @@ package com.educational.platform.administration.course.create;
 
 import com.educational.platform.administration.course.CourseProposal;
 import com.educational.platform.administration.course.CourseProposalRepository;
-import com.educational.platform.administration.course.create.CreateCourseProposalCommand;
-import com.educational.platform.administration.course.create.CreateCourseProposalCommandHandler;
+import com.educational.platform.administration.course.CourseProposalStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -40,5 +39,22 @@ public class CreateCourseProposalCommandHandlerTest {
         final CourseProposal proposal = argument.getValue();
         assertThat(proposal)
                 .hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void handle_courseProposalSavedWithWaitingForApprovalStatus() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseProposal> argument = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository).save(argument.capture());
+        final CourseProposal proposal = argument.getValue();
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL);
     }
 }
