@@ -535,6 +535,64 @@ public class DeclineCourseProposalCommandHandlerTest {
     }
 
     @Test
+    void handle_invalidId_exceptionMessageMatchesExpectedFormat() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+                .isThrownBy(handle)
+                .withMessage("Course Proposal with uuid: " + uuid + " not found");
+    }
+
+    @Test
+    void handle_nilUuid_proposalFound_savedWithDeclinedStatus() {
+        // given
+        final UUID nilUuid = new UUID(0L, 0L);
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(nilUuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(nilUuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", nilUuid);
+        when(repository.findByUuid(nilUuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseProposal> argument = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED)
+                .hasFieldOrPropertyWithValue("uuid", nilUuid);
+    }
+
+    @Test
+    void handle_existingCourseProposal_publishedEventUuidNotNull() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseDeclinedByAdminIntegrationEvent> eventArgument = ArgumentCaptor.forClass(CourseDeclinedByAdminIntegrationEvent.class);
+        verify(eventPublisher).publishEvent(eventArgument.capture());
+        assertThat(eventArgument.getValue().courseId()).isNotNull();
+    }
+
+    @Test
     void handle_multipleSequentialCommands_eachProcessedIndependently() {
         // given
         final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

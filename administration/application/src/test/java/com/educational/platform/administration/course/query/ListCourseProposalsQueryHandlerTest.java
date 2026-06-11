@@ -265,4 +265,39 @@ class ListCourseProposalsQueryHandlerTest {
         // then
         assertThat(result).containsExactly(dto1, dto2);
     }
+
+    @Test
+    void handle_repositoryReturnsDtoWithNullUuid_passesThrough() {
+        // given
+        final CourseProposalDTO dtoWithNullUuid = new CourseProposalDTO(null, CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
+        when(repository.listCourseProposals()).thenReturn(List.of(dtoWithNullUuid));
+        final ListCourseProposalsQuery query = new ListCourseProposalsQuery();
+
+        // when
+        final List<CourseProposalDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result)
+                .hasSize(1)
+                .first()
+                .hasFieldOrPropertyWithValue("uuid", null)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void handle_repositoryReturnsLargeList_allElementsReturned() {
+        // given
+        final List<CourseProposalDTO> largelist = java.util.stream.IntStream.range(0, 100)
+                .mapToObj(i -> new CourseProposalDTO(UUID.randomUUID(), CourseProposalStatusDTO.WAITING_FOR_APPROVAL))
+                .toList();
+        when(repository.listCourseProposals()).thenReturn(largelist);
+        final ListCourseProposalsQuery query = new ListCourseProposalsQuery();
+
+        // when
+        final List<CourseProposalDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(100);
+        assertThat(result).isSameAs(largelist);
+    }
 }

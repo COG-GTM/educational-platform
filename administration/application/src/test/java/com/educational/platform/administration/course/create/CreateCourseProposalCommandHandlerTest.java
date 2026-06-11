@@ -222,4 +222,41 @@ public class CreateCourseProposalCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("uuid", uuid2)
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL);
     }
+
+    @Test
+    void handle_duplicateUuid_createsTwoSeparateProposals() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+
+        // when
+        sut.handle(command);
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseProposal> captor = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(0)).isNotSameAs(captor.getAllValues().get(1));
+        assertThat(captor.getAllValues().get(0))
+                .hasFieldOrPropertyWithValue("uuid", uuid);
+        assertThat(captor.getAllValues().get(1))
+                .hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void handle_nilUuid_courseProposalSavedWithNilUuid() {
+        // given
+        final UUID nilUuid = new UUID(0L, 0L);
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(nilUuid);
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseProposal> argument = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", nilUuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL);
+    }
 }

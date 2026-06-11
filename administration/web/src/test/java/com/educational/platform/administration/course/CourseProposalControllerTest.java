@@ -1025,4 +1025,79 @@ class CourseProposalControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
     }
+
+    @Test
+    void approve_nilUuid_noContent() throws Exception {
+        // given
+        final UUID nilUuid = new UUID(0L, 0L);
+
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", nilUuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+
+        final ArgumentCaptor<ApproveCourseProposalCommand> captor = ArgumentCaptor.forClass(ApproveCourseProposalCommand.class);
+        verify(approveCourseProposalCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().uuid()).isEqualTo(nilUuid);
+    }
+
+    @Test
+    void decline_nilUuid_noContent() throws Exception {
+        // given
+        final UUID nilUuid = new UUID(0L, 0L);
+
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", nilUuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+
+        final ArgumentCaptor<DeclineCourseProposalCommand> captor = ArgumentCaptor.forClass(DeclineCourseProposalCommand.class);
+        verify(declineCourseProposalCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().uuid()).isEqualTo(nilUuid);
+    }
+
+    @Test
+    void courseProposals_queryHandlerReceivesListCourseProposalsQueryInstance() throws Exception {
+        // given
+        when(listCourseProposalsQueryHandler.handle(any(ListCourseProposalsQuery.class)))
+                .thenReturn(Collections.emptyList());
+
+        // when
+        mockMvc.perform(get("/administration/course-proposals"))
+                .andExpect(status().isOk());
+
+        // then
+        final ArgumentCaptor<ListCourseProposalsQuery> captor = ArgumentCaptor.forClass(ListCourseProposalsQuery.class);
+        verify(listCourseProposalsQueryHandler).handle(captor.capture());
+        assertThat(captor.getValue()).isNotNull();
+        assertThat(captor.getValue()).isInstanceOf(ListCourseProposalsQuery.class);
+    }
+
+    @Test
+    void approve_notFound_responseMessageContainsNotFoundText() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new ResourceNotFoundException("Course Proposal with uuid: " + uuid + " not found"))
+                .when(approveCourseProposalCommandHandler).handle(any(ApproveCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString("not found")));
+    }
+
+    @Test
+    void decline_notFound_responseMessageContainsNotFoundText() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new ResourceNotFoundException("Course Proposal with uuid: " + uuid + " not found"))
+                .when(declineCourseProposalCommandHandler).handle(any(DeclineCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString("not found")));
+    }
 }
