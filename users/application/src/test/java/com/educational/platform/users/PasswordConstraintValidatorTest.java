@@ -245,4 +245,28 @@ public class PasswordConstraintValidatorTest {
         // then
         assertThat(result).isFalse();
     }
+
+    @Test
+    void isValid_allWhitespaceOfValidLength_invalid() {
+        // given — 8 spaces meets length but violates whitespace rule
+        final String password = " ".repeat(8);
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isValid_passwordWithCarriageReturn_invalid() {
+        // given
+        final String password = "pass\rword1";
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isFalse();
+    }
 }

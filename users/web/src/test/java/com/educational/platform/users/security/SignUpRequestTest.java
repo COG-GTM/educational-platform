@@ -196,4 +196,43 @@ public class SignUpRequestTest {
         assertThat(str).contains("test@example.com");
         assertThat(str).contains("ROLE_STUDENT");
     }
+
+    @Test
+    void validate_whitespaceOnlyPassword_violation() {
+        // given
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "testuser", "test@example.com", "   ");
+
+        // when
+        final Set<ConstraintViolation<SignUpRequest>> violations = validator.validate(request);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("password"));
+    }
+
+    @Test
+    void validate_whitespaceOnlyUsername_violation() {
+        // given
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "   ", "test@example.com", "password1");
+
+        // when
+        final Set<ConstraintViolation<SignUpRequest>> violations = validator.validate(request);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("username"));
+    }
+
+    @Test
+    void validate_whitespaceOnlyEmail_violation() {
+        // given
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "testuser", "   ", "password1");
+
+        // when
+        final Set<ConstraintViolation<SignUpRequest>> violations = validator.validate(request);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("email"));
+    }
 }

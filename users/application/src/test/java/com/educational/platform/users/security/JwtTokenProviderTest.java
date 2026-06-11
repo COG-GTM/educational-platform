@@ -416,4 +416,48 @@ public class JwtTokenProviderTest {
         assertThatExceptionOfType(JwtTokenValidationException.class)
                 .isThrownBy(() -> sut.validateToken(token));
     }
+
+    @Test
+    void getUsername_expiredToken_throwsException() {
+        // given
+        final MyUserDetails myUserDetails = new MyUserDetails(userRepository);
+        final JwtTokenProvider expiredProvider = new JwtTokenProvider(myUserDetails, 0, "test-secret-key");
+        final String token = expiredProvider.createToken("user", Collections.singletonList(Role.ROLE_STUDENT));
+
+        // when / then
+        assertThatExceptionOfType(Exception.class)
+                .isThrownBy(() -> sut.getUsername(token));
+    }
+
+    @Test
+    void createToken_sameUserDifferentRoles_differentTokens() {
+        // when
+        final String studentToken = sut.createToken("user", Collections.singletonList(Role.ROLE_STUDENT));
+        final String teacherToken = sut.createToken("user", Collections.singletonList(Role.ROLE_TEACHER));
+
+        // then
+        assertThat(studentToken).isNotEqualTo(teacherToken);
+    }
+
+    @Test
+    void getAuthentication_validToken_isAuthenticated() {
+        // given
+        final String token = sut.createToken("username", Collections.singletonList(Role.ROLE_STUDENT));
+
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("username")
+                .email("email@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("username")).thenReturn(Optional.of(user));
+
+        // when
+        final Authentication authentication = sut.getAuthentication(token);
+
+        // then
+        assertThat(authentication.isAuthenticated()).isTrue();
+    }
 }

@@ -15,8 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class UserControllerTest {
@@ -159,5 +158,33 @@ public class UserControllerTest {
 
         // then
         assertThat(result).isNotNull().isNotBlank();
+    }
+
+    @Test
+    void signUp_validRequest_registrationHandlerCalledExactlyOnce() {
+        // given
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "user", "user@example.com", "password123");
+        when(userRegistrationCommandHandler.handle(any())).thenReturn("token");
+
+        // when
+        sut.signUp(request);
+
+        // then
+        verify(userRegistrationCommandHandler, times(1)).handle(any());
+        verify(signInCommandHandler, never()).handle(any());
+    }
+
+    @Test
+    void signIn_validRequest_signInHandlerCalledExactlyOnce() {
+        // given
+        final SignInRequest request = new SignInRequest("user", "password123");
+        when(signInCommandHandler.handle(any())).thenReturn("token");
+
+        // when
+        sut.signIn(request);
+
+        // then
+        verify(signInCommandHandler, times(1)).handle(any());
+        verify(userRegistrationCommandHandler, never()).handle(any());
     }
 }

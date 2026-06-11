@@ -168,4 +168,40 @@ public class MyUserDetailsTest {
         // then
         verify(userRepository).findByUsername("delegate-user");
     }
+
+    @Test
+    void loadUserByUsername_existingUser_returnsUserDetailsWithCorrectUsername() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("specificuser")
+                .email("specific@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("specificuser")).thenReturn(Optional.of(user));
+
+        // when
+        final UserDetails userDetails = sut.loadUserByUsername("specificuser");
+
+        // then — verify username in returned UserDetails matches exactly
+        assertThat(userDetails.getUsername()).isEqualTo("specificuser");
+        assertThat(userDetails.getUsername()).isNotEqualTo("different-user");
+    }
+
+    @Test
+    void loadUserByUsername_nonExistingUser_repositoryQueried() {
+        // given
+        when(userRepository.findByUsername("ghost")).thenReturn(Optional.empty());
+
+        // when
+        try {
+            sut.loadUserByUsername("ghost");
+        } catch (UsernameNotFoundException ignored) {
+        }
+
+        // then
+        verify(userRepository).findByUsername("ghost");
+    }
 }

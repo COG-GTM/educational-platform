@@ -269,4 +269,55 @@ public class JwtTokenFilterTest {
         // then
         assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
     }
+
+    @Test
+    void doFilterInternal_validateTokenThrowsRuntimeException_exceptionPropagates() {
+        // given — non-JwtTokenValidationException is NOT caught by the filter
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        when(jwtTokenProvider.resolveToken(request)).thenReturn("some-token");
+        when(jwtTokenProvider.validateToken("some-token")).thenThrow(new RuntimeException("unexpected error"));
+
+        // when / then
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> sut.doFilterInternal(request, response, filterChain)
+        ).isInstanceOf(RuntimeException.class).hasMessageContaining("unexpected error");
+    }
+
+    @Test
+    void doFilterInternal_validToken_resolveTokenCalledExactlyOnce() throws ServletException, IOException {
+        // given
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        final Authentication authentication = mock(Authentication.class);
+        when(jwtTokenProvider.resolveToken(request)).thenReturn("valid-token");
+        when(jwtTokenProvider.validateToken("valid-token")).thenReturn(true);
+        when(jwtTokenProvider.getAuthentication("valid-token")).thenReturn(authentication);
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then
+        verify(jwtTokenProvider, times(1)).resolveToken(request);
+    }
+
+    @Test
+    void doFilterInternal_noToken_validateTokenNeverCalled() throws ServletException, IOException {
+        // given
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        when(jwtTokenProvider.resolveToken(request)).thenReturn(null);
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then
+        verify(jwtTokenProvider, never()).validateToken(any());
+    }
 }

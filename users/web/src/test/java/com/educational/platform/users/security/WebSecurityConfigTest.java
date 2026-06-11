@@ -145,4 +145,44 @@ public class WebSecurityConfigTest {
                 .then()
                 .statusCode(HttpStatus.FORBIDDEN.value());
     }
+
+    @Test
+    void publicEndpoint_noAuth_notForbidden() {
+        final int status = given()
+                .when()
+                .get("/public")
+                .statusCode();
+
+        assertThat(status).isNotEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void v2ApiDocsEndpoint_noAuth_notForbidden() {
+        final int status = given()
+                .when()
+                .get("/v2/api-docs")
+                .statusCode();
+
+        assertThat(status).isNotEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void swaggerResourcesEndpoint_noAuth_notForbidden() {
+        final int status = given()
+                .when()
+                .get("/swagger-resources")
+                .statusCode();
+
+        assertThat(status).isNotEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void webjarsEndpoint_noAuth_notForbidden() {
+        final int status = given()
+                .when()
+                .get("/webjars/test")
+                .statusCode();
+
+        assertThat(status).isNotEqualTo(HttpStatus.FORBIDDEN.value());
+    }
 }

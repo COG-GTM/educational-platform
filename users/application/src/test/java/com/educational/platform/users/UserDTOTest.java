@@ -122,4 +122,41 @@ public class UserDTOTest {
         // then
         assertThat(dto1.hashCode()).isEqualTo(dto2.hashCode());
     }
+
+    @Test
+    void builder_noSettersCalled_allFieldsNull() {
+        // when
+        final UserDTO dto = UserDTO.builder().build();
+
+        // then
+        assertThat(dto.username()).isNull();
+        assertThat(dto.email()).isNull();
+        assertThat(dto.role()).isNull();
+    }
+
+    @Test
+    void equality_sameInstance_equal() {
+        // given
+        final UserDTO dto = UserDTO.builder()
+                .username("user")
+                .email("user@example.com")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // then
+        assertThat(dto).isEqualTo(dto);
+    }
+
+    @Test
+    void equality_nullComparison_notEqual() {
+        // given
+        final UserDTO dto = UserDTO.builder()
+                .username("user")
+                .email("user@example.com")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // then
+        assertThat(dto).isNotEqualTo(null);
+    }
 }
