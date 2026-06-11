@@ -50,4 +50,12 @@ class CourseProposalStatusTest {
         assertThatThrownBy(() -> CourseProposalStatus.valueOf("INVALID"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void allValues_mapToDistinctDTOValues() {
+        final var dtoValues = java.util.Arrays.stream(CourseProposalStatus.values())
+                .map(CourseProposalStatus::toDTO)
+                .toList();
+        assertThat(dtoValues).doesNotHaveDuplicates();
+    }
 }

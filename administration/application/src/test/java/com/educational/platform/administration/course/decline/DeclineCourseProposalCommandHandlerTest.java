@@ -491,4 +491,40 @@ public class DeclineCourseProposalCommandHandlerTest {
         assertThat(argument.getValue())
                 .hasFieldOrPropertyWithValue("uuid", uuid);
     }
+
+    @Test
+    void handle_multipleSequentialCommands_eachProcessedIndependently() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final DeclineCourseProposalCommand command1 = new DeclineCourseProposalCommand(uuid1);
+        final DeclineCourseProposalCommand command2 = new DeclineCourseProposalCommand(uuid2);
+
+        final CourseProposal proposal1 = new CourseProposal(new CreateCourseProposalCommand(uuid1));
+        ReflectionTestUtils.setField(proposal1, "uuid", uuid1);
+        when(repository.findByUuid(uuid1)).thenReturn(Optional.of(proposal1));
+
+        final CourseProposal proposal2 = new CourseProposal(new CreateCourseProposalCommand(uuid2));
+        ReflectionTestUtils.setField(proposal2, "uuid", uuid2);
+        when(repository.findByUuid(uuid2)).thenReturn(Optional.of(proposal2));
+
+        // when
+        sut.handle(command1);
+        sut.handle(command2);
+
+        // then
+        final ArgumentCaptor<CourseProposal> saveCaptor = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository, times(2)).save(saveCaptor.capture());
+        assertThat(saveCaptor.getAllValues().get(0))
+                .hasFieldOrPropertyWithValue("uuid", uuid1)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED);
+        assertThat(saveCaptor.getAllValues().get(1))
+                .hasFieldOrPropertyWithValue("uuid", uuid2)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED);
+
+        final ArgumentCaptor<CourseDeclinedByAdminIntegrationEvent> eventCaptor = ArgumentCaptor.forClass(CourseDeclinedByAdminIntegrationEvent.class);
+        verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getAllValues().get(0).courseId()).isEqualTo(uuid1);
+        assertThat(eventCaptor.getAllValues().get(1).courseId()).isEqualTo(uuid2);
+    }
 }

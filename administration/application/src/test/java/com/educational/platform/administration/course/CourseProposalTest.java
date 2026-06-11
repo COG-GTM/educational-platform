@@ -591,4 +591,36 @@ public class CourseProposalTest {
         assertThatCode(proposal::decline).doesNotThrowAnyException();
     }
 
+    @Test
+    void toDTO_calledTwiceAfterApprove_returnsEqualResults() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+        proposal.approve();
+
+        // when
+        final CourseProposalDTO dto1 = proposal.toDTO();
+        final CourseProposalDTO dto2 = proposal.toDTO();
+
+        // then
+        assertThat(dto1).isEqualTo(dto2);
+    }
+
+    @Test
+    void toDTO_calledTwiceAfterDecline_returnsEqualResults() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+        proposal.decline();
+
+        // when
+        final CourseProposalDTO dto1 = proposal.toDTO();
+        final CourseProposalDTO dto2 = proposal.toDTO();
+
+        // then
+        assertThat(dto1).isEqualTo(dto2);
+    }
+
 }
