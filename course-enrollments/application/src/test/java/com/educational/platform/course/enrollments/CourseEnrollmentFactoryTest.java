@@ -88,6 +88,26 @@ public class CourseEnrollmentFactoryTest {
     }
 
     @Test
+    void create_validCommand_enrollmentHasNonNullUuid() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CreateCourseCommand createCourseCommand = new CreateCourseCommand(courseId);
+        final EnrollCourse correspondingCourse = new EnrollCourse(createCourseCommand);
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
+
+        final CreateStudentCommand createStudentCommand = new CreateStudentCommand("username");
+        final Student correspondingStudent = new Student(createStudentCommand);
+        when(currentUserAsStudent.userAsStudent()).thenReturn(correspondingStudent);
+
+        // when
+        final CourseEnrollment enrollment = sut.createFrom(command);
+
+        // then
+        assertThat(enrollment.getUuid()).isNotNull();
+    }
+
+    @Test
     void createFrom_studentNotFound_throwsNullPointerException() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

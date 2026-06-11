@@ -100,4 +100,48 @@ public class CourseEnrollmentApiTest {
                 .statusCode(HttpStatus.OK.value());
     }
 
+    @Test
+    void listCourseEnrollments_studentAuthenticated_returnsNonEmptyArray() {
+        var token = SignUpHelper.signUpStudent();
+
+        // register an enrollment first
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .body("{\n" +
+                        "  \"student\": \"username\"\n" +
+                        "}")
+                .when()
+                .post("/courses/{uuid}/course-enrollments", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+                .then()
+                .statusCode(HttpStatus.CREATED.value());
+
+        // then list and verify body
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .when()
+                .get("/course-enrollments")
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("size()", org.hamcrest.Matchers.greaterThanOrEqualTo(1));
+    }
+
+    @Test
+    void register_validCourse_returnsUuidInBody() {
+        var token = SignUpHelper.signUpStudent();
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .body("{\n" +
+                        "  \"student\": \"username\"\n" +
+                        "}")
+                .when()
+                .post("/courses/{uuid}/course-enrollments", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+                .then()
+                .statusCode(HttpStatus.CREATED.value())
+                .body(org.hamcrest.Matchers.notNullValue());
+    }
+
 }

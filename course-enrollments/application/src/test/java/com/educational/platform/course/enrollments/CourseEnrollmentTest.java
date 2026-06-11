@@ -71,4 +71,28 @@ public class CourseEnrollmentTest {
 		assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.COMPLETED);
 	}
 
+	@Test
+	void complete_alreadyCompleted_remainsCompleted() {
+		// given
+		final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+		enrollment.complete();
+		assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.COMPLETED);
+
+		// when
+		enrollment.complete();
+
+		// then
+		assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.COMPLETED);
+	}
+
+	@Test
+	void constructor_storesCourseAndStudentReferences() {
+		// given / when
+		final CourseEnrollment enrollment = new CourseEnrollment(42, 99);
+
+		// then
+		assertThat(enrollment).hasFieldOrPropertyWithValue("course", 42);
+		assertThat(enrollment).hasFieldOrPropertyWithValue("student", 99);
+	}
+
 }

@@ -105,4 +105,40 @@ public class RegisterStudentToCourseCommandHandlerTest {
                 .isInstanceOf(NullPointerException.class);
         verify(eventPublisher, never()).publishEvent(any());
     }
+
+    @Test
+    void handle_currentUserReturnsNull_throwsNullPointerException() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment courseEnrollment = new CourseEnrollment(1, 1);
+
+        when(transactionTemplate.execute(any())).thenReturn(courseEnrollment);
+        when(currentUserAsStudent.userAsStudent()).thenReturn(null);
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(command))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void handle_validCommand_returnsEnrollmentUuid() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment courseEnrollment = new CourseEnrollment(1, 1);
+        final UUID expectedUuid = courseEnrollment.getUuid();
+
+        when(transactionTemplate.execute(any())).thenReturn(courseEnrollment);
+
+        final Student student = new Student(new CreateStudentCommand("student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        final UUID result = sut.handle(command);
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result).isEqualTo(expectedUuid);
+    }
 }
