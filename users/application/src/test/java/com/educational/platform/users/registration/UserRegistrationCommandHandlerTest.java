@@ -421,4 +421,104 @@ public class UserRegistrationCommandHandlerTest {
         // then
         verify(repository).existsByUsername("checkuser");
     }
+
+    @Test
+    void handle_validationFails_repositoryNeverChecked() {
+        // given — null role triggers @NotNull violation
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(null)
+                .build();
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(repository, never()).existsByUsername(any());
+    }
+
+    @Test
+    void handle_validationFails_eventNotPublished() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(null)
+                .build();
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void handle_validationFails_userNotSaved() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(null)
+                .build();
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void handle_validationFails_tokenNotCreated() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(null)
+                .build();
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(jwtTokenProvider, never()).createToken(any(), any());
+    }
+
+    @Test
+    void handle_validationFails_passwordNeverEncoded() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(null)
+                .build();
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(passwordEncoder, never()).encode(any());
+    }
 }

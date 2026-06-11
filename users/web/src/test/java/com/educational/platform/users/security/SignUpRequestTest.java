@@ -172,4 +172,28 @@ public class SignUpRequestTest {
         // then
         assertThat(request1).isNotEqualTo(request2);
     }
+
+    @Test
+    void hashCode_sameValues_equal() {
+        // given
+        final SignUpRequest request1 = new SignUpRequest(RoleDTO.ROLE_STUDENT, "user", "user@example.com", "pass");
+        final SignUpRequest request2 = new SignUpRequest(RoleDTO.ROLE_STUDENT, "user", "user@example.com", "pass");
+
+        // then
+        assertThat(request1.hashCode()).isEqualTo(request2.hashCode());
+    }
+
+    @Test
+    void toString_containsFieldValues() {
+        // given
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "testuser", "test@example.com", "pass123");
+
+        // when
+        final String str = request.toString();
+
+        // then
+        assertThat(str).contains("testuser");
+        assertThat(str).contains("test@example.com");
+        assertThat(str).contains("ROLE_STUDENT");
+    }
 }

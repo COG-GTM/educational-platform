@@ -58,4 +58,14 @@ public class UserCreatedIntegrationEventTest {
         assertThat(str).contains("testuser");
         assertThat(str).contains("test@example.com");
     }
+
+    @Test
+    void hashCode_sameValues_equal() {
+        // given
+        final UserCreatedIntegrationEvent event1 = new UserCreatedIntegrationEvent("user", "user@example.com");
+        final UserCreatedIntegrationEvent event2 = new UserCreatedIntegrationEvent("user", "user@example.com");
+
+        // then
+        assertThat(event1.hashCode()).isEqualTo(event2.hashCode());
+    }
 }

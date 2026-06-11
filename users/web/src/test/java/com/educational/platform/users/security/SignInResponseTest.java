@@ -64,4 +64,14 @@ public class SignInResponseTest {
         // then
         assertThat(str).contains("my-jwt-token");
     }
+
+    @Test
+    void hashCode_sameValues_equal() {
+        // given
+        final SignInResponse response1 = new SignInResponse("token");
+        final SignInResponse response2 = new SignInResponse("token");
+
+        // then
+        assertThat(response1.hashCode()).isEqualTo(response2.hashCode());
+    }
 }

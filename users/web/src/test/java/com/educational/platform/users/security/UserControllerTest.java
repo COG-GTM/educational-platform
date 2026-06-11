@@ -147,4 +147,17 @@ public class UserControllerTest {
         // then
         assertThat(result).isNotNull().isNotBlank();
     }
+
+    @Test
+    void signIn_returnsNonNullToken() {
+        // given
+        final SignInRequest request = new SignInRequest("user", "password123");
+        when(signInCommandHandler.handle(any())).thenReturn("non-null-token");
+
+        // when
+        final String result = sut.signIn(request);
+
+        // then
+        assertThat(result).isNotNull().isNotBlank();
+    }
 }

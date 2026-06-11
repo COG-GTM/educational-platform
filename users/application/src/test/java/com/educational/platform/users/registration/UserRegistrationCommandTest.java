@@ -372,4 +372,64 @@ public class UserRegistrationCommandTest {
         assertThat(violations).hasSize(1);
         assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("role"));
     }
+
+    @Test
+    void equality_sameValues_equal() {
+        // given
+        final UserRegistrationCommand command1 = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("user")
+                .email("user@example.com")
+                .password("password123")
+                .build();
+        final UserRegistrationCommand command2 = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("user")
+                .email("user@example.com")
+                .password("password123")
+                .build();
+
+        // then
+        assertThat(command1).isEqualTo(command2);
+        assertThat(command1.hashCode()).isEqualTo(command2.hashCode());
+    }
+
+    @Test
+    void equality_differentValues_notEqual() {
+        // given
+        final UserRegistrationCommand command1 = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("user1")
+                .email("user1@example.com")
+                .password("password1")
+                .build();
+        final UserRegistrationCommand command2 = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_TEACHER)
+                .username("user2")
+                .email("user2@example.com")
+                .password("password2")
+                .build();
+
+        // then
+        assertThat(command1).isNotEqualTo(command2);
+    }
+
+    @Test
+    void toString_containsFieldValues() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("test@example.com")
+                .password("password123")
+                .build();
+
+        // when
+        final String str = command.toString();
+
+        // then
+        assertThat(str).contains("testuser");
+        assertThat(str).contains("test@example.com");
+        assertThat(str).contains("ROLE_STUDENT");
+    }
 }

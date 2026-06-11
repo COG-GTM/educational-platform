@@ -118,4 +118,27 @@ public class SignInRequestTest {
         // then
         assertThat(request1).isNotEqualTo(request2);
     }
+
+    @Test
+    void hashCode_sameValues_equal() {
+        // given
+        final SignInRequest request1 = new SignInRequest("user", "pass");
+        final SignInRequest request2 = new SignInRequest("user", "pass");
+
+        // then
+        assertThat(request1.hashCode()).isEqualTo(request2.hashCode());
+    }
+
+    @Test
+    void toString_containsFieldValues() {
+        // given
+        final SignInRequest request = new SignInRequest("testuser", "testpass");
+
+        // when
+        final String str = request.toString();
+
+        // then
+        assertThat(str).contains("testuser");
+        assertThat(str).contains("testpass");
+    }
 }

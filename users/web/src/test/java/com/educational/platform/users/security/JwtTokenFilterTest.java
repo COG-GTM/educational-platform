@@ -253,4 +253,20 @@ public class JwtTokenFilterTest {
         // then
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
     }
+
+    @Test
+    void doFilterInternal_noToken_responseStatusOk() throws ServletException, IOException {
+        // given
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        when(jwtTokenProvider.resolveToken(request)).thenReturn(null);
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+    }
 }

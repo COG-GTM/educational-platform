@@ -335,4 +335,40 @@ public class SignInCommandHandlerTest {
         // then
         verify(authenticationManager, never()).authenticate(any());
     }
+
+    @Test
+    void handle_validationFails_repositoryNeverQueried() {
+        // given — null username triggers @NotBlank violation
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username(null)
+                .password("password")
+                .build();
+
+        // when
+        try {
+            sut.handle(signInCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(repository, never()).findByUsername(any());
+    }
+
+    @Test
+    void handle_validationFails_tokenNeverCreated() {
+        // given — null password triggers @NotBlank violation
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password(null)
+                .build();
+
+        // when
+        try {
+            sut.handle(signInCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(jwtTokenProvider, never()).createToken(any(), any());
+    }
 }
