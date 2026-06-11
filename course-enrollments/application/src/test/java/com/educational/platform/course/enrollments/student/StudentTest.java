@@ -4,6 +4,8 @@ import com.educational.platform.course.enrollments.student.create.CreateStudentC
 
 import org.junit.jupiter.api.Test;
 
+import com.educational.platform.common.domain.AggregateRoot;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class StudentTest {
@@ -86,5 +88,14 @@ public class StudentTest {
 
 		// then
 		assertThat(student.toReference()).isEqualTo("  ");
+	}
+
+	@Test
+	void student_implementsAggregateRoot() {
+		// given / when
+		final Student student = new Student(new CreateStudentCommand("user"));
+
+		// then
+		assertThat(student).isInstanceOf(AggregateRoot.class);
 	}
 }

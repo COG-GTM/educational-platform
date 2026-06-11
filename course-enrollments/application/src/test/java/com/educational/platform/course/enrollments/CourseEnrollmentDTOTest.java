@@ -146,6 +146,15 @@ public class CourseEnrollmentDTOTest {
 	}
 
 	@Test
+	void constructor_nullCompletionStatusDTO_acceptsNull() {
+		// when
+		final CourseEnrollmentDTO dto = new CourseEnrollmentDTO(null, null, null, (CompletionStatusDTO) null);
+
+		// then
+		assertThat(dto.completionStatus()).isNull();
+	}
+
+	@Test
 	void equals_differentCourseUuid_areNotEqual() {
 		// given
 		final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

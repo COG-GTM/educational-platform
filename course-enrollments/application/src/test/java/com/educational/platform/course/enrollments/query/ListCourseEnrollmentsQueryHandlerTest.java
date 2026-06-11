@@ -155,4 +155,35 @@ public class ListCourseEnrollmentsQueryHandlerTest {
         assertThatThrownBy(() -> sut.handle(query))
                 .isInstanceOf(ClassCastException.class);
     }
+
+    @Test
+    void handle_multipleEnrollments_preservesRepositoryOrder() {
+        // given
+        final ListCourseEnrollmentsQuery query = new ListCourseEnrollmentsQuery();
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UUID uuid3 = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+        final CourseEnrollmentDTO dto1 = new CourseEnrollmentDTO(uuid1, UUID.randomUUID(), "student", CompletionStatusDTO.IN_PROGRESS);
+        final CourseEnrollmentDTO dto2 = new CourseEnrollmentDTO(uuid2, UUID.randomUUID(), "student", CompletionStatusDTO.COMPLETED);
+        final CourseEnrollmentDTO dto3 = new CourseEnrollmentDTO(uuid3, UUID.randomUUID(), "student", CompletionStatusDTO.IN_PROGRESS);
+        when(repository.query("student")).thenReturn(List.of(dto1, dto2, dto3));
+
+        // when
+        final List<CourseEnrollmentDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).containsExactly(dto1, dto2, dto3);
+    }
+
+    @Test
+    void handle_repositoryThrows_exceptionPropagates() {
+        // given
+        final ListCourseEnrollmentsQuery query = new ListCourseEnrollmentsQuery();
+        when(repository.query("student")).thenThrow(new RuntimeException("query failed"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("query failed");
+    }
 }

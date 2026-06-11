@@ -13,6 +13,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -73,5 +76,46 @@ public class CreateEnrollmentCourseCommandHandlerTest {
         verify(courseRepository).save(captor.capture());
         final EnrollCourse savedCourse = captor.getValue();
         assertThat(savedCourse.toReference()).isEqualTo(courseUuid);
+    }
+
+    @Test
+    void handle_repositoryThrows_exceptionPropagates() {
+        // given
+        final CreateCourseCommand command = new CreateCourseCommand(UUID.randomUUID());
+        doThrow(new RuntimeException("save failed")).when(courseRepository).save(any(EnrollCourse.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(command))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("save failed");
+    }
+
+    @Test
+    void handle_validCommand_saveCalledExactlyOnce() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseCommand command = new CreateCourseCommand(courseUuid);
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(courseRepository).save(any(EnrollCourse.class));
+        org.mockito.Mockito.verifyNoMoreInteractions(courseRepository);
+    }
+
+    @Test
+    void handle_validCommand_savedCourseHasNullIdBeforePersist() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseCommand command = new CreateCourseCommand(courseUuid);
+
+        // when
+        sut.handle(command);
+
+        // then
+        ArgumentCaptor<EnrollCourse> captor = ArgumentCaptor.forClass(EnrollCourse.class);
+        verify(courseRepository).save(captor.capture());
+        assertThat(captor.getValue().getId()).isNull();
     }
 }

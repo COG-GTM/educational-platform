@@ -270,4 +270,46 @@ public class RegisterStudentToCourseCommandHandlerTest {
                 .hasMessage("transaction failed");
         verify(eventPublisher, never()).publishEvent(any());
     }
+
+    @Test
+    void handle_validCommand_currentUserCalledForEventUsername() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment courseEnrollment = new CourseEnrollment(1, 1);
+
+        when(transactionTemplate.execute(any())).thenReturn(courseEnrollment);
+
+        final Student student = new Student(new CreateStudentCommand("event-student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        sut.handle(command);
+
+        // then — currentUserAsStudent is called to resolve the username for the event
+        verify(currentUserAsStudent).userAsStudent();
+        ArgumentCaptor<StudentEnrolledToCourseIntegrationEvent> captor = ArgumentCaptor.forClass(StudentEnrolledToCourseIntegrationEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().username()).isEqualTo("event-student");
+    }
+
+    @Test
+    void handle_validCommand_returnedUuidIsNotNull() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment courseEnrollment = new CourseEnrollment(1, 1);
+
+        when(transactionTemplate.execute(any())).thenReturn(courseEnrollment);
+
+        final Student student = new Student(new CreateStudentCommand("student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        final UUID result = sut.handle(command);
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.toString()).matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+    }
 }

@@ -170,4 +170,32 @@ public class CourseEnrollmentByUUIDQueryHandlerTest {
         assertThatThrownBy(() -> sut.handle(query))
                 .isInstanceOf(ClassCastException.class);
     }
+
+    @Test
+    void handle_nullUuidInQuery_delegatesNullToRepository() {
+        // given
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(null);
+        when(repository.query(null, "student")).thenReturn(Optional.empty());
+
+        // when
+        final Optional<CourseEnrollmentDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isEmpty();
+        verify(repository).query(null, "student");
+    }
+
+    @Test
+    void handle_repositoryReturnsEmpty_neverAccessesDTOFields() {
+        // given
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(enrollmentUuid);
+        when(repository.query(enrollmentUuid, "student")).thenReturn(Optional.empty());
+
+        // when
+        final Optional<CourseEnrollmentDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isNotPresent();
+    }
 }

@@ -1,5 +1,7 @@
 package com.educational.platform.course.enrollments;
 
+import com.educational.platform.common.domain.AggregateRoot;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.UUID;
@@ -161,6 +163,15 @@ public class CourseEnrollmentTest {
 		assertThat(enrollment).hasFieldOrPropertyWithValue("course", 10);
 		assertThat(enrollment).hasFieldOrPropertyWithValue("student", 20);
 		assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
+	}
+
+	@Test
+	void courseEnrollment_implementsAggregateRoot() {
+		// given / when
+		final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+
+		// then
+		assertThat(enrollment).isInstanceOf(AggregateRoot.class);
 	}
 
 }

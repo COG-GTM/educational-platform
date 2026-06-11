@@ -254,4 +254,41 @@ public class CourseEnrollmentFactoryTest {
         assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
     }
 
+    @Test
+    void createFrom_validCommand_enrollmentHasNullEntityIdsBeforePersist() {
+        // given — unpersisted entities have null IDs
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final EnrollCourse correspondingCourse = new EnrollCourse(new CreateCourseCommand(courseId));
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
+
+        final Student correspondingStudent = new Student(new CreateStudentCommand("username"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(correspondingStudent);
+
+        // when
+        final CourseEnrollment enrollment = sut.createFrom(command);
+
+        // then — course.getId() and student.getId() are null before persist, so enrollment stores null refs
+        assertThat(enrollment).hasFieldOrPropertyWithValue("course", null);
+        assertThat(enrollment).hasFieldOrPropertyWithValue("student", null);
+    }
+
+    @Test
+    void createFrom_validCommand_enrollmentIdIsNullBeforePersist() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final EnrollCourse correspondingCourse = new EnrollCourse(new CreateCourseCommand(courseId));
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
+
+        final Student correspondingStudent = new Student(new CreateStudentCommand("username"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(correspondingStudent);
+
+        // when
+        final CourseEnrollment enrollment = sut.createFrom(command);
+
+        // then
+        assertThat(enrollment).hasFieldOrPropertyWithValue("id", null);
+    }
+
 }

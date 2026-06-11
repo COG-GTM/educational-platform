@@ -4,6 +4,8 @@ import com.educational.platform.course.enrollments.course.create.CreateCourseCom
 
 import org.junit.jupiter.api.Test;
 
+import com.educational.platform.common.domain.AggregateRoot;
+
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -86,5 +88,14 @@ public class EnrollCourseTest {
 
 		// then
 		assertThat(ref1).isEqualTo(ref2);
+	}
+
+	@Test
+	void enrollCourse_implementsAggregateRoot() {
+		// given / when
+		final EnrollCourse course = new EnrollCourse(new CreateCourseCommand(UUID.randomUUID()));
+
+		// then
+		assertThat(course).isInstanceOf(AggregateRoot.class);
 	}
 }
