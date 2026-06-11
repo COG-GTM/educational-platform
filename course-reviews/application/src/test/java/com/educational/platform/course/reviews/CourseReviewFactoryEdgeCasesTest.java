@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.util.Optional;
@@ -32,6 +33,27 @@ public class CourseReviewFactoryEdgeCasesTest {
     void setUp() {
         final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
         sut = new CourseReviewFactory(validator, currentUserAsReviewer, reviewableCourseRepository);
+    }
+
+    @Test
+    void createFrom_nullRating_constraintViolationException() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, null, "comment");
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.createFrom(command));
+    }
+
+    @Test
+    void createFrom_nullCourseId_constraintViolationException() {
+        // given
+        final ReviewCourseCommand command = new ReviewCourseCommand(null, 4.0, "comment");
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.createFrom(command));
     }
 
     @Test
