@@ -210,4 +210,37 @@ public class ListCourseQueryHandlerTest {
         assertThat(result.getLast().name()).isEqualTo("course-100");
     }
 
+    @Test
+    void handle_queryParameterIsIgnored_resultDependsOnlyOnRepository() {
+        // given
+        final ListCourseQuery query1 = new ListCourseQuery();
+        final ListCourseQuery query2 = new ListCourseQuery();
+        final CourseLightDTO course = new CourseLightDTO(UUID.randomUUID(), "c", "d", 1);
+        when(repository.list()).thenReturn(List.of(course));
+
+        // when
+        final List<CourseLightDTO> result1 = sut.handle(query1);
+        final List<CourseLightDTO> result2 = sut.handle(query2);
+
+        // then
+        assertThat(result1).isEqualTo(result2);
+    }
+
+    @Test
+    void handle_courseWithNullFields_includedInResults() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO nullFieldsCourse = new CourseLightDTO(null, null, null, 0);
+        when(repository.list()).thenReturn(List.of(nullFieldsCourse));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().uuid()).isNull();
+        assertThat(result.getFirst().name()).isNull();
+        assertThat(result.getFirst().description()).isNull();
+    }
+
 }

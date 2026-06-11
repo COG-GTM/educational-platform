@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -218,6 +219,46 @@ public class CourseByUUIDQueryHandlerTest {
         assertThat(returned.description()).isEqualTo("Intro to Java");
         assertThat(returned.numberOfStudents()).isEqualTo(42);
         assertThat(returned.curriculumItems()).isEmpty();
+    }
+
+    @Test
+    void handle_nullQuery_throwsNullPointerException() {
+        // when / then
+        assertThatThrownBy(() -> sut.handle(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void handle_resultOptionalIsDirectlyFromRepository_notRewrapped() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440011");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        final Optional<CourseDTO> repositoryResult = Optional.of(
+                new CourseDTO(uuid, "course", "desc", 1, List.of()));
+        when(repository.findDTOByUuid(uuid)).thenReturn(repositoryResult);
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(repositoryResult);
+    }
+
+    @Test
+    void handle_courseWithNullName_returnedAsIs() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440012");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        final CourseDTO courseDTO = new CourseDTO(uuid, null, null, 0, List.of());
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().name()).isNull();
+        assertThat(result.get().description()).isNull();
     }
 
 }

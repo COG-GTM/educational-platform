@@ -10,6 +10,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -169,6 +170,47 @@ public class UserCreatedIntegrationEventHandlerTest {
         verify(createTeacherCommandHandler).handle(argument.capture());
         assertThat(argument.getValue().username()).isEqualTo(longUsername);
         assertThat(argument.getValue().username()).hasSize(500);
+    }
+
+    @Test
+    void handleUserCreatedEvent_nullEvent_throwsNullPointerException() {
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void handleUserCreatedEvent_eachCallConstructsNewCommand() {
+        // given
+        final UserCreatedIntegrationEvent event1 = new UserCreatedIntegrationEvent("user1", "u1@example.com");
+        final UserCreatedIntegrationEvent event2 = new UserCreatedIntegrationEvent("user1", "u2@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event1);
+        sut.handleUserCreatedEvent(event2);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler, times(2)).handle(argument.capture());
+        final CreateTeacherCommand cmd1 = argument.getAllValues().get(0);
+        final CreateTeacherCommand cmd2 = argument.getAllValues().get(1);
+        assertThat(cmd1).isNotSameAs(cmd2);
+        assertThat(cmd1.username()).isEqualTo("user1");
+        assertThat(cmd2.username()).isEqualTo("user1");
+    }
+
+    @Test
+    void handleUserCreatedEvent_differentEmails_sameUsernamePassedToCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher", "different@email.org");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("teacher");
     }
 
 }
