@@ -114,4 +114,40 @@ public class ReviewCourseCommandTest {
         assertThat(command.rating()).isEqualTo(4.0);
         assertThat(command.comment()).isEqualTo("comment");
     }
+
+    @Test
+    void emptyComment_noViolations() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "");
+
+        // when
+        final Set<ConstraintViolation<ReviewCourseCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void equals_sameValues_returnsTrue() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand first = new ReviewCourseCommand(courseId, 4.0, "good");
+        final ReviewCourseCommand second = new ReviewCourseCommand(courseId, 4.0, "good");
+
+        // then
+        assertThat(first).isEqualTo(second);
+        assertThat(first.hashCode()).isEqualTo(second.hashCode());
+    }
+
+    @Test
+    void equals_differentValues_returnsFalse() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand first = new ReviewCourseCommand(courseId, 4.0, "good");
+        final ReviewCourseCommand second = new ReviewCourseCommand(courseId, 5.0, "great");
+
+        // then
+        assertThat(first).isNotEqualTo(second);
+    }
 }

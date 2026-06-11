@@ -113,4 +113,16 @@ public class UpdateCourseReviewRequestTest {
         // then
         assertThat(first).isNotEqualTo(second);
     }
+
+    @Test
+    void emptyComment_noViolations() {
+        // given
+        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(4.0, "");
+
+        // when
+        final Set<ConstraintViolation<UpdateCourseReviewRequest>> violations = validator.validate(request);
+
+        // then
+        assertThat(violations).isEmpty();
+    }
 }

@@ -301,4 +301,24 @@ public class CourseReviewFactoryTest {
         assertThat(first.toIdentifier()).isNotEqualTo(second.toIdentifier());
     }
 
+    @Test
+    void createFrom_reviewerIsNull_nullPointerException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+
+        final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(uuid));
+        ReflectionTestUtils.setField(reviewableCourse, "id", 11);
+        ReflectionTestUtils.setField(reviewableCourse, "originalCourseId", uuid);
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.of(reviewableCourse));
+
+        when(currentUserAsReviewer.userAsReviewer()).thenReturn(null);
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(NullPointerException.class, createAction);
+    }
+
 }

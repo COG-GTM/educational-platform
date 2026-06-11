@@ -114,4 +114,40 @@ public class UpdateCourseReviewCommandTest {
         assertThat(command.rating()).isEqualTo(3.0);
         assertThat(command.comment()).isEqualTo("updated");
     }
+
+    @Test
+    void emptyComment_noViolations() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 4.0, "");
+
+        // when
+        final Set<ConstraintViolation<UpdateCourseReviewCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void equals_sameValues_returnsTrue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseReviewCommand first = new UpdateCourseReviewCommand(uuid, 3.0, "ok");
+        final UpdateCourseReviewCommand second = new UpdateCourseReviewCommand(uuid, 3.0, "ok");
+
+        // then
+        assertThat(first).isEqualTo(second);
+        assertThat(first.hashCode()).isEqualTo(second.hashCode());
+    }
+
+    @Test
+    void equals_differentValues_returnsFalse() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseReviewCommand first = new UpdateCourseReviewCommand(uuid, 3.0, "ok");
+        final UpdateCourseReviewCommand second = new UpdateCourseReviewCommand(uuid, 4.0, "great");
+
+        // then
+        assertThat(first).isNotEqualTo(second);
+    }
 }

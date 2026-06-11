@@ -84,4 +84,24 @@ public class CourseRatingRecalculatedIntegrationEventTest {
         // then
         assertThat(first).isNotEqualTo(second);
     }
+
+    @Test
+    void constructor_negativeRating_ratingStored() {
+        // when
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(courseId, -1.0);
+
+        // then
+        assertThat(event.rating()).isEqualTo(-1.0);
+    }
+
+    @Test
+    void constructor_fractionalRating_ratingStored() {
+        // when
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(courseId, 3.75);
+
+        // then
+        assertThat(event.rating()).isEqualTo(3.75);
+    }
 }

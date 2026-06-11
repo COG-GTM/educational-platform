@@ -67,4 +67,19 @@ public class CreateReviewerCommandHandlerTest {
         // then
         verify(reviewerRepository, org.mockito.Mockito.times(1)).save(org.mockito.ArgumentMatchers.any(Reviewer.class));
     }
+
+    @Test
+    void handle_nullUsername_reviewerSavedWithNullUsername() {
+        // given
+        final CreateReviewerCommand command = new CreateReviewerCommand(null);
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Reviewer> argument = ArgumentCaptor.forClass(Reviewer.class);
+        verify(reviewerRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("username", null);
+    }
 }

@@ -262,6 +262,33 @@ public class UpdateCourseReviewCommandHandlerTest {
         verify(courseReviewRepository, org.mockito.Mockito.times(1)).save(org.mockito.ArgumentMatchers.any(CourseReview.class));
     }
 
+    @Test
+    void handle_notFoundWithInvalidRating_resourceNotFoundExceptionTakesPrecedence() {
+        // given — UUID not found AND rating is also invalid (-1); not-found check runs first
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440099");
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, -1.0, "comment");
+        when(courseReviewRepository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_existingReviewNullUuid_resourceNotFoundException() {
+        // given
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(null, 3.0, "comment");
+        when(courseReviewRepository.findByUuid(null)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
