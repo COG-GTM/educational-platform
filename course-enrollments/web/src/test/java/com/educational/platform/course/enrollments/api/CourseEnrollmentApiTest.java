@@ -158,4 +158,34 @@ public class CourseEnrollmentApiTest {
                 .body(org.hamcrest.Matchers.notNullValue());
     }
 
+    @Test
+    void listCourseEnrollments_studentAuthenticated_responseContainsDTOFields() {
+        var token = SignUpHelper.signUpStudent();
+
+        // register an enrollment first
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .body("{\n" +
+                        "  \"student\": \"username\"\n" +
+                        "}")
+                .when()
+                .post("/courses/{uuid}/course-enrollments", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+                .then()
+                .statusCode(HttpStatus.CREATED.value());
+
+        // then verify the response DTO structure
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .when()
+                .get("/course-enrollments")
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("[0].uuid", org.hamcrest.Matchers.notNullValue())
+                .body("[0].course", org.hamcrest.Matchers.notNullValue())
+                .body("[0].student", org.hamcrest.Matchers.equalTo("username"))
+                .body("[0].completionStatus", org.hamcrest.Matchers.equalTo("IN_PROGRESS"));
+    }
+
 }

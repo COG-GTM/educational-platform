@@ -1,6 +1,9 @@
 package com.educational.platform.course.enrollments.query.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.util.List;
 
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
@@ -10,6 +13,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.jdbc.Sql;
 
+import com.educational.platform.course.enrollments.CourseEnrollmentDTO;
 import com.educational.platform.course.enrollments.query.ListCourseEnrollmentsQuery;
 import com.educational.platform.course.enrollments.query.ListCourseEnrollmentsQueryHandler;
 
@@ -31,5 +35,18 @@ public class ListCourseEnrollmentsQueryHandlerSecurityTest {
 
 		// then
 		assertThatThrownBy(queryAction).isInstanceOf(AccessDeniedException.class);
+	}
+
+	@Test
+	@WithMockUser(username = "student", roles = "STUDENT")
+	void handle_userIsStudent_accessAllowed() {
+		// given
+		var query = new ListCourseEnrollmentsQuery();
+
+		// when
+		final List<CourseEnrollmentDTO> result = sut.handle(query);
+
+		// then
+		assertThat(result).isNotNull();
 	}
 }

@@ -14,10 +14,12 @@ import org.junit.jupiter.api.function.Executable;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -144,6 +146,42 @@ public class CourseEnrollmentFactoryTest {
         // then
         verify(courseRepository).findByUuid(courseId);
         verify(currentUserAsStudent).userAsStudent();
+    }
+
+    @Test
+    void createFrom_courseIdIsNull_constraintViolationContainsCourseIdProperty() {
+        // given
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(null);
+
+        // when
+        final ConstraintViolationException exception = assertThrows(
+                ConstraintViolationException.class, () -> sut.createFrom(command));
+
+        // then
+        final Set<? extends ConstraintViolation<?>> violations = exception.getConstraintViolations();
+        assertThat(violations).hasSize(1);
+        assertThat(violations.iterator().next().getPropertyPath().toString()).isEqualTo("courseId");
+    }
+
+    @Test
+    void createFrom_validCommand_enrollmentHasInProgressStatus() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CreateCourseCommand createCourseCommand = new CreateCourseCommand(courseId);
+        final EnrollCourse correspondingCourse = new EnrollCourse(createCourseCommand);
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
+
+        final CreateStudentCommand createStudentCommand = new CreateStudentCommand("username");
+        final Student correspondingStudent = new Student(createStudentCommand);
+        when(currentUserAsStudent.userAsStudent()).thenReturn(correspondingStudent);
+
+        // when
+        final CourseEnrollment enrollment = sut.createFrom(command);
+
+        // then
+        assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
+        assertThat(enrollment.getUuid()).isNotNull();
     }
 
 }

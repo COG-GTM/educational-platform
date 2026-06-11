@@ -141,4 +141,67 @@ public class RegisterStudentToCourseCommandHandlerTest {
         assertThat(result).isNotNull();
         assertThat(result).isEqualTo(expectedUuid);
     }
+
+    @Test
+    void handle_validCommand_transactionTemplateIsInvoked() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment courseEnrollment = new CourseEnrollment(1, 1);
+
+        when(transactionTemplate.execute(any())).thenReturn(courseEnrollment);
+
+        final Student student = new Student(new CreateStudentCommand("student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(transactionTemplate).execute(any());
+    }
+
+    @Test
+    void handle_validCommand_eventPublishedWithCorrectCourseId() {
+        // given
+        final UUID courseId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment courseEnrollment = new CourseEnrollment(1, 1);
+
+        when(transactionTemplate.execute(any())).thenReturn(courseEnrollment);
+
+        final Student student = new Student(new CreateStudentCommand("enrolled-student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        sut.handle(command);
+
+        // then
+        ArgumentCaptor<StudentEnrolledToCourseIntegrationEvent> eventCaptor = ArgumentCaptor.forClass(StudentEnrolledToCourseIntegrationEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        final StudentEnrolledToCourseIntegrationEvent event = eventCaptor.getValue();
+        assertThat(event.courseId()).isEqualTo(courseId);
+        assertThat(event.username()).isEqualTo("enrolled-student");
+    }
+
+    @Test
+    void handle_multipleInvocations_publishMultipleEvents() {
+        // given
+        final UUID courseId1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseId2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseEnrollment enrollment1 = new CourseEnrollment(1, 1);
+        final CourseEnrollment enrollment2 = new CourseEnrollment(2, 1);
+
+        when(transactionTemplate.execute(any())).thenReturn(enrollment1, enrollment2);
+
+        final Student student = new Student(new CreateStudentCommand("student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        sut.handle(new RegisterStudentToCourseCommand(courseId1));
+        sut.handle(new RegisterStudentToCourseCommand(courseId2));
+
+        // then
+        verify(eventPublisher, times(2)).publishEvent(any(StudentEnrolledToCourseIntegrationEvent.class));
+    }
 }
