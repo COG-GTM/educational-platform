@@ -22,4 +22,29 @@ public class CourseAlreadyApprovedExceptionTest {
         assertThat(message).contains("cannot be sent for approval");
         assertThat(message).contains("already approved");
     }
+
+    @Test
+    void constructor_validUuid_isRuntimeException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        final CourseAlreadyApprovedException sut = new CourseAlreadyApprovedException(uuid);
+
+        // then
+        assertThat(sut).isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void getMessage_validUuid_exactMessage() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseAlreadyApprovedException sut = new CourseAlreadyApprovedException(uuid);
+
+        // when
+        final String message = sut.getMessage();
+
+        // then
+        assertThat(message).isEqualTo("Course with uuid = 123e4567-e89b-12d3-a456-426655440001 cannot be sent for approval, course was already approved");
+    }
 }

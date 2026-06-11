@@ -7,10 +7,12 @@ import com.educational.platform.course.enrollments.register.RegisterStudentToCou
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -44,7 +46,9 @@ public class CourseEnrollmentControllerTest {
 
         // then
         assertThat(result).isEqualTo(enrollmentUuid);
-        verify(registerStudentToCourseCommandHandler).handle(any(RegisterStudentToCourseCommand.class));
+        final ArgumentCaptor<RegisterStudentToCourseCommand> argument = ArgumentCaptor.forClass(RegisterStudentToCourseCommand.class);
+        verify(registerStudentToCourseCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().courseId()).isEqualTo(courseUuid);
     }
 
     @Test
@@ -62,5 +66,17 @@ public class CourseEnrollmentControllerTest {
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().uuid()).isEqualTo(enrollmentUuid);
         verify(listCourseEnrollmentsQueryHandler).handle(any(ListCourseEnrollmentsQuery.class));
+    }
+
+    @Test
+    void courseEnrollments_noEnrollments_returnsEmptyList() {
+        // given
+        when(listCourseEnrollmentsQueryHandler.handle(any(ListCourseEnrollmentsQuery.class))).thenReturn(Collections.emptyList());
+
+        // when
+        final List<CourseEnrollmentDTO> result = sut.courseEnrollments();
+
+        // then
+        assertThat(result).isEmpty();
     }
 }

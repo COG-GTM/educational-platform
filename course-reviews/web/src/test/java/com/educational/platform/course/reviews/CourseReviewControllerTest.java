@@ -13,6 +13,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -88,5 +89,19 @@ public class CourseReviewControllerTest {
         assertThat(argument.getValue().uuid()).isEqualTo(reviewUuid);
         assertThat(argument.getValue().rating()).isEqualTo(3.5);
         assertThat(argument.getValue().comment()).isEqualTo("updated comment");
+    }
+
+    @Test
+    void reviews_noReviews_returnsEmptyList() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(listCourseReviewsByCourseUUIDQueryHandler.handle(any(ListCourseReviewsByCourseUUIDQuery.class)))
+                .thenReturn(Collections.emptyList());
+
+        // when
+        final List<CourseReviewDTO> result = sut.reviews(courseUuid);
+
+        // then
+        assertThat(result).isEmpty();
     }
 }
