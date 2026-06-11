@@ -37,4 +37,23 @@ public class NumberOfStudentsTest {
         // when / then
         assertThat(nos1).isNotEqualTo(nos2);
     }
+
+    @Test
+    void create_zero_numberOfStudentsCreated() {
+        // when
+        final NumberOfStudents numberOfStudents = new NumberOfStudents(0);
+
+        // then
+        assertThat(numberOfStudents.number()).isZero();
+    }
+
+    @Test
+    void hashCode_sameNumber_sameHashCode() {
+        // given
+        final NumberOfStudents nos1 = new NumberOfStudents(7);
+        final NumberOfStudents nos2 = new NumberOfStudents(7);
+
+        // when / then
+        assertThat(nos1.hashCode()).isEqualTo(nos2.hashCode());
+    }
 }

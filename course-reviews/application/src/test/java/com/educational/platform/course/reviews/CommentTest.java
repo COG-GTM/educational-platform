@@ -46,4 +46,33 @@ public class CommentTest {
         // when/then
         assertThat(comment1).isNotEqualTo(comment2);
     }
+
+    @Test
+    void constructor_emptyString_commentCreated() {
+        // when
+        final Comment result = new Comment("");
+
+        // then
+        assertThat(result.comment()).isEmpty();
+    }
+
+    @Test
+    void equals_bothNull_true() {
+        // given
+        final Comment comment1 = new Comment(null);
+        final Comment comment2 = new Comment(null);
+
+        // when/then
+        assertThat(comment1).isEqualTo(comment2);
+    }
+
+    @Test
+    void hashCode_sameComment_sameHashCode() {
+        // given
+        final Comment comment1 = new Comment("text");
+        final Comment comment2 = new Comment("text");
+
+        // when/then
+        assertThat(comment1.hashCode()).isEqualTo(comment2.hashCode());
+    }
 }

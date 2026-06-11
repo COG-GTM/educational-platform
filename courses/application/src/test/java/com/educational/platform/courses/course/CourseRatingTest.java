@@ -37,4 +37,23 @@ public class CourseRatingTest {
         // when / then
         assertThat(rating1).isNotEqualTo(rating2);
     }
+
+    @Test
+    void create_zeroRating_courseRatingCreated() {
+        // when
+        final CourseRating courseRating = new CourseRating(0);
+
+        // then
+        assertThat(courseRating.rating()).isZero();
+    }
+
+    @Test
+    void hashCode_sameRating_sameHashCode() {
+        // given
+        final CourseRating rating1 = new CourseRating(3.2);
+        final CourseRating rating2 = new CourseRating(3.2);
+
+        // when / then
+        assertThat(rating1.hashCode()).isEqualTo(rating2.hashCode());
+    }
 }
