@@ -869,4 +869,97 @@ public class SignInCommandHandlerTest {
                 .isThrownBy(handle)
                 .withMessageContaining("Invalid username/password");
     }
+
+    @Test
+    void handle_internalAuthenticationServiceException_wrappedInUnprocessableEntityException() {
+        // given — InternalAuthenticationServiceException (server error during auth) is still wrapped
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("password")
+                .build();
+        doThrow(new org.springframework.security.authentication.InternalAuthenticationServiceException("Internal error"))
+                .when(authenticationManager).authenticate(any());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(handle)
+                .withMessageContaining("Invalid username/password");
+    }
+
+    @Test
+    void handle_validCommand_returnedTokenIsFromProvider() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("password")
+                .build();
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User existingUser = new User(userRegistrationCommand, passwordEncoder);
+        when(repository.findByUsername("username")).thenReturn(Optional.of(existingUser));
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("specific-generated-token");
+
+        // when
+        final String result = sut.handle(signInCommand);
+
+        // then — the token returned must be exactly what the provider produced
+        assertThat(result).isEqualTo("specific-generated-token");
+    }
+
+    @Test
+    void handle_whitespaceOnlyUsername_constraintViolationException() {
+        // given — whitespace-only username should be caught by @NotBlank
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("   ")
+                .password("password")
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_whitespaceOnlyPassword_constraintViolationException() {
+        // given — whitespace-only password should be caught by @NotBlank
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("   ")
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_whitespaceOnlyUsername_noAuthenticationAttempted() {
+        // given — validation failure should prevent authentication
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("   ")
+                .password("password")
+                .build();
+
+        // when
+        try {
+            sut.handle(signInCommand);
+        } catch (ConstraintViolationException ignored) {
+        }
+
+        // then
+        verify(authenticationManager, never()).authenticate(any());
+        verify(repository, never()).findByUsername(any());
+        verify(jwtTokenProvider, never()).createToken(any(), any());
+    }
 }

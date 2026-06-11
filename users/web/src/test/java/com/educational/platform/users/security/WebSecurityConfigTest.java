@@ -309,4 +309,101 @@ public class WebSecurityConfigTest {
                 .then()
                 .statusCode(HttpStatus.OK.value());
     }
+
+    @Test
+    void signUpEndpoint_noSessionCookieReturned_statelessSessions() {
+        // session management is STATELESS — no JSESSIONID should be set
+        final io.restassured.response.Response response = given()
+                .contentType("application/json")
+                .body("{\"role\": \"ROLE_STUDENT\", \"username\": \"nosession\", \"email\": \"nosession@gmail.com\", \"password\": \"password\"}")
+                .post("/users/sign-up");
+
+        assertThat(response.getDetailedCookie("JSESSIONID")).isNull();
+    }
+
+    @Test
+    void signUpEndpoint_csrfTokenNotRequired() {
+        // CSRF is disabled — POST without CSRF token should succeed
+        given()
+                .contentType("application/json")
+                .body("{\"role\": \"ROLE_STUDENT\", \"username\": \"csrftest\", \"email\": \"csrf@gmail.com\", \"password\": \"password\"}")
+
+                .when()
+                .post("/users/sign-up")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void protectedEndpoint_expiredJwt_notSuccessful() {
+        // sign up to ensure user exists, then use a manually crafted expired-like invalid token
+        given()
+                .contentType("application/json")
+                .body("{\"role\": \"ROLE_STUDENT\", \"username\": \"expuser\", \"email\": \"exp@gmail.com\", \"password\": \"password\"}")
+                .post("/users/sign-up");
+
+        // malformed token simulating expiration/corruption
+        final int status = given()
+                .header("Authorization", "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJleHB1c2VyIiwiZXhwIjoxfQ.invalid")
+                .when()
+                .get("/protected-resource")
+                .statusCode();
+
+        assertThat(status).isGreaterThanOrEqualTo(HttpStatus.BAD_REQUEST.value());
+    }
+
+    @Test
+    void protectedEndpoint_malformedAuthorizationHeader_notSuccessful() {
+        // "Basic" scheme rather than "Bearer" should not authenticate
+        final int status = given()
+                .header("Authorization", "Basic dXNlcjpwYXNz")
+                .when()
+                .get("/protected-resource")
+                .statusCode();
+
+        assertThat(status).isEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void signUpEndpoint_duplicateUsername_unprocessableEntity() {
+        // first registration
+        given()
+                .contentType("application/json")
+                .body("{\"role\": \"ROLE_STUDENT\", \"username\": \"dupuser\", \"email\": \"dup1@gmail.com\", \"password\": \"password\"}")
+                .post("/users/sign-up")
+                .then()
+                .statusCode(HttpStatus.OK.value());
+
+        // duplicate registration should fail
+        given()
+                .contentType("application/json")
+                .body("{\"role\": \"ROLE_STUDENT\", \"username\": \"dupuser\", \"email\": \"dup2@gmail.com\", \"password\": \"password\"}")
+
+                .when()
+                .post("/users/sign-up")
+
+                .then()
+                .statusCode(HttpStatus.UNPROCESSABLE_ENTITY.value());
+    }
+
+    @Test
+    void signInEndpoint_wrongPassword_unprocessableEntity() {
+        // first sign up
+        given()
+                .contentType("application/json")
+                .body("{\"role\": \"ROLE_STUDENT\", \"username\": \"wrongpw\", \"email\": \"wrongpw@gmail.com\", \"password\": \"password\"}")
+                .post("/users/sign-up");
+
+        // sign in with wrong password
+        given()
+                .contentType("application/json")
+                .body("{\"username\": \"wrongpw\", \"password\": \"wrongpassword\"}")
+
+                .when()
+                .post("/users/sign-in")
+
+                .then()
+                .statusCode(HttpStatus.UNPROCESSABLE_ENTITY.value());
+    }
 }

@@ -1148,4 +1148,166 @@ public class UserRegistrationCommandHandlerTest {
                             .anyMatch(v -> v.getPropertyPath().toString().equals("password"));
                 });
     }
+
+    @Test
+    void handle_usernameExactMinLength4_validationPasses() {
+        // given — username at exact min boundary (4 chars) should pass validation
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("abcd")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("abcd")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        final String token = sut.handle(userRegistrationCommand);
+
+        // then
+        assertThat(token).isNotBlank();
+        verify(repository).save(any(User.class));
+    }
+
+    @Test
+    void handle_usernameExactMaxLength255_validationPasses() {
+        // given — username at exact max boundary (255 chars) should pass validation
+        final String longUsername = "a".repeat(255);
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username(longUsername)
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername(longUsername)).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        final String token = sut.handle(userRegistrationCommand);
+
+        // then
+        assertThat(token).isNotBlank();
+        verify(repository).save(any(User.class));
+    }
+
+    @Test
+    void handle_usernameOneAboveMaxLength256_constraintViolationException() {
+        // given — username exceeds @Size max (256 chars)
+        final String tooLongUsername = "a".repeat(256);
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username(tooLongUsername)
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_usernameOneAboveMaxLength_noPersistence() {
+        // given — validation failure should prevent persistence
+        final String tooLongUsername = "a".repeat(256);
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username(tooLongUsername)
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (ConstraintViolationException ignored) {
+        }
+
+        // then
+        verify(repository, never()).existsByUsername(any());
+        verify(repository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
+        verify(jwtTokenProvider, never()).createToken(any(), any());
+    }
+
+    @Test
+    void handle_passwordExactMaxLength30_validationPasses() {
+        // given — password at exact max boundary (30 chars) should pass validation
+        final String maxPassword = "a".repeat(30);
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password(maxPassword)
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        final String token = sut.handle(userRegistrationCommand);
+
+        // then
+        assertThat(token).isNotBlank();
+        verify(repository).save(any(User.class));
+    }
+
+    @Test
+    void handle_passwordOneAboveMaxLength31_constraintViolationException() {
+        // given — password exceeds max (31 chars)
+        final String tooLongPassword = "a".repeat(31);
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password(tooLongPassword)
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_validCommand_eventContainsExactUsernameAndEmail() {
+        // given — verify the integration event carries exact field values from the saved user
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("precise@example.com")
+                .username("precise-user")
+                .password("password")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+        when(repository.existsByUsername("precise-user")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        final ArgumentCaptor<UserCreatedIntegrationEvent> eventCaptor =
+                ArgumentCaptor.forClass(UserCreatedIntegrationEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().username()).isEqualTo("precise-user");
+        assertThat(eventCaptor.getValue().email()).isEqualTo("precise@example.com");
+    }
+
+    @Test
+    void handle_usernameAlreadyExists_exceptionMessageContainsExactUsername() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("dup@gmail.com")
+                .username("duplicate-name")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("duplicate-name")).thenReturn(true);
+
+        // when / then
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(() -> sut.handle(userRegistrationCommand))
+                .withMessageContaining("duplicate-name");
+    }
 }

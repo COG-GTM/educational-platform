@@ -241,4 +241,59 @@ public class MyUserDetailsTest {
         // then
         verify(userRepository, times(1)).findByUsername("single-query");
     }
+
+    @Test
+    void loadUserByUsername_emptyString_usernameNotFoundException() {
+        // given
+        when(userRepository.findByUsername("")).thenReturn(Optional.empty());
+
+        // when / then
+        assertThatExceptionOfType(UsernameNotFoundException.class)
+                .isThrownBy(() -> sut.loadUserByUsername(""))
+                .withMessageContaining("");
+    }
+
+    @Test
+    void loadUserByUsername_existingUser_userDetailsAuthoritiesAreNotEmpty() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("authcheck")
+                .email("authcheck@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("authcheck")).thenReturn(Optional.of(user));
+
+        // when
+        final UserDetails userDetails = sut.loadUserByUsername("authcheck");
+
+        // then
+        assertThat(userDetails.getAuthorities()).isNotEmpty();
+        assertThat(userDetails.getAuthorities()).hasSize(1);
+    }
+
+    @Test
+    void loadUserByUsername_existingUser_userDetailsIsEnabled() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("enabled-check")
+                .email("enabled@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("enabled-check")).thenReturn(Optional.of(user));
+
+        // when
+        final UserDetails userDetails = sut.loadUserByUsername("enabled-check");
+
+        // then — all UserDetails returned by our service should be fully active
+        assertThat(userDetails.isEnabled()).isTrue();
+        assertThat(userDetails.isAccountNonExpired()).isTrue();
+        assertThat(userDetails.isAccountNonLocked()).isTrue();
+        assertThat(userDetails.isCredentialsNonExpired()).isTrue();
+    }
 }

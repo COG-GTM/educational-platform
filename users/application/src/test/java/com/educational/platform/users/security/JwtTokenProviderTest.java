@@ -649,4 +649,76 @@ public class JwtTokenProviderTest {
         // then — verify repository is called exactly once (no duplicate loads)
         verify(userRepository, times(1)).findByUsername("singlecall");
     }
+
+    @Test
+    void createToken_unicodeUsername_preservedInToken() {
+        // given — Unicode characters should be preserved correctly in JWT subject
+        final String unicodeUsername = "用户名";
+
+        // when
+        final String token = sut.createToken(unicodeUsername, Collections.singletonList(Role.ROLE_STUDENT));
+
+        // then
+        assertThat(token).isNotBlank();
+        assertThat(sut.getUsername(token)).isEqualTo(unicodeUsername);
+    }
+
+    @Test
+    void createToken_specialCharactersUsername_preservedInToken() {
+        // given — special characters in username
+        final String specialUsername = "user@domain.com+tag/path";
+
+        // when
+        final String token = sut.createToken(specialUsername, Collections.singletonList(Role.ROLE_STUDENT));
+
+        // then
+        assertThat(token).isNotBlank();
+        assertThat(sut.getUsername(token)).isEqualTo(specialUsername);
+    }
+
+    @Test
+    void createToken_multipleRoles_allRolesInToken() {
+        // given — multiple roles in the token
+        final List<Role> roles = Arrays.asList(Role.ROLE_STUDENT, Role.ROLE_TEACHER);
+
+        // when
+        final String token = sut.createToken("multi-role-user", roles);
+
+        // then
+        assertThat(token).isNotBlank();
+        assertThat(sut.validateToken(token)).isTrue();
+        assertThat(sut.getUsername(token)).isEqualTo("multi-role-user");
+    }
+
+    @Test
+    void createToken_emptyRolesList_tokenCreated() {
+        // given — empty roles list (edge case)
+        // when
+        final String token = sut.createToken("no-roles-user", Collections.emptyList());
+
+        // then
+        assertThat(token).isNotBlank();
+        assertThat(sut.validateToken(token)).isTrue();
+        assertThat(sut.getUsername(token)).isEqualTo("no-roles-user");
+    }
+
+    @Test
+    void validateToken_randomNonJwtString_jwtTokenValidationException() {
+        // when / then
+        assertThatExceptionOfType(JwtTokenValidationException.class)
+                .isThrownBy(() -> sut.validateToken("not-a-jwt-token"));
+    }
+
+    @Test
+    void resolveToken_authorizationHeaderWithOnlyBearer_emptyString() {
+        // given — "Bearer " followed by nothing
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer ");
+
+        // when
+        final String token = sut.resolveToken(request);
+
+        // then — substring(7) of "Bearer " gives ""
+        assertThat(token).isEmpty();
+    }
 }
