@@ -40,4 +40,34 @@ public class CreateStudentCommandHandlerTest {
         final Student savedStudent = captor.getValue();
         assertThat(savedStudent.toReference()).isEqualTo("username");
     }
+
+    @Test
+    void handle_nullUsername_studentSavedWithNullReference() {
+        // given
+        final CreateStudentCommand command = new CreateStudentCommand(null);
+
+        // when
+        sut.handle(command);
+
+        // then
+        ArgumentCaptor<Student> captor = ArgumentCaptor.forClass(Student.class);
+        verify(studentRepository).save(captor.capture());
+        final Student savedStudent = captor.getValue();
+        assertThat(savedStudent.toReference()).isNull();
+    }
+
+    @Test
+    void handle_emptyUsername_studentSavedWithEmptyReference() {
+        // given
+        final CreateStudentCommand command = new CreateStudentCommand("");
+
+        // when
+        sut.handle(command);
+
+        // then
+        ArgumentCaptor<Student> captor = ArgumentCaptor.forClass(Student.class);
+        verify(studentRepository).save(captor.capture());
+        final Student savedStudent = captor.getValue();
+        assertThat(savedStudent.toReference()).isEmpty();
+    }
 }

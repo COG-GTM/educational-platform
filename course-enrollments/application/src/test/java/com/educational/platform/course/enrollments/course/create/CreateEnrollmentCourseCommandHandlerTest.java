@@ -43,4 +43,35 @@ public class CreateEnrollmentCourseCommandHandlerTest {
         final EnrollCourse savedCourse = captor.getValue();
         assertThat(savedCourse.toReference()).isEqualTo(courseUuid);
     }
+
+    @Test
+    void handle_nullUuidInCommand_courseSavedWithNullReference() {
+        // given
+        final CreateCourseCommand command = new CreateCourseCommand(null);
+
+        // when
+        sut.handle(command);
+
+        // then
+        ArgumentCaptor<EnrollCourse> captor = ArgumentCaptor.forClass(EnrollCourse.class);
+        verify(courseRepository).save(captor.capture());
+        final EnrollCourse savedCourse = captor.getValue();
+        assertThat(savedCourse.toReference()).isNull();
+    }
+
+    @Test
+    void handle_differentUuids_savedWithCorrectReference() {
+        // given
+        final UUID courseUuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        final CreateCourseCommand command = new CreateCourseCommand(courseUuid);
+
+        // when
+        sut.handle(command);
+
+        // then
+        ArgumentCaptor<EnrollCourse> captor = ArgumentCaptor.forClass(EnrollCourse.class);
+        verify(courseRepository).save(captor.capture());
+        final EnrollCourse savedCourse = captor.getValue();
+        assertThat(savedCourse.toReference()).isEqualTo(courseUuid);
+    }
 }

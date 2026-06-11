@@ -20,6 +20,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -91,5 +93,36 @@ public class CourseEnrollmentByUUIDQueryHandlerTest {
 
         // then
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    void handle_delegatesWithAuthenticatedUsername() {
+        // given
+        SecurityContextHolder.clearContext();
+        UserDetails userDetails = new User("other-student", "password", Collections.emptyList());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(userDetails, "password", Collections.emptyList()));
+
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(enrollmentUuid);
+        when(repository.query(enrollmentUuid, "other-student")).thenReturn(Optional.empty());
+
+        // when
+        sut.handle(query);
+
+        // then
+        verify(repository).query(enrollmentUuid, "other-student");
+    }
+
+    @Test
+    void handle_noAuthentication_throwsNullPointerException() {
+        // given
+        SecurityContextHolder.clearContext();
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(enrollmentUuid);
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(NullPointerException.class);
     }
 }

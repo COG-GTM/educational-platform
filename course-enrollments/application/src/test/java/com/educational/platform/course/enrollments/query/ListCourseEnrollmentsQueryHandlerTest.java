@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -95,5 +97,34 @@ public class ListCourseEnrollmentsQueryHandlerTest {
 
         // then
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    void handle_delegatesWithAuthenticatedUsername() {
+        // given
+        SecurityContextHolder.clearContext();
+        UserDetails userDetails = new User("another-student", "password", Collections.emptyList());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(userDetails, "password", Collections.emptyList()));
+
+        final ListCourseEnrollmentsQuery query = new ListCourseEnrollmentsQuery();
+        when(repository.query("another-student")).thenReturn(Collections.emptyList());
+
+        // when
+        sut.handle(query);
+
+        // then
+        verify(repository).query("another-student");
+    }
+
+    @Test
+    void handle_noAuthentication_throwsNullPointerException() {
+        // given
+        SecurityContextHolder.clearContext();
+        final ListCourseEnrollmentsQuery query = new ListCourseEnrollmentsQuery();
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(NullPointerException.class);
     }
 }
