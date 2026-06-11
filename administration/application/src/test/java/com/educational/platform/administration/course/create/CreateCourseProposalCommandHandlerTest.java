@@ -110,4 +110,22 @@ public class CreateCourseProposalCommandHandlerTest {
         // then
         assertThat(method.isAnnotationPresent(PreAuthorize.class)).isFalse();
     }
+
+    @Test
+    void class_hasNamedAnnotation() {
+        assertThat(CreateCourseProposalCommandHandler.class.isAnnotationPresent(jakarta.inject.Named.class)).isTrue();
+    }
+
+    @Test
+    void handle_repositorySaveCalledExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(repository, org.mockito.Mockito.times(1)).save(any(CourseProposal.class));
+    }
 }

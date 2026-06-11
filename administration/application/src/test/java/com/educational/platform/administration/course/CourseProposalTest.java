@@ -319,4 +319,57 @@ public class CourseProposalTest {
         assertThat(CourseProposal.class.isAnnotationPresent(jakarta.persistence.Entity.class)).isTrue();
     }
 
+    @Test
+    void toDTO_calledTwice_returnsEqualResults() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+
+        // when
+        final CourseProposalDTO dto1 = proposal.toDTO();
+        final CourseProposalDTO dto2 = proposal.toDTO();
+
+        // then
+        assertThat(dto1).isEqualTo(dto2);
+    }
+
+    @Test
+    void approve_waitingForApproval_statusIsApprovedNotDeclined() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+
+        // when
+        proposal.approve();
+
+        // then
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED);
+        assertThat(proposal)
+                .extracting("status")
+                .isNotEqualTo(CourseProposalStatus.DECLINED)
+                .isNotEqualTo(CourseProposalStatus.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void decline_waitingForApproval_statusIsDeclinedNotApproved() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+
+        // when
+        proposal.decline();
+
+        // then
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED);
+        assertThat(proposal)
+                .extracting("status")
+                .isNotEqualTo(CourseProposalStatus.APPROVED)
+                .isNotEqualTo(CourseProposalStatus.WAITING_FOR_APPROVAL);
+    }
+
 }

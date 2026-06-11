@@ -291,4 +291,9 @@ class ApproveCourseProposalCommandHandlerTest {
         // then
         assertThat(annotation.value()).contains("hasRole('ADMIN')");
     }
+
+    @Test
+    void class_hasNamedAnnotation() {
+        assertThat(ApproveCourseProposalCommandHandler.class.isAnnotationPresent(jakarta.inject.Named.class)).isTrue();
+    }
 }

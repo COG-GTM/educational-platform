@@ -5,6 +5,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CourseProposalStatusTest {
 
@@ -36,5 +37,17 @@ class CourseProposalStatusTest {
     void values_count_matchesStatusDTOCount() {
         assertThat(CourseProposalStatus.values())
                 .hasSameSizeAs(CourseProposalStatusDTO.values());
+    }
+
+    @ParameterizedTest
+    @EnumSource(CourseProposalStatus.class)
+    void name_matchesCorrespondingStatusDTOName(CourseProposalStatus status) {
+        assertThat(status.toDTO().name()).isEqualTo(status.name());
+    }
+
+    @Test
+    void valueOf_invalidName_throwsIllegalArgumentException() {
+        assertThatThrownBy(() -> CourseProposalStatus.valueOf("INVALID"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

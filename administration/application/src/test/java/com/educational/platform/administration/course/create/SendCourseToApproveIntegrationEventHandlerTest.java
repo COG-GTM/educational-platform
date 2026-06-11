@@ -18,8 +18,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class SendCourseToApproveIntegrationEventHandlerTest {
@@ -114,6 +113,20 @@ class SendCourseToApproveIntegrationEventHandlerTest {
     void class_hasComponentAnnotation() {
         // then
         assertThat(SendCourseToApproveIntegrationEventHandler.class.isAnnotationPresent(Component.class)).isTrue();
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_handlerCalledExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+
+        // when
+        sut.handleSendCourseToApproveEvent(event);
+
+        // then
+        verify(createCourseProposalCommandHandler, times(1)).handle(any(CreateCourseProposalCommand.class));
+        verifyNoMoreInteractions(createCourseProposalCommandHandler);
     }
 
 }

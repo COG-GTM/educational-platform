@@ -382,4 +382,49 @@ class CourseProposalControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
     }
+
+    @Test
+    void class_hasRestControllerAnnotation() {
+        assertThat(CourseProposalController.class.isAnnotationPresent(
+                org.springframework.web.bind.annotation.RestController.class)).isTrue();
+    }
+
+    @Test
+    void class_hasRequestMappingWithCorrectPath() {
+        final org.springframework.web.bind.annotation.RequestMapping mapping =
+                CourseProposalController.class.getAnnotation(
+                        org.springframework.web.bind.annotation.RequestMapping.class);
+        assertThat(mapping).isNotNull();
+        assertThat(mapping.value()).contains("/administration/course-proposals");
+    }
+
+    @Test
+    void approve_alreadyApproved_conflictResponseHasErrorsArray() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyApprovedException(uuid))
+                .when(approveCourseProposalCommandHandler).handle(any(ApproveCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors").isArray())
+                .andExpect(jsonPath("$.errors.length()").value(1));
+    }
+
+    @Test
+    void decline_alreadyDeclined_conflictResponseHasErrorsArray() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyDeclinedException(uuid))
+                .when(declineCourseProposalCommandHandler).handle(any(DeclineCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors").isArray())
+                .andExpect(jsonPath("$.errors.length()").value(1));
+    }
 }

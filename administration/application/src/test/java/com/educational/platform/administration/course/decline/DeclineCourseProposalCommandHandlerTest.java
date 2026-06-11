@@ -291,4 +291,9 @@ public class DeclineCourseProposalCommandHandlerTest {
         // then
         assertThat(annotation.value()).contains("hasRole('ADMIN')");
     }
+
+    @Test
+    void class_hasNamedAnnotation() {
+        assertThat(DeclineCourseProposalCommandHandler.class.isAnnotationPresent(jakarta.inject.Named.class)).isTrue();
+    }
 }

@@ -17,6 +17,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -125,5 +126,24 @@ class ListCourseProposalsQueryHandlerTest {
 
         // then
         assertThat(method.isAnnotationPresent(Nonnull.class)).isTrue();
+    }
+
+    @Test
+    void class_hasNamedAnnotation() {
+        assertThat(ListCourseProposalsQueryHandler.class.isAnnotationPresent(jakarta.inject.Named.class)).isTrue();
+    }
+
+    @Test
+    void handle_delegatesToRepositoryListCourseProposals() {
+        // given
+        when(repository.listCourseProposals()).thenReturn(Collections.emptyList());
+        final ListCourseProposalsQuery query = new ListCourseProposalsQuery();
+
+        // when
+        sut.handle(query);
+
+        // then
+        verify(repository).listCourseProposals();
+        verifyNoMoreInteractions(repository);
     }
 }

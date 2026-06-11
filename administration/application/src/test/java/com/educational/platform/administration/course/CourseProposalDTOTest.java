@@ -7,6 +7,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CourseProposalDTOTest {
 
@@ -89,6 +90,26 @@ class CourseProposalDTOTest {
 
         // then
         assertThat(dto1).isNotEqualTo(dto2);
+    }
+
+    @Test
+    void convenienceConstructor_nullStatus_throwsNullPointerException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when / then
+        assertThatThrownBy(() -> new CourseProposalDTO(uuid, (CourseProposalStatus) null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void primaryConstructor_nullValues_preservesNulls() {
+        // when
+        final CourseProposalDTO dto = new CourseProposalDTO(null, (CourseProposalStatusDTO) null);
+
+        // then
+        assertThat(dto.uuid()).isNull();
+        assertThat(dto.status()).isNull();
     }
 
     @Test
