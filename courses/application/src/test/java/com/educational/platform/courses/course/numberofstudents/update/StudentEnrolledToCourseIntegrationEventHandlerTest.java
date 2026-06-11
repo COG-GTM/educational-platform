@@ -15,6 +15,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,6 +46,48 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         final IncreaseNumberOfStudentsCommand updateNumberOfStudentsCommand = argument.getValue();
         assertThat(updateNumberOfStudentsCommand)
                 .hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_differentUuid_correctUuidPassed() {
+        // given
+        final UUID uuid = UUID.fromString("abcdef01-2345-6789-abcd-ef0123456789");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "another-user");
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> argument = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_handlerThrowsException_exceptionPropagated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        doThrow(new RuntimeException("handler error")).when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("handler error");
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_handlerCalledExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        verify(increaseNumberOfStudentsCommandHandler, times(1)).handle(any(IncreaseNumberOfStudentsCommand.class));
     }
 
 }
