@@ -285,4 +285,58 @@ public class UserCreatedIntegrationEventHandlerTest {
         assertThat(argument.getValue().username()).isNull();
     }
 
+    @Test
+    void handleUserCreatedEvent_singleCharUsername_preservedInCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("x", "x@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("x");
+    }
+
+    @Test
+    void handleUserCreatedEvent_singleEvent_noMoreInteractions() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher", "teacher@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        verify(createTeacherCommandHandler).handle(any(CreateTeacherCommand.class));
+        verifyNoMoreInteractions(createTeacherCommandHandler);
+    }
+
+    @Test
+    void handleUserCreatedEvent_usernameWithUrlChars_preservedInCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(
+                "user?param=value&other=123#fragment", "url@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("user?param=value&other=123#fragment");
+    }
+
+    @Test
+    void handleUserCreatedEvent_commandHandlerThrowsIllegalStateException_exceptionPropagated() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher", "teacher@example.com");
+        doThrow(new IllegalStateException("duplicate teacher")).when(createTeacherCommandHandler).handle(any(CreateTeacherCommand.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("duplicate teacher");
+    }
+
 }

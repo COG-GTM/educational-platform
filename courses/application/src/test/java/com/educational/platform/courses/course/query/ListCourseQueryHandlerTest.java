@@ -321,4 +321,66 @@ public class ListCourseQueryHandlerTest {
         assertThat(result.getFirst().numberOfStudents()).isEqualTo(Integer.MAX_VALUE);
     }
 
+    @Test
+    void handle_coursesWithEmptyStringFields_preservedInResults() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO emptyFields = new CourseLightDTO(UUID.randomUUID(), "", "", 0);
+        when(repository.list()).thenReturn(List.of(emptyFields));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().name()).isEmpty();
+        assertThat(result.getFirst().description()).isEmpty();
+    }
+
+    @Test
+    void handle_mixedNullAndPopulatedCourses_allReturned() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO normal = new CourseLightDTO(UUID.randomUUID(), "Java", "Intro", 10);
+        final CourseLightDTO nullFields = new CourseLightDTO(null, null, null, 0);
+        final CourseLightDTO emptyFields = new CourseLightDTO(UUID.randomUUID(), "", "", 0);
+        when(repository.list()).thenReturn(List.of(normal, nullFields, emptyFields));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(3);
+        assertThat(result.get(0).name()).isEqualTo("Java");
+        assertThat(result.get(1).name()).isNull();
+        assertThat(result.get(2).name()).isEmpty();
+    }
+
+    @Test
+    void handle_repositoryReturnsMinIntStudents_includedInResults() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO minCourse = new CourseLightDTO(UUID.randomUUID(), "min", "desc", Integer.MIN_VALUE);
+        when(repository.list()).thenReturn(List.of(minCourse));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().numberOfStudents()).isEqualTo(Integer.MIN_VALUE);
+    }
+
+    @Test
+    void handle_repositoryThrowsIllegalStateException_exceptionPropagated() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        when(repository.list()).thenThrow(new IllegalStateException("connection closed"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("connection closed");
+    }
+
 }
