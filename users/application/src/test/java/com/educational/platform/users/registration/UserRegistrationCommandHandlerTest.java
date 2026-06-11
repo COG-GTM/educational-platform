@@ -584,4 +584,150 @@ public class UserRegistrationCommandHandlerTest {
         inOrder.verify(repository).existsByUsername("orderuser");
         inOrder.verify(repository).save(any(User.class));
     }
+
+    @Test
+    void handle_validCommand_saveCalledBeforeEventPublished() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("order@gmail.com")
+                .username("orderuser2")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("orderuser2")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        final var inOrder = inOrder(repository, eventPublisher);
+        inOrder.verify(repository).save(any(User.class));
+        inOrder.verify(eventPublisher).publishEvent(any(UserCreatedIntegrationEvent.class));
+    }
+
+    @Test
+    void handle_invalidEmail_constraintViolationException() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("not-an-email")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_usernameTooShort_constraintViolationException() {
+        // given — username "ab" violates @Size(min = 4)
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("ab")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_invalidEmail_repositoryNeverChecked() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("not-an-email")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(repository, never()).existsByUsername(any());
+    }
+
+    @Test
+    void handle_usernameTooShort_repositoryNeverChecked() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("ab")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(repository, never()).existsByUsername(any());
+    }
+
+    @Test
+    void handle_blankUsername_constraintViolationException() {
+        // given — whitespace-only triggers @NotBlank
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("   ")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_blankEmail_constraintViolationException() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("   ")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_blankPassword_constraintViolationException() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("   ")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
 }

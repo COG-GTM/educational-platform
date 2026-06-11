@@ -187,4 +187,49 @@ public class UserControllerTest {
         verify(signInCommandHandler, times(1)).handle(any());
         verify(userRegistrationCommandHandler, never()).handle(any());
     }
+
+    @Test
+    void signUp_emailFieldMappedFromRequest() {
+        // given
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "user", "specific-email@example.com", "password123");
+        when(userRegistrationCommandHandler.handle(any())).thenReturn("token");
+
+        // when
+        sut.signUp(request);
+
+        // then
+        final ArgumentCaptor<UserRegistrationCommand> captor = ArgumentCaptor.forClass(UserRegistrationCommand.class);
+        verify(userRegistrationCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().email()).isEqualTo("specific-email@example.com");
+    }
+
+    @Test
+    void signUp_passwordFieldMappedFromRequest() {
+        // given
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "user", "user@example.com", "specific-password");
+        when(userRegistrationCommandHandler.handle(any())).thenReturn("token");
+
+        // when
+        sut.signUp(request);
+
+        // then
+        final ArgumentCaptor<UserRegistrationCommand> captor = ArgumentCaptor.forClass(UserRegistrationCommand.class);
+        verify(userRegistrationCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().password()).isEqualTo("specific-password");
+    }
+
+    @Test
+    void signIn_passwordFieldMappedFromRequest() {
+        // given
+        final SignInRequest request = new SignInRequest("user", "specific-password");
+        when(signInCommandHandler.handle(any())).thenReturn("token");
+
+        // when
+        sut.signIn(request);
+
+        // then
+        final ArgumentCaptor<SignInCommand> captor = ArgumentCaptor.forClass(SignInCommand.class);
+        verify(signInCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().password()).isEqualTo("specific-password");
+    }
 }

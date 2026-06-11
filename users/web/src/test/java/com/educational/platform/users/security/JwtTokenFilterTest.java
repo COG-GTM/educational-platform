@@ -357,4 +357,66 @@ public class JwtTokenFilterTest {
                 () -> sut.doFilterInternal(request, response, filterChain)
         ).isInstanceOf(RuntimeException.class).hasMessageContaining("user details error");
     }
+
+    @Test
+    void doFilterInternal_validToken_validateCalledBeforeGetAuthentication() throws ServletException, IOException {
+        // given
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        final Authentication authentication = mock(Authentication.class);
+        when(jwtTokenProvider.resolveToken(request)).thenReturn("valid-token");
+        when(jwtTokenProvider.validateToken("valid-token")).thenReturn(true);
+        when(jwtTokenProvider.getAuthentication("valid-token")).thenReturn(authentication);
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then
+        final var inOrder = inOrder(jwtTokenProvider);
+        inOrder.verify(jwtTokenProvider).resolveToken(request);
+        inOrder.verify(jwtTokenProvider).validateToken("valid-token");
+        inOrder.verify(jwtTokenProvider).getAuthentication("valid-token");
+    }
+
+    @Test
+    void doFilterInternal_invalidToken_securityContextClearedBeforeErrorSent() throws ServletException, IOException {
+        // given
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        final Authentication existingAuth = mock(Authentication.class);
+        SecurityContextHolder.getContext().setAuthentication(existingAuth);
+
+        when(jwtTokenProvider.resolveToken(request)).thenReturn("bad-token");
+        when(jwtTokenProvider.validateToken("bad-token")).thenThrow(new JwtTokenValidationException("Invalid"));
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+    }
+
+    @Test
+    void doFilterInternal_noToken_existingAuthPreserved() throws ServletException, IOException {
+        // given — when no token is present, any existing auth in context should remain
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        final Authentication existingAuth = mock(Authentication.class);
+        SecurityContextHolder.getContext().setAuthentication(existingAuth);
+
+        when(jwtTokenProvider.resolveToken(request)).thenReturn(null);
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then — the filter does not clear context when there's no token
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isEqualTo(existingAuth);
+    }
 }

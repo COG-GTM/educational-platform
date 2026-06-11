@@ -168,4 +168,84 @@ public class SignInCommandTest {
         assertThat(str).contains("testuser");
         assertThat(str).contains("testpass");
     }
+
+    @Test
+    void validate_whitespaceOnlyUsername_violation() {
+        // given
+        final SignInCommand command = SignInCommand.builder()
+                .username("   ")
+                .password("testpass")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<SignInCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("username"));
+    }
+
+    @Test
+    void validate_whitespaceOnlyPassword_violation() {
+        // given
+        final SignInCommand command = SignInCommand.builder()
+                .username("testuser")
+                .password("   ")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<SignInCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("password"));
+    }
+
+    @Test
+    void validate_emptyUsername_violation() {
+        // given
+        final SignInCommand command = SignInCommand.builder()
+                .username("")
+                .password("testpass")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<SignInCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("username"));
+    }
+
+    @Test
+    void validate_emptyPassword_violation() {
+        // given
+        final SignInCommand command = SignInCommand.builder()
+                .username("testuser")
+                .password("")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<SignInCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("password"));
+    }
+
+    @Test
+    void hashCode_sameValues_equal() {
+        // given
+        final SignInCommand command1 = SignInCommand.builder()
+                .username("user")
+                .password("pass")
+                .build();
+        final SignInCommand command2 = SignInCommand.builder()
+                .username("user")
+                .password("pass")
+                .build();
+
+        // then
+        assertThat(command1.hashCode()).isEqualTo(command2.hashCode());
+    }
 }

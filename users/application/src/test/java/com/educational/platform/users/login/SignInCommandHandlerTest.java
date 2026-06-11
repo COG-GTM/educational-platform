@@ -416,4 +416,115 @@ public class SignInCommandHandlerTest {
                 .isThrownBy(handle)
                 .withMessageContaining("Invalid username/password");
     }
+
+    @Test
+    void handle_bothFieldsNull_constraintViolationException() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username(null)
+                .password(null)
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_blankUsername_constraintViolationException() {
+        // given — whitespace-only username triggers @NotBlank
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("   ")
+                .password("password")
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_blankPassword_constraintViolationException() {
+        // given — whitespace-only password triggers @NotBlank
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("   ")
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_bothFieldsNull_authenticationManagerNeverCalled() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username(null)
+                .password(null)
+                .build();
+
+        // when
+        try {
+            sut.handle(signInCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(authenticationManager, never()).authenticate(any());
+    }
+
+    @Test
+    void handle_blankUsername_repositoryNeverQueried() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("   ")
+                .password("password")
+                .build();
+
+        // when
+        try {
+            sut.handle(signInCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(repository, never()).findByUsername(any());
+    }
+
+    @Test
+    void handle_emptyUsername_constraintViolationException() {
+        // given — empty string triggers @NotBlank
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("")
+                .password("password")
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_emptyPassword_constraintViolationException() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("")
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
 }

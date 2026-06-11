@@ -185,4 +185,61 @@ public class WebSecurityConfigTest {
 
         assertThat(status).isNotEqualTo(HttpStatus.FORBIDDEN.value());
     }
+
+    @Test
+    void configurationEndpoint_noAuth_notForbidden() {
+        final int status = given()
+                .when()
+                .get("/configuration/ui")
+                .statusCode();
+
+        assertThat(status).isNotEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void protectedEndpoint_withValidJwt_accessible() {
+        // first sign up a user
+        final String token = given()
+                .contentType("application/json")
+                .body("{\"role\": \"ROLE_STUDENT\", \"username\": \"jwtuser\", \"email\": \"jwt@gmail.com\", \"password\": \"password\"}")
+                .post("/users/sign-up")
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .extract()
+                .asString();
+
+        // then access a protected endpoint with the JWT
+        final int status = given()
+                .header("Authorization", "Bearer " + token)
+                .when()
+                .get("/protected-resource")
+                .statusCode();
+
+        // should not be 403 Forbidden (the resource may not exist → 404, but should not be 403)
+        assertThat(status).isNotEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void protectedEndpoint_withInvalidJwt_notSuccessful() {
+        // invalid JWT should not grant access — exact status depends on Spring Security error dispatch
+        final int status = given()
+                .header("Authorization", "Bearer invalid-jwt-token")
+                .when()
+                .get("/protected-resource")
+                .statusCode();
+
+        assertThat(status).isGreaterThanOrEqualTo(HttpStatus.BAD_REQUEST.value());
+    }
+
+    @Test
+    void signUpEndpoint_getMethod_notAllowed() {
+        // sign-up is mapped to POST only
+        final int status = given()
+                .when()
+                .get("/users/sign-up")
+                .statusCode();
+
+        // GET is not mapped → should not return 200
+        assertThat(status).isNotEqualTo(HttpStatus.OK.value());
+    }
 }
