@@ -740,4 +740,76 @@ public class SignInCommandHandlerTest {
                             .anyMatch(v -> v.getPropertyPath().toString().equals("password"));
                 });
     }
+
+    @Test
+    void handle_validCommand_authenticationManagerCalledExactlyOnce() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("password")
+                .build();
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User existingUser = new User(userRegistrationCommand, passwordEncoder);
+        when(repository.findByUsername("username")).thenReturn(Optional.of(existingUser));
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(signInCommand);
+
+        // then
+        verify(authenticationManager, times(1)).authenticate(any());
+    }
+
+    @Test
+    void handle_validCommand_repositoryQueriedExactlyOnce() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("password")
+                .build();
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User existingUser = new User(userRegistrationCommand, passwordEncoder);
+        when(repository.findByUsername("username")).thenReturn(Optional.of(existingUser));
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(signInCommand);
+
+        // then
+        verify(repository, times(1)).findByUsername("username");
+    }
+
+    @Test
+    void handle_validCommand_tokenCreatedExactlyOnce() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("password")
+                .build();
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User existingUser = new User(userRegistrationCommand, passwordEncoder);
+        when(repository.findByUsername("username")).thenReturn(Optional.of(existingUser));
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(signInCommand);
+
+        // then
+        verify(jwtTokenProvider, times(1)).createToken(any(), any());
+    }
 }

@@ -419,4 +419,43 @@ public class JwtTokenFilterTest {
         // then — the filter does not clear context when there's no token
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isEqualTo(existingAuth);
     }
+
+    @Test
+    void doFilterInternal_validateTokenReturnsFalse_existingAuthPreserved() throws ServletException, IOException {
+        // given — validateToken returns false (not throw); existing auth should remain untouched
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        final Authentication existingAuth = mock(Authentication.class);
+        SecurityContextHolder.getContext().setAuthentication(existingAuth);
+
+        when(jwtTokenProvider.resolveToken(request)).thenReturn("some-token");
+        when(jwtTokenProvider.validateToken("some-token")).thenReturn(false);
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then — filter does not clear or replace existing auth when validateToken returns false
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isEqualTo(existingAuth);
+        assertThat(filterChain.getRequest()).isNotNull();
+    }
+
+    @Test
+    void doFilterInternal_emptyStringToken_validateTokenCalled() throws ServletException, IOException {
+        // given — resolveToken returns empty string (e.g., "Bearer " with no actual token)
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        when(jwtTokenProvider.resolveToken(request)).thenReturn("");
+        when(jwtTokenProvider.validateToken("")).thenThrow(new JwtTokenValidationException("Expired or invalid JWT token"));
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then — empty string is non-null so validateToken is called
+        verify(jwtTokenProvider).validateToken("");
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+    }
 }

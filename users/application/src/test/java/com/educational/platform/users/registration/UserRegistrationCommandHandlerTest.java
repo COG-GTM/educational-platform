@@ -991,4 +991,85 @@ public class UserRegistrationCommandHandlerTest {
                 .isThrownBy(() -> sut.handle(userRegistrationCommand))
                 .satisfies(ex -> assertThat(ex.getConstraintViolations()).hasSizeGreaterThanOrEqualTo(3));
     }
+
+    @Test
+    void handle_validTeacherCommand_returnsNonBlankToken() {
+        // given — verify teacher registration flow returns a non-blank token
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("teacher@gmail.com")
+                .username("teacher")
+                .password("password")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+        when(repository.existsByUsername("teacher")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("teacher-jwt-token");
+
+        // when
+        final String token = sut.handle(userRegistrationCommand);
+
+        // then
+        assertThat(token).isNotNull().isNotBlank();
+        assertThat(token).isEqualTo("teacher-jwt-token");
+    }
+
+    @Test
+    void handle_validCommand_savedUserHasEncodedPassword() {
+        // given — verify the saved User contains the encoded password, not the raw one
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("raw-password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        when(passwordEncoder.encode("raw-password")).thenReturn("encoded-raw-password");
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        final ArgumentCaptor<User> argument = ArgumentCaptor.forClass(User.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("password", "encoded-raw-password");
+    }
+
+    @Test
+    void handle_validCommand_existsByUsernameCalledExactlyOnce() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        verify(repository, times(1)).existsByUsername("username");
+    }
+
+    @Test
+    void handle_validCommand_tokenCreatedExactlyOnce() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        verify(jwtTokenProvider, times(1)).createToken(any(), any());
+    }
 }

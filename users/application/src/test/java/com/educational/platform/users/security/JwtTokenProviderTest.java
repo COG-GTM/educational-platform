@@ -24,6 +24,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -600,5 +601,52 @@ public class JwtTokenProviderTest {
                 .hasSize(1)
                 .first()
                 .satisfies(a -> assertThat(a.getAuthority()).isEqualTo("ROLE_TEACHER"));
+    }
+
+    @Test
+    void createToken_nullUsername_tokenCreated() {
+        // given — null username is an edge case; JJWT allows null subject
+        // when
+        final String token = sut.createToken(null, Collections.singletonList(Role.ROLE_STUDENT));
+
+        // then
+        assertThat(token).isNotBlank();
+        assertThat(token.split("\\.")).hasSize(3);
+    }
+
+    @Test
+    void validateToken_tamperedPayload_jwtTokenValidationException() {
+        // given — create a valid token, then tamper with the payload segment
+        final String validToken = sut.createToken("user", Collections.singletonList(Role.ROLE_STUDENT));
+        final String[] parts = validToken.split("\\.");
+        // flip a character in the payload to invalidate the signature
+        final String tamperedPayload = parts[1].substring(0, parts[1].length() - 1) + "X";
+        final String tamperedToken = parts[0] + "." + tamperedPayload + "." + parts[2];
+
+        // when / then
+        assertThatExceptionOfType(JwtTokenValidationException.class)
+                .isThrownBy(() -> sut.validateToken(tamperedToken));
+    }
+
+    @Test
+    void getAuthentication_validToken_loadUserByUsernameCalledExactlyOnce() {
+        // given
+        final String token = sut.createToken("singlecall", Collections.singletonList(Role.ROLE_STUDENT));
+
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("singlecall")
+                .email("single@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("singlecall")).thenReturn(Optional.of(user));
+
+        // when
+        sut.getAuthentication(token);
+
+        // then — verify repository is called exactly once (no duplicate loads)
+        verify(userRepository, times(1)).findByUsername("singlecall");
     }
 }

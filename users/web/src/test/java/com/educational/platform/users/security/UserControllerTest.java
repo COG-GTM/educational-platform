@@ -282,4 +282,56 @@ public class UserControllerTest {
                 .isThrownBy(() -> sut.signIn(request))
                 .withMessageContaining("Invalid username/password");
     }
+
+    @Test
+    void signUp_handlerReturnsEmptyString_emptyReturned() {
+        // given — edge case: handler returns empty token string
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "user", "user@example.com", "password123");
+        when(userRegistrationCommandHandler.handle(any())).thenReturn("");
+
+        // when
+        final String result = sut.signUp(request);
+
+        // then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void signIn_handlerReturnsEmptyString_emptyReturned() {
+        // given — edge case: handler returns empty token string
+        final SignInRequest request = new SignInRequest("user", "password123");
+        when(signInCommandHandler.handle(any())).thenReturn("");
+
+        // when
+        final String result = sut.signIn(request);
+
+        // then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void signUp_handlerReturnsNull_nullReturned() {
+        // given — edge case: handler returns null
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "user", "user@example.com", "password123");
+        when(userRegistrationCommandHandler.handle(any())).thenReturn(null);
+
+        // when
+        final String result = sut.signUp(request);
+
+        // then
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void signIn_handlerReturnsNull_nullReturned() {
+        // given — edge case: handler returns null
+        final SignInRequest request = new SignInRequest("user", "password123");
+        when(signInCommandHandler.handle(any())).thenReturn(null);
+
+        // when
+        final String result = sut.signIn(request);
+
+        // then
+        assertThat(result).isNull();
+    }
 }

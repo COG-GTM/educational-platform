@@ -242,4 +242,71 @@ public class WebSecurityConfigTest {
         // GET is not mapped → should not return 200
         assertThat(status).isNotEqualTo(HttpStatus.OK.value());
     }
+
+    @Test
+    void signInEndpoint_getMethod_notAllowed() {
+        // sign-in is mapped to POST only
+        final int status = given()
+                .when()
+                .get("/users/sign-in")
+                .statusCode();
+
+        // GET is not mapped → should not return 200
+        assertThat(status).isNotEqualTo(HttpStatus.OK.value());
+    }
+
+    @Test
+    void signUpEndpoint_authenticatedUser_stillAccessible() {
+        // first sign up to get a JWT
+        final String token = given()
+                .contentType("application/json")
+                .body("{\"role\": \"ROLE_STUDENT\", \"username\": \"authuser1\", \"email\": \"auth1@gmail.com\", \"password\": \"password\"}")
+                .post("/users/sign-up")
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .extract()
+                .asString();
+
+        // then sign up again WITH the JWT — permitAll should allow authenticated users
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType("application/json")
+                .body("{\"role\": \"ROLE_STUDENT\", \"username\": \"authuser2\", \"email\": \"auth2@gmail.com\", \"password\": \"password\"}")
+
+                .when()
+                .post("/users/sign-up")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void signInEndpoint_authenticatedUser_stillAccessible() {
+        // sign up two users
+        given()
+                .contentType("application/json")
+                .body("{\"role\": \"ROLE_STUDENT\", \"username\": \"authlogin1\", \"email\": \"authlogin1@gmail.com\", \"password\": \"password\"}")
+                .post("/users/sign-up");
+
+        final String token = given()
+                .contentType("application/json")
+                .body("{\"role\": \"ROLE_STUDENT\", \"username\": \"authlogin2\", \"email\": \"authlogin2@gmail.com\", \"password\": \"password\"}")
+                .post("/users/sign-up")
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .extract()
+                .asString();
+
+        // sign in as user1 while authenticated as user2 — permitAll should allow
+        given()
+                .header("Authorization", "Bearer " + token)
+                .contentType("application/json")
+                .body("{\"username\": \"authlogin1\", \"password\": \"password\"}")
+
+                .when()
+                .post("/users/sign-in")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
 }
