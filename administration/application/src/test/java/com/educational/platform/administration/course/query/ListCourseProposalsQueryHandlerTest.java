@@ -192,4 +192,17 @@ class ListCourseProposalsQueryHandlerTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("DB error");
     }
+
+    @Test
+    void handle_nullQuery_delegatesToRepository() {
+        // given
+        when(repository.listCourseProposals()).thenReturn(Collections.emptyList());
+
+        // when
+        final List<CourseProposalDTO> result = sut.handle(null);
+
+        // then
+        verify(repository).listCourseProposals();
+        assertThat(result).isEmpty();
+    }
 }

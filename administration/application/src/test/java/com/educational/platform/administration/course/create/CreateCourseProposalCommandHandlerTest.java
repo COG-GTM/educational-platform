@@ -160,4 +160,27 @@ public class CreateCourseProposalCommandHandlerTest {
         verify(repository).save(any(CourseProposal.class));
         org.mockito.Mockito.verifyNoMoreInteractions(repository);
     }
+
+    @Test
+    void constructor_acceptsOnlyRepository() throws NoSuchMethodException {
+        // when
+        final var constructor = CreateCourseProposalCommandHandler.class.getConstructor(
+                CourseProposalRepository.class
+        );
+
+        // then
+        assertThat(constructor).isNotNull();
+        assertThat(constructor.getParameterCount()).isEqualTo(1);
+    }
+
+    @Test
+    void class_doesNotInjectEventPublisher() {
+        // then - handler has no ApplicationEventPublisher dependency (unlike approve/decline)
+        assertThat(CreateCourseProposalCommandHandler.class.getDeclaredConstructors())
+                .allSatisfy(ctor -> {
+                    for (Class<?> paramType : ctor.getParameterTypes()) {
+                        assertThat(paramType).isNotEqualTo(org.springframework.context.ApplicationEventPublisher.class);
+                    }
+                });
+    }
 }

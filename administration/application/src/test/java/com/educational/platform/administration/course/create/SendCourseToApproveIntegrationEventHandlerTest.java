@@ -129,4 +129,21 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         verifyNoMoreInteractions(createCourseProposalCommandHandler);
     }
 
+    @Test
+    void class_doesNotHaveTransactionalAnnotation() {
+        assertThat(SendCourseToApproveIntegrationEventHandler.class
+                .isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class)).isFalse();
+    }
+
+    @Test
+    void constructor_acceptsOnlyCreateCourseProposalCommandHandler() throws NoSuchMethodException {
+        // when
+        final var constructor = SendCourseToApproveIntegrationEventHandler.class.getConstructor(
+                CreateCourseProposalCommandHandler.class
+        );
+
+        // then
+        assertThat(constructor).isNotNull();
+        assertThat(constructor.getParameterCount()).isEqualTo(1);
+    }
 }

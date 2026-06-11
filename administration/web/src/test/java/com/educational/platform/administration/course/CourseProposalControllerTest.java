@@ -693,4 +693,69 @@ class CourseProposalControllerTest {
         // then
         assertThat(method.getReturnType()).isEqualTo(org.springframework.http.ResponseEntity.class);
     }
+
+    @Test
+    void approveMethod_producesApplicationJson() throws NoSuchMethodException {
+        // when
+        final var method = CourseProposalController.class.getMethod("approve", UUID.class);
+        final var mapping = method.getAnnotation(
+                org.springframework.web.bind.annotation.PutMapping.class);
+
+        // then
+        assertThat(mapping.produces()).contains(MediaType.APPLICATION_JSON_VALUE);
+    }
+
+    @Test
+    void declineMethod_producesApplicationJson() throws NoSuchMethodException {
+        // when
+        final var method = CourseProposalController.class.getMethod("decline", UUID.class);
+        final var mapping = method.getAnnotation(
+                org.springframework.web.bind.annotation.DeleteMapping.class);
+
+        // then
+        assertThat(mapping.produces()).contains(MediaType.APPLICATION_JSON_VALUE);
+    }
+
+    @Test
+    void approve_existingCourseProposal_declineAndListHandlersNotInteracted() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+
+        // then
+        verifyNoInteractions(declineCourseProposalCommandHandler);
+        verifyNoInteractions(listCourseProposalsQueryHandler);
+    }
+
+    @Test
+    void decline_existingCourseProposal_approveAndListHandlersNotInteracted() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+
+        // then
+        verifyNoInteractions(approveCourseProposalCommandHandler);
+        verifyNoInteractions(listCourseProposalsQueryHandler);
+    }
+
+    @Test
+    void courseProposals_listEndpoint_returnsJsonArray() throws Exception {
+        // given
+        when(listCourseProposalsQueryHandler.handle(any(ListCourseProposalsQuery.class)))
+                .thenReturn(Collections.emptyList());
+
+        // when / then
+        mockMvc.perform(get("/administration/course-proposals")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+    }
 }

@@ -407,4 +407,24 @@ public class DeclineCourseProposalCommandHandlerTest {
                 .withMessageContaining("DB save error");
         verifyNoInteractions(eventPublisher);
     }
+
+    @Test
+    void class_doesNotHaveTransactionalAnnotation() {
+        assertThat(DeclineCourseProposalCommandHandler.class
+                .isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class)).isFalse();
+    }
+
+    @Test
+    void constructor_acceptsTransactionTemplateRepositoryAndEventPublisher() throws NoSuchMethodException {
+        // when
+        final var constructor = DeclineCourseProposalCommandHandler.class.getConstructor(
+                org.springframework.transaction.support.TransactionTemplate.class,
+                CourseProposalRepository.class,
+                org.springframework.context.ApplicationEventPublisher.class
+        );
+
+        // then
+        assertThat(constructor).isNotNull();
+        assertThat(constructor.getParameterCount()).isEqualTo(3);
+    }
 }
