@@ -1,5 +1,6 @@
 package com.educational.platform.users.security;
 
+import com.educational.platform.common.exception.UnprocessableEntityException;
 import com.educational.platform.users.RoleDTO;
 import com.educational.platform.users.login.SignInCommand;
 import com.educational.platform.users.login.SignInCommandHandler;
@@ -11,6 +12,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import jakarta.validation.ConstraintViolationException;
+import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -231,5 +235,51 @@ public class UserControllerTest {
         final ArgumentCaptor<SignInCommand> captor = ArgumentCaptor.forClass(SignInCommand.class);
         verify(signInCommandHandler).handle(captor.capture());
         assertThat(captor.getValue().password()).isEqualTo("specific-password");
+    }
+
+    @Test
+    void signUp_handlerThrowsConstraintViolationException_propagates() {
+        // given
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "user", "user@example.com", "password123");
+        when(userRegistrationCommandHandler.handle(any())).thenThrow(new ConstraintViolationException(Collections.emptySet()));
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.signUp(request));
+    }
+
+    @Test
+    void signUp_handlerThrowsUnprocessableEntityException_propagates() {
+        // given
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "user", "user@example.com", "password123");
+        when(userRegistrationCommandHandler.handle(any())).thenThrow(new UnprocessableEntityException("Username already in use"));
+
+        // when / then
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(() -> sut.signUp(request))
+                .withMessageContaining("Username already in use");
+    }
+
+    @Test
+    void signIn_handlerThrowsConstraintViolationException_propagates() {
+        // given
+        final SignInRequest request = new SignInRequest("user", "password");
+        when(signInCommandHandler.handle(any())).thenThrow(new ConstraintViolationException(Collections.emptySet()));
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.signIn(request));
+    }
+
+    @Test
+    void signIn_handlerThrowsUnprocessableEntityException_propagates() {
+        // given
+        final SignInRequest request = new SignInRequest("user", "password");
+        when(signInCommandHandler.handle(any())).thenThrow(new UnprocessableEntityException("Invalid username/password"));
+
+        // when / then
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(() -> sut.signIn(request))
+                .withMessageContaining("Invalid username/password");
     }
 }

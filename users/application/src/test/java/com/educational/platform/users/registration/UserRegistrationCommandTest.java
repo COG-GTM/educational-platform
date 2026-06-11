@@ -452,4 +452,145 @@ public class UserRegistrationCommandTest {
         // then
         assertThat(command1.hashCode()).isNotEqualTo(command2.hashCode());
     }
+
+    @Test
+    void validate_passwordExactMinLength8_noViolation() {
+        // given — @ValidPassword min length is 8
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("test@example.com")
+                .password("a".repeat(8))
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void validate_passwordExactMaxLength30_noViolation() {
+        // given — @ValidPassword max length is 30
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("test@example.com")
+                .password("a".repeat(30))
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void validate_passwordOneBelowMinLength_violation() {
+        // given — 7 chars violates @ValidPassword min=8
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("test@example.com")
+                .password("a".repeat(7))
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("password"));
+    }
+
+    @Test
+    void validate_passwordOneAboveMaxLength_violation() {
+        // given — 31 chars violates @ValidPassword max=30
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("test@example.com")
+                .password("a".repeat(31))
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("password"));
+    }
+
+    @Test
+    void validate_usernameExactMinLength4_noPasswordViolation() {
+        // given — boundary: username=4 chars + valid password → only username checked
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("abcd")
+                .email("test@example.com")
+                .password("validpass")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void validate_emptyStringUsername_violation() {
+        // given — empty string triggers both @NotBlank and @Size(min=4)
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("")
+                .email("test@example.com")
+                .password("password123")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("username"));
+    }
+
+    @Test
+    void validate_emptyStringPassword_violation() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("test@example.com")
+                .password("")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("password"));
+    }
+
+    @Test
+    void validate_emptyStringEmail_violation() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("")
+                .password("password123")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("email"));
+    }
 }
