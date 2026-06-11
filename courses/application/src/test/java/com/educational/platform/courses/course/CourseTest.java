@@ -405,4 +405,223 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("curriculumItems", null);
     }
 
+    @Test
+    void publish_declinedCourse_courseCannotBePublishedException() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.decline();
+
+        // when
+        final ThrowableAssert.ThrowingCallable publish = course::publish;
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(publish);
+    }
+
+    @Test
+    void publish_waitingForApprovalCourse_courseCannotBePublishedException() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.sendToApprove();
+
+        // when
+        final ThrowableAssert.ThrowingCallable publish = course::publish;
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(publish);
+    }
+
+    @Test
+    void approve_declinedCourse_approvedStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.decline();
+
+        // when
+        course.approve();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+    }
+
+    @Test
+    void approve_calledTwice_remainsApproved() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.approve();
+        course.approve();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+    }
+
+    @Test
+    void updateRating_negativeValue_ratingUpdated() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.updateRating(-1.5);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(-1.5));
+    }
+
+    @Test
+    void updateRating_calledMultipleTimes_lastValueWins() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.updateRating(1.0);
+        course.updateRating(3.0);
+        course.updateRating(5.0);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0));
+    }
+
+    @Test
+    void create_implementsAggregateRoot() {
+        // then
+        assertThat(com.educational.platform.common.domain.AggregateRoot.class)
+                .isAssignableFrom(Course.class);
+    }
+
+    @Test
+    void create_initialPublishStatusIsDraft() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT);
+    }
+
+    @Test
+    void create_initialApprovalStatusIsNotSent() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.NOT_SENT_FOR_APPROVAL);
+    }
+
+    @Test
+    void sendToApprove_waitingForApprovalCourse_remainsWaiting() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.sendToApprove();
+
+        // when
+        course.sendToApprove();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void fullLifecycle_create_approve_publish_archive() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when — full happy path
+        course.sendToApprove();
+        assertThat(course).hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+
+        course.approve();
+        assertThat(course).hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+
+        course.publish();
+        assertThat(course).hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED);
+
+        course.archive();
+        assertThat(course).hasFieldOrPropertyWithValue("publishStatus", PublishStatus.ARCHIVED);
+    }
+
+    @Test
+    void create_withCurriculumItems_curriculumItemsPopulated() {
+        // given
+        final var lecture = com.educational.platform.courses.course.create.CreateLectureCommand.builder()
+                .title("Intro")
+                .description("Introduction lecture")
+                .serialNumber(1)
+                .text("Content text")
+                .build();
+        final var question = new com.educational.platform.courses.course.create.CreateQuestionCommand("Q1");
+        final var quiz = com.educational.platform.courses.course.create.CreateQuizCommand.builder()
+                .title("Quiz 1")
+                .description("First quiz")
+                .serialNumber(2)
+                .text("Quiz text")
+                .questions(java.util.List.of(question))
+                .build();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .curriculumItems(java.util.List.of(lecture, quiz))
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course)
+                .extracting("curriculumItems")
+                .asList()
+                .hasSize(2);
+    }
+
 }
