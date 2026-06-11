@@ -839,4 +839,43 @@ public class ListCourseQueryHandlerTest {
         assertThat(result).hasSize(1);
     }
 
+    @Test
+    void handle_returnTypeIsListOfCourseLightDTO() throws NoSuchMethodException {
+        // given
+        final java.lang.reflect.Method method = ListCourseQueryHandler.class
+                .getMethod("handle", ListCourseQuery.class);
+
+        // then
+        assertThat(method.getReturnType()).isEqualTo(List.class);
+        final java.lang.reflect.ParameterizedType genericReturn =
+                (java.lang.reflect.ParameterizedType) method.getGenericReturnType();
+        assertThat(genericReturn.getActualTypeArguments()[0]).isEqualTo(CourseLightDTO.class);
+    }
+
+    @Test
+    void handle_repositoryFieldIsPrivateAndFinal() throws NoSuchFieldException {
+        // given
+        final java.lang.reflect.Field field = ListCourseQueryHandler.class.getDeclaredField("repository");
+
+        // then
+        assertThat(java.lang.reflect.Modifier.isPrivate(field.getModifiers())).isTrue();
+        assertThat(java.lang.reflect.Modifier.isFinal(field.getModifiers())).isTrue();
+        assertThat(field.getType()).isEqualTo(com.educational.platform.courses.course.CourseRepository.class);
+    }
+
+    @Test
+    void handle_repositoryReturnsCollectionsEmptyList_returnedAsIs() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final List<CourseLightDTO> emptyList = java.util.Collections.emptyList();
+        when(repository.list()).thenReturn(emptyList);
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(emptyList);
+        assertThat(result).isEmpty();
+    }
+
 }

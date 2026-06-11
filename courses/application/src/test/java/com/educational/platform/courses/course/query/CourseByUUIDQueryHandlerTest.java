@@ -920,4 +920,45 @@ public class CourseByUUIDQueryHandlerTest {
         assertThat(constructor.getParameterTypes()[0]).isEqualTo(com.educational.platform.courses.course.CourseRepository.class);
     }
 
+    @Test
+    void handle_returnTypeIsOptionalOfCourseDTO() throws NoSuchMethodException {
+        // given
+        final java.lang.reflect.Method method = CourseByUUIDQueryHandler.class
+                .getMethod("handle", CourseByUUIDQuery.class);
+
+        // then
+        assertThat(method.getReturnType()).isEqualTo(Optional.class);
+        final java.lang.reflect.ParameterizedType genericReturn =
+                (java.lang.reflect.ParameterizedType) method.getGenericReturnType();
+        assertThat(genericReturn.getActualTypeArguments()[0]).isEqualTo(CourseDTO.class);
+    }
+
+    @Test
+    void handle_repositoryFieldIsPrivateAndFinal() throws NoSuchFieldException {
+        // given
+        final java.lang.reflect.Field field = CourseByUUIDQueryHandler.class.getDeclaredField("repository");
+
+        // then
+        assertThat(java.lang.reflect.Modifier.isPrivate(field.getModifiers())).isTrue();
+        assertThat(java.lang.reflect.Modifier.isFinal(field.getModifiers())).isTrue();
+        assertThat(field.getType()).isEqualTo(com.educational.platform.courses.course.CourseRepository.class);
+    }
+
+    @Test
+    void handle_multipleNullUuidQueries_allReturnEmpty() {
+        // given
+        when(repository.findDTOByUuid(null)).thenReturn(Optional.empty());
+
+        // when
+        final Optional<CourseDTO> result1 = sut.handle(new CourseByUUIDQuery(null));
+        final Optional<CourseDTO> result2 = sut.handle(new CourseByUUIDQuery(null));
+        final Optional<CourseDTO> result3 = sut.handle(new CourseByUUIDQuery(null));
+
+        // then
+        assertThat(result1).isEmpty();
+        assertThat(result2).isEmpty();
+        assertThat(result3).isEmpty();
+        verify(repository, times(3)).findDTOByUuid(null);
+    }
+
 }

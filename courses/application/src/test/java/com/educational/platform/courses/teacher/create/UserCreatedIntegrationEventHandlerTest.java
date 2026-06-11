@@ -762,4 +762,36 @@ public class UserCreatedIntegrationEventHandlerTest {
         assertThat(method.getParameterTypes()[0]).isEqualTo(UserCreatedIntegrationEvent.class);
     }
 
+    @Test
+    void handleUserCreatedEvent_methodIsPublic() throws NoSuchMethodException {
+        // given
+        final java.lang.reflect.Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+
+        // then — must be public for Spring @EventListener proxy
+        assertThat(java.lang.reflect.Modifier.isPublic(method.getModifiers())).isTrue();
+    }
+
+    @Test
+    void handleUserCreatedEvent_returnTypeIsVoid() throws NoSuchMethodException {
+        // given
+        final java.lang.reflect.Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+
+        // then
+        assertThat(method.getReturnType()).isEqualTo(void.class);
+    }
+
+    @Test
+    void handleUserCreatedEvent_commandHandlerFieldIsPrivateAndFinal() throws NoSuchFieldException {
+        // given
+        final java.lang.reflect.Field field = UserCreatedIntegrationEventHandler.class
+                .getDeclaredField("createTeacherCommandHandler");
+
+        // then
+        assertThat(java.lang.reflect.Modifier.isPrivate(field.getModifiers())).isTrue();
+        assertThat(java.lang.reflect.Modifier.isFinal(field.getModifiers())).isTrue();
+        assertThat(field.getType()).isEqualTo(CreateTeacherCommandHandler.class);
+    }
+
 }

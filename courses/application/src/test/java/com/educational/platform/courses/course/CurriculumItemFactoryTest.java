@@ -2411,4 +2411,139 @@ public class CurriculumItemFactoryTest {
                 .allSatisfy(q -> assertThat(q).isInstanceOf(Question.class));
     }
 
+    @Test
+    void createFrom_quizCommand_modifyingInputListAfterCreation_doesNotAffectQuiz() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final java.util.ArrayList<CreateQuestionCommand> inputQuestions = new java.util.ArrayList<>();
+        inputQuestions.add(new CreateQuestionCommand("Q1"));
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(inputQuestions)
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+        inputQuestions.add(new CreateQuestionCommand("Q2-added-after"));
+
+        // then — quiz still has only the original question
+        assertThat(result).extracting("questions")
+                .asInstanceOf(LIST)
+                .hasSize(1)
+                .first()
+                .hasFieldOrPropertyWithValue("content", "Q1");
+    }
+
+    @Test
+    void createFrom_quizCommand_questionsListIsMutable() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(List.of(new CreateQuestionCommand("Q1")))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then — Collectors.toList() produces a mutable list
+        assertThat(result).isInstanceOf(Quiz.class);
+        @SuppressWarnings("unchecked")
+        final List<Question> questions = (List<Question>) org.springframework.test.util.ReflectionTestUtils.getField(result, "questions");
+        assertThat(questions).isNotNull();
+        final int originalSize = questions.size();
+        questions.add(new Question("injected", (Quiz) result));
+        assertThat(questions).hasSize(originalSize + 1);
+    }
+
+    @Test
+    void createFrom_factoryClassHasNoInstanceFields() {
+        // then — CurriculumItemFactory is a stateless utility
+        final java.lang.reflect.Field[] declaredFields = CurriculumItemFactory.class.getDeclaredFields();
+        assertThat(declaredFields).allSatisfy(field ->
+                assertThat(java.lang.reflect.Modifier.isStatic(field.getModifiers()))
+                        .as("Field '%s' should be static", field.getName())
+                        .isTrue());
+    }
+
+    @Test
+    void createFrom_lectureCommand_titleFromGetTitleNotTextField() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateLectureCommand lectureCommand = CreateLectureCommand.builder()
+                .title("THE_TITLE")
+                .description("THE_DESC")
+                .serialNumber(42)
+                .text("THE_CONTENT")
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(lectureCommand, course);
+
+        // then — title comes from getTitle(), content from getText(), they are not mixed
+        assertThat(result)
+                .hasFieldOrPropertyWithValue("title", "THE_TITLE")
+                .hasFieldOrPropertyWithValue("content", "THE_CONTENT");
+        assertThat(result).extracting("title").isNotEqualTo("THE_CONTENT");
+        assertThat(result).extracting("content").isNotEqualTo("THE_TITLE");
+    }
+
+    @Test
+    void createFrom_quizCommand_serialNumberPassedFromBaseCommandAccessor() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(123)
+                .text("Content")
+                .questions(List.of(new CreateQuestionCommand("Q1")))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then — serialNumber is passed via getSerialNumber() on the base command
+        assertThat(result).hasFieldOrPropertyWithValue("serialNumber", 123);
+        assertThat(quizCommand.getSerialNumber()).isEqualTo(123);
+    }
+
 }
