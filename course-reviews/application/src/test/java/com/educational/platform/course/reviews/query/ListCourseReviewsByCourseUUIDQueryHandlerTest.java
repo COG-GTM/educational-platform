@@ -194,4 +194,18 @@ public class ListCourseReviewsByCourseUUIDQueryHandlerTest {
         // then
         org.mockito.Mockito.verify(courseReviewRepository, org.mockito.Mockito.times(1)).listCourseReviews(courseId);
     }
+
+    @Test
+    void handle_emptyResult_resultIsNonNull() {
+        // given — @Nonnull contract: result is always non-null even when repository returns empty
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ListCourseReviewsByCourseUUIDQuery query = new ListCourseReviewsByCourseUUIDQuery(courseId);
+        when(courseReviewRepository.listCourseReviews(courseId)).thenReturn(List.of());
+
+        // when
+        final List<CourseReviewDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isNotNull().isEmpty();
+    }
 }

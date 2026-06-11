@@ -512,6 +512,39 @@ public class UpdateCourseReviewCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("comment", new Comment("revised"));
     }
 
+    @Test
+    void handle_whitespaceComment_reviewSaved() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, "   ");
+
+        // when
+        sut.handle(command);
+
+        // then — whitespace-only comments are stored as-is without trimming
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("comment", new Comment("   "));
+    }
+
+    @Test
+    void handle_longComment_reviewSaved() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final String longComment = "y".repeat(5000);
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, longComment);
+
+        // when
+        sut.handle(command);
+
+        // then — long comments are stored without truncation
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("comment", new Comment(longComment));
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));

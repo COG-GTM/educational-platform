@@ -430,4 +430,36 @@ public class CourseReviewTest {
         assertThat(courseReview)
                 .hasFieldOrPropertyWithValue("comment", new Comment(longComment));
     }
+
+    @Test
+    void constructor_validCommand_uuidIsNotDerivedFromCourseId() {
+        // given — the review UUID must be independently generated, not reusing the courseId
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+
+        // when
+        final CourseReview courseReview = new CourseReview(command, 11, 22);
+
+        // then — toIdentifier() returns a UUID that is distinct from the courseId
+        assertThat(courseReview.toIdentifier()).isNotEqualTo(courseId);
+    }
+
+    @Test
+    void update_previouslyNonNullCommentToNull_commentCleared() {
+        // given — verifies that a non-null comment can be replaced with null
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "original comment");
+        final CourseReview courseReview = new CourseReview(createCommand, 11, 22);
+        final UUID uuid = courseReview.toIdentifier();
+
+        final UpdateCourseReviewCommand updateCommand = new UpdateCourseReviewCommand(uuid, 3.0, null);
+
+        // when
+        courseReview.update(updateCommand);
+
+        // then — comment is replaced, not retained
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("comment", new Comment(null))
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(3.0));
+    }
 }
