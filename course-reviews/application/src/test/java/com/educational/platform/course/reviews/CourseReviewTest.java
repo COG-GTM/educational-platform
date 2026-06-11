@@ -240,4 +240,22 @@ public class CourseReviewTest {
         assertThat(courseReview)
                 .hasFieldOrPropertyWithValue("comment", new Comment(null));
     }
+
+    @Test
+    void update_multipleUpdates_lastUpdateWins() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "original");
+        final CourseReview courseReview = new CourseReview(createCommand, 11, 22);
+        final UUID uuid = courseReview.toIdentifier();
+
+        // when
+        courseReview.update(new UpdateCourseReviewCommand(uuid, 1.0, "first update"));
+        courseReview.update(new UpdateCourseReviewCommand(uuid, 5.0, "second update"));
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0))
+                .hasFieldOrPropertyWithValue("comment", new Comment("second update"));
+    }
 }

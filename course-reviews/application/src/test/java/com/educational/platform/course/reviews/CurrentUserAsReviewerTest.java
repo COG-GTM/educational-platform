@@ -15,6 +15,7 @@ import org.springframework.security.core.userdetails.User;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -98,5 +99,15 @@ public class CurrentUserAsReviewerTest {
 
         // then
         verify(reviewerRepository).findByUsername("verify-user");
+    }
+
+    @Test
+    void userAsReviewer_noAuthenticationInContext_throwsNullPointerException() {
+        // given
+        SecurityContextHolder.clearContext();
+
+        // when/then
+        assertThatThrownBy(() -> sut.userAsReviewer())
+                .isInstanceOf(NullPointerException.class);
     }
 }

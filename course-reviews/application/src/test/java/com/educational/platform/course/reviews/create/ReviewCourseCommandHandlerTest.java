@@ -337,4 +337,27 @@ public class ReviewCourseCommandHandlerTest {
         // then
         assertThat(result).isNotNull();
     }
+
+    @Test
+    void handle_twoCalls_differentUuidsReturned() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+
+        final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
+        ReflectionTestUtils.setField(reviewableCourse, "id", 11);
+        ReflectionTestUtils.setField(reviewableCourse, "originalCourseId", courseId);
+        when(reviewableCourseRepository.findByOriginalCourseId(courseId)).thenReturn(Optional.of(reviewableCourse));
+
+        final Reviewer reviewer = new Reviewer(new CreateReviewerCommand("username"));
+        ReflectionTestUtils.setField(reviewer, "id", 22);
+        when(currentUserAsReviewer.userAsReviewer()).thenReturn(reviewer);
+
+        // when
+        final UUID first = sut.handle(command);
+        final UUID second = sut.handle(command);
+
+        // then
+        assertThat(first).isNotEqualTo(second);
+    }
 }

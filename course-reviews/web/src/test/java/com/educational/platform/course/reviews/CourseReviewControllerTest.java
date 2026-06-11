@@ -13,10 +13,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.educational.platform.common.exception.RelatedResourceIsNotResolvedException;
+import com.educational.platform.common.exception.ResourceNotFoundException;
+
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -348,5 +352,78 @@ public class CourseReviewControllerTest {
 
         // then
         verify(listCourseReviewsByCourseUUIDQueryHandler, times(1)).handle(any(ListCourseReviewsByCourseUUIDQuery.class));
+    }
+
+    @Test
+    void review_handlerThrowsRelatedResourceNotResolved_exceptionPropagates() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseRequest request = new ReviewCourseRequest(4.0, "comment");
+        when(reviewCourseCommandHandler.handle(any(ReviewCourseCommand.class)))
+                .thenThrow(new RelatedResourceIsNotResolvedException("Course not found"));
+
+        // when/then
+        assertThatThrownBy(() -> sut.review(courseUuid, request))
+                .isInstanceOf(RelatedResourceIsNotResolvedException.class);
+    }
+
+    @Test
+    void updateReview_handlerThrowsResourceNotFound_exceptionPropagates() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(3.0, "updated");
+        doThrow(new ResourceNotFoundException("Review not found"))
+                .when(updateCourseReviewCommandHandler).handle(any(UpdateCourseReviewCommand.class));
+
+        // when/then
+        assertThatThrownBy(() -> sut.updateReview(courseUuid, reviewUuid, request))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void review_doesNotInteractWithUpdateOrQueryHandlers() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseRequest request = new ReviewCourseRequest(4.0, "great");
+        when(reviewCourseCommandHandler.handle(any(ReviewCourseCommand.class)))
+                .thenReturn(UUID.fromString("123e4567-e89b-12d3-a456-426655440002"));
+
+        // when
+        sut.review(courseUuid, request);
+
+        // then
+        verifyNoInteractions(updateCourseReviewCommandHandler);
+        verifyNoInteractions(listCourseReviewsByCourseUUIDQueryHandler);
+    }
+
+    @Test
+    void updateReview_doesNotInteractWithReviewOrQueryHandlers() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(3.0, "updated");
+
+        // when
+        sut.updateReview(courseUuid, reviewUuid, request);
+
+        // then
+        verifyNoInteractions(reviewCourseCommandHandler);
+        verifyNoInteractions(listCourseReviewsByCourseUUIDQueryHandler);
+    }
+
+    @Test
+    void reviews_doesNotInteractWithReviewOrUpdateHandlers() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(listCourseReviewsByCourseUUIDQueryHandler.handle(any(ListCourseReviewsByCourseUUIDQuery.class)))
+                .thenReturn(List.of());
+
+        // when
+        sut.reviews(courseUuid);
+
+        // then
+        verifyNoInteractions(reviewCourseCommandHandler);
+        verifyNoInteractions(updateCourseReviewCommandHandler);
     }
 }

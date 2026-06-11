@@ -70,4 +70,18 @@ public class CourseReviewCheckerTest {
         // then
         verify(courseReviewRepository).isReviewer(reviewId, "test-user");
     }
+
+    @Test
+    void hasAccess_nullReviewId_delegatesToRepository() {
+        // given
+        when(authentication.getName()).thenReturn("user");
+        when(courseReviewRepository.isReviewer(null, "user")).thenReturn(false);
+
+        // when
+        final boolean result = sut.hasAccess(authentication, null);
+
+        // then
+        assertThat(result).isFalse();
+        verify(courseReviewRepository).isReviewer(null, "user");
+    }
 }

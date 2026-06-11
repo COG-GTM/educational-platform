@@ -110,4 +110,20 @@ public class ListCourseReviewsByCourseUUIDQueryHandlerTest {
         assertThat(result).isEmpty();
         verify(courseReviewRepository).listCourseReviews(null);
     }
+
+    @Test
+    void handle_returnsExactListFromRepository() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ListCourseReviewsByCourseUUIDQuery query = new ListCourseReviewsByCourseUUIDQuery(courseId);
+        final List<CourseReviewDTO> expectedList = List.of(
+                new CourseReviewDTO(UUID.fromString("123e4567-e89b-12d3-a456-426655440002"), courseId, "user", "good", 4.0));
+        when(courseReviewRepository.listCourseReviews(courseId)).thenReturn(expectedList);
+
+        // when
+        final List<CourseReviewDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(expectedList);
+    }
 }
