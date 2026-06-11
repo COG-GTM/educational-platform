@@ -653,4 +653,91 @@ public class SignInCommandHandlerTest {
         verify(repository, never()).findByUsername(any());
         verify(jwtTokenProvider, never()).createToken(any(), any());
     }
+
+    @Test
+    void handle_disabledException_wrappedInUnprocessableEntityException() {
+        // given — DisabledException is an AuthenticationException subclass
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("disabled")
+                .password("password")
+                .build();
+        doThrow(new org.springframework.security.authentication.DisabledException("User is disabled"))
+                .when(authenticationManager).authenticate(any());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(handle)
+                .withMessageContaining("Invalid username/password");
+    }
+
+    @Test
+    void handle_lockedException_wrappedInUnprocessableEntityException() {
+        // given — LockedException is an AuthenticationException subclass
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("locked")
+                .password("password")
+                .build();
+        doThrow(new org.springframework.security.authentication.LockedException("User account is locked"))
+                .when(authenticationManager).authenticate(any());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(handle)
+                .withMessageContaining("Invalid username/password");
+    }
+
+    @Test
+    void handle_constraintViolationException_containsExpectedPropertyPaths() {
+        // given — null username triggers @NotBlank violation with property path
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username(null)
+                .password("password")
+                .build();
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.handle(signInCommand))
+                .satisfies(ex -> assertThat(ex.getConstraintViolations())
+                        .anyMatch(v -> v.getPropertyPath().toString().equals("username")));
+    }
+
+    @Test
+    void handle_nullPassword_constraintViolationContainsPasswordPath() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password(null)
+                .build();
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.handle(signInCommand))
+                .satisfies(ex -> assertThat(ex.getConstraintViolations())
+                        .anyMatch(v -> v.getPropertyPath().toString().equals("password")));
+    }
+
+    @Test
+    void handle_bothFieldsNull_constraintViolationContainsBothPaths() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username(null)
+                .password(null)
+                .build();
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.handle(signInCommand))
+                .satisfies(ex -> {
+                    assertThat(ex.getConstraintViolations())
+                            .anyMatch(v -> v.getPropertyPath().toString().equals("username"));
+                    assertThat(ex.getConstraintViolations())
+                            .anyMatch(v -> v.getPropertyPath().toString().equals("password"));
+                });
+    }
 }

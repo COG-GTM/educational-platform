@@ -935,4 +935,60 @@ public class UserRegistrationCommandHandlerTest {
         // then
         verify(jwtTokenProvider, never()).createToken(any(), any());
     }
+
+    @Test
+    void handle_teacherRole_eventPublishedWithCorrectData() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("teacher@gmail.com")
+                .username("teacheruser")
+                .password("password")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+        when(repository.existsByUsername("teacheruser")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("teacher-token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        final ArgumentCaptor<UserCreatedIntegrationEvent> eventArgument = ArgumentCaptor.forClass(UserCreatedIntegrationEvent.class);
+        verify(eventPublisher).publishEvent(eventArgument.capture());
+        final UserCreatedIntegrationEvent event = eventArgument.getValue();
+        assertThat(event.username()).isEqualTo("teacheruser");
+        assertThat(event.email()).isEqualTo("teacher@gmail.com");
+    }
+
+    @Test
+    void handle_constraintViolationException_containsExpectedPropertyPath() {
+        // given — null role triggers @NotNull violation
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(null)
+                .build();
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.handle(userRegistrationCommand))
+                .satisfies(ex -> assertThat(ex.getConstraintViolations())
+                        .anyMatch(v -> v.getPropertyPath().toString().equals("role")));
+    }
+
+    @Test
+    void handle_multipleValidationFailures_allViolationsReported() {
+        // given — null role + null username + null email → multiple violations
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email(null)
+                .username(null)
+                .password(null)
+                .role(null)
+                .build();
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.handle(userRegistrationCommand))
+                .satisfies(ex -> assertThat(ex.getConstraintViolations()).hasSizeGreaterThanOrEqualTo(3));
+    }
 }
