@@ -353,4 +353,67 @@ public class JwtTokenProviderTest {
         // then
         assertThat(token).isEqualTo(" token-with-leading-space");
     }
+
+    @Test
+    void getAuthentication_userNotInRepository_usernameNotFoundException() {
+        // given
+        final String token = sut.createToken("ghost", Collections.singletonList(Role.ROLE_STUDENT));
+        when(userRepository.findByUsername("ghost")).thenReturn(Optional.empty());
+
+        // when / then
+        assertThatExceptionOfType(org.springframework.security.core.userdetails.UsernameNotFoundException.class)
+                .isThrownBy(() -> sut.getAuthentication(token))
+                .withMessageContaining("ghost");
+    }
+
+    @Test
+    void getAuthentication_validToken_principalIsUserDetails() {
+        // given
+        final String token = sut.createToken("username", Collections.singletonList(Role.ROLE_STUDENT));
+
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("username")
+                .email("email@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("username")).thenReturn(Optional.of(user));
+
+        // when
+        final Authentication authentication = sut.getAuthentication(token);
+
+        // then
+        assertThat(authentication.getPrincipal()).isInstanceOf(org.springframework.security.core.userdetails.UserDetails.class);
+        final org.springframework.security.core.userdetails.UserDetails principal =
+                (org.springframework.security.core.userdetails.UserDetails) authentication.getPrincipal();
+        assertThat(principal.getUsername()).isEqualTo("username");
+    }
+
+    @Test
+    void createToken_differentSecretKey_tokensDiffer() {
+        // given
+        final MyUserDetails myUserDetails = new MyUserDetails(userRepository);
+        final JwtTokenProvider otherProvider = new JwtTokenProvider(myUserDetails, 3600000, "different-secret-key");
+
+        // when
+        final String token1 = sut.createToken("user", Collections.singletonList(Role.ROLE_STUDENT));
+        final String token2 = otherProvider.createToken("user", Collections.singletonList(Role.ROLE_STUDENT));
+
+        // then
+        assertThat(token1).isNotEqualTo(token2);
+    }
+
+    @Test
+    void validateToken_tokenFromDifferentKey_jwtTokenValidationException() {
+        // given
+        final MyUserDetails myUserDetails = new MyUserDetails(userRepository);
+        final JwtTokenProvider otherProvider = new JwtTokenProvider(myUserDetails, 3600000, "different-secret-key");
+        final String token = otherProvider.createToken("user", Collections.singletonList(Role.ROLE_STUDENT));
+
+        // when / then
+        assertThatExceptionOfType(JwtTokenValidationException.class)
+                .isThrownBy(() -> sut.validateToken(token));
+    }
 }

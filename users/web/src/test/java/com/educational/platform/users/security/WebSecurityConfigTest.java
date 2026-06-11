@@ -8,6 +8,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 
 import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -122,5 +123,26 @@ public class WebSecurityConfigTest {
 
                 .then()
                 .statusCode(HttpStatus.BAD_REQUEST.value());
+    }
+
+    @Test
+    void h2ConsoleEndpoint_noAuth_notForbidden() {
+        // h2-console is in the permitAll list — should not return 403
+        final int status = given()
+                .when()
+                .get("/h2-console")
+                .statusCode();
+
+        assertThat(status).isNotEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void protectedEndpoint_getMethod_forbidden() {
+        given()
+                .when()
+                .get("/api/protected")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
     }
 }

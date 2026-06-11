@@ -86,4 +86,40 @@ public class UserDTOTest {
         // then
         assertThat(dto1).isNotEqualTo(dto2);
     }
+
+    @Test
+    void toString_containsFieldValues() {
+        // given
+        final UserDTO dto = UserDTO.builder()
+                .username("testuser")
+                .email("test@example.com")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        final String str = dto.toString();
+
+        // then
+        assertThat(str).contains("testuser");
+        assertThat(str).contains("test@example.com");
+        assertThat(str).contains("ROLE_STUDENT");
+    }
+
+    @Test
+    void hashCode_sameValues_equal() {
+        // given
+        final UserDTO dto1 = UserDTO.builder()
+                .username("user")
+                .email("user@example.com")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final UserDTO dto2 = UserDTO.builder()
+                .username("user")
+                .email("user@example.com")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // then
+        assertThat(dto1.hashCode()).isEqualTo(dto2.hashCode());
+    }
 }

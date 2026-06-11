@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -321,5 +321,104 @@ public class UserRegistrationCommandHandlerTest {
 
         // then
         verify(jwtTokenProvider).createToken(eq("student"), eq(Collections.singletonList(Role.ROLE_STUDENT)));
+    }
+
+    @Test
+    void handle_validCommand_eventPublishedExactlyOnce() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("once@gmail.com")
+                .username("onceuser")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("onceuser")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        verify(eventPublisher, times(1)).publishEvent(any(UserCreatedIntegrationEvent.class));
+    }
+
+    @Test
+    void handle_validCommand_userSavedExactlyOnce() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("save@gmail.com")
+                .username("saveuser")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("saveuser")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        verify(repository, times(1)).save(any(User.class));
+    }
+
+    @Test
+    void handle_usernameAlreadyExists_eventNotPublished() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("existing")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("existing")).thenReturn(true);
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (UnprocessableEntityException ignored) {
+        }
+
+        // then
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void handle_usernameAlreadyExists_userNotSaved() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("existing")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("existing")).thenReturn(true);
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (UnprocessableEntityException ignored) {
+        }
+
+        // then
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void handle_validCommand_existsByUsernameCalledWithCorrectUsername() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("checkuser")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("checkuser")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        verify(repository).existsByUsername("checkuser");
     }
 }

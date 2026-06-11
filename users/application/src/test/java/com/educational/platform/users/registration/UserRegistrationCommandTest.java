@@ -299,4 +299,77 @@ public class UserRegistrationCommandTest {
         // then
         assertThat(violations).hasSizeGreaterThanOrEqualTo(3);
     }
+
+    @Test
+    void validate_blankUsername_violation() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("   ")
+                .email("test@example.com")
+                .password("password123")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("username"));
+    }
+
+    @Test
+    void validate_blankPassword_violation() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("test@example.com")
+                .password("   ")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("password"));
+    }
+
+    @Test
+    void validate_whitespaceOnlyEmail_violation() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("   ")
+                .password("password123")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("email"));
+    }
+
+    @ParameterizedTest
+    @NullSource
+    void validate_nullRole_singleViolation(RoleDTO role) {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(role)
+                .username("testuser")
+                .email("test@example.com")
+                .password("password123")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).hasSize(1);
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("role"));
+    }
 }

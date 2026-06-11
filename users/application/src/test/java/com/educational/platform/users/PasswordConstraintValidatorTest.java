@@ -10,6 +10,7 @@ import jakarta.validation.ConstraintValidatorContext;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.atLeast;
 
 public class PasswordConstraintValidatorTest {
 
@@ -217,5 +218,31 @@ public class PasswordConstraintValidatorTest {
 
         // then
         assertThat(result).isTrue();
+    }
+
+    @Test
+    void isValid_shortPasswordWithWhitespace_invalidAndMultipleViolationsAdded() {
+        // given — violates both length (< 8) AND whitespace rules
+        final String password = "a b";
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isFalse();
+        verify(context).disableDefaultConstraintViolation();
+        verify(context, atLeast(2)).buildConstraintViolationWithTemplate(anyString());
+    }
+
+    @Test
+    void isValid_singleCharacter_invalid() {
+        // given
+        final String password = "x";
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isFalse();
     }
 }

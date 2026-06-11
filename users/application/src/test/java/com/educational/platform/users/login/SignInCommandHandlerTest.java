@@ -29,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 public class SignInCommandHandlerTest {
@@ -277,5 +278,61 @@ public class SignInCommandHandlerTest {
 
         // then
         assertThat(token).isEqualTo("expected-token");
+    }
+
+    @Test
+    void handle_invalidCredentials_repositoryNeverQueried() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("wrong")
+                .build();
+        doThrow(BadCredentialsException.class).when(authenticationManager).authenticate(any());
+
+        // when
+        try {
+            sut.handle(signInCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(repository, never()).findByUsername(any());
+    }
+
+    @Test
+    void handle_invalidCredentials_tokenNeverCreated() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("wrong")
+                .build();
+        doThrow(BadCredentialsException.class).when(authenticationManager).authenticate(any());
+
+        // when
+        try {
+            sut.handle(signInCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(jwtTokenProvider, never()).createToken(any(), any());
+    }
+
+    @Test
+    void handle_validationFails_authenticationManagerNeverCalled() {
+        // given — null username triggers @NotBlank violation
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username(null)
+                .password("password")
+                .build();
+
+        // when
+        try {
+            sut.handle(signInCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then
+        verify(authenticationManager, never()).authenticate(any());
     }
 }

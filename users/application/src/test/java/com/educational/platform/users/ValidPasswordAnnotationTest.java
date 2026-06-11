@@ -125,4 +125,44 @@ public class ValidPasswordAnnotationTest {
         // then
         assertThat(violations).isEmpty();
     }
+
+    @Test
+    void nullPassword_notBlankViolationNotPasswordViolation() {
+        // given — @ValidPassword allows null, but @NotBlank rejects it
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("test@example.com")
+                .password(null)
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("password"));
+        // all violations on password should be from @NotBlank, not from @ValidPassword
+        violations.stream()
+                .filter(v -> v.getPropertyPath().toString().equals("password"))
+                .forEach(v -> assertThat(v.getMessage()).isNotEqualTo("Invalid Password"));
+    }
+
+    @Test
+    void passwordWithTabCharacter_passwordViolation() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_STUDENT)
+                .username("testuser")
+                .email("test@example.com")
+                .password("pass\tword1")
+                .build();
+
+        // when
+        final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).isNotEmpty();
+        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("password"));
+    }
 }
