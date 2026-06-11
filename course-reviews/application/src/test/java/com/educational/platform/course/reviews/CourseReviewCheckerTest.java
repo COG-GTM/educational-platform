@@ -128,4 +128,33 @@ public class CourseReviewCheckerTest {
         org.junit.jupiter.api.Assertions.assertThrows(NullPointerException.class,
                 () -> sut.hasAccess(null, reviewId));
     }
+
+    @Test
+    void hasAccess_authenticationNameReturnsNull_delegatesToRepositoryWithNull() {
+        // given
+        final UUID reviewId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(authentication.getName()).thenReturn(null);
+        when(courseReviewRepository.isReviewer(reviewId, null)).thenReturn(false);
+
+        // when
+        final boolean result = sut.hasAccess(authentication, reviewId);
+
+        // then
+        assertThat(result).isFalse();
+        verify(courseReviewRepository).isReviewer(reviewId, null);
+    }
+
+    @Test
+    void hasAccess_calledExactlyOnce_singleRepositoryInvocation() {
+        // given
+        final UUID reviewId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(authentication.getName()).thenReturn("user");
+        when(courseReviewRepository.isReviewer(reviewId, "user")).thenReturn(true);
+
+        // when
+        sut.hasAccess(authentication, reviewId);
+
+        // then
+        org.mockito.Mockito.verify(courseReviewRepository, org.mockito.Mockito.times(1)).isReviewer(reviewId, "user");
+    }
 }

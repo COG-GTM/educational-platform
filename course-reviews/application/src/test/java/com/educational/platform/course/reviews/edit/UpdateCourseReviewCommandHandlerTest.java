@@ -443,6 +443,43 @@ public class UpdateCourseReviewCommandHandlerTest {
                 .withMessageContaining(uuid.toString());
     }
 
+    @Test
+    void handle_validationFails_reviewEntityNotMutated() {
+        // given — review found but rating is null (constraint violation); entity must remain unmodified
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, null, "should not apply");
+
+        // capture original state
+        final CourseReview review = courseReviewRepository.findByUuid(uuid).orElseThrow();
+        final CourseRating originalRating = (CourseRating) ReflectionTestUtils.getField(review, "rating");
+        final Comment originalComment = (Comment) ReflectionTestUtils.getField(review, "comment");
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then — validation failed, entity fields unchanged
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        assertThat(review)
+                .hasFieldOrPropertyWithValue("rating", originalRating)
+                .hasFieldOrPropertyWithValue("comment", originalComment);
+    }
+
+    @Test
+    void handle_reviewNotFound_exceptionMessageHasExpectedFormat() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, "comment");
+        when(courseReviewRepository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then — verify the exact message format from the handler
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+                .isThrownBy(handle)
+                .withMessage("Course Review with uuid: " + uuid + " not found");
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));

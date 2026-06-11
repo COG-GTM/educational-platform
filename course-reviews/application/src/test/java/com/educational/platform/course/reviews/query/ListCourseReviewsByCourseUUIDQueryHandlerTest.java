@@ -153,4 +153,45 @@ public class ListCourseReviewsByCourseUUIDQueryHandlerTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("db error");
     }
+
+    @Test
+    void handle_twoDifferentUuids_eachDelegatesToRepositoryWithCorrectUuid() {
+        // given
+        final UUID courseId1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseId2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final ListCourseReviewsByCourseUUIDQuery query1 = new ListCourseReviewsByCourseUUIDQuery(courseId1);
+        final ListCourseReviewsByCourseUUIDQuery query2 = new ListCourseReviewsByCourseUUIDQuery(courseId2);
+        final CourseReviewDTO dto1 = new CourseReviewDTO(
+                UUID.fromString("123e4567-e89b-12d3-a456-426655440010"), courseId1, "user1", "good", 4.0);
+        final CourseReviewDTO dto2 = new CourseReviewDTO(
+                UUID.fromString("123e4567-e89b-12d3-a456-426655440020"), courseId2, "user2", "great", 5.0);
+        when(courseReviewRepository.listCourseReviews(courseId1)).thenReturn(List.of(dto1));
+        when(courseReviewRepository.listCourseReviews(courseId2)).thenReturn(List.of(dto2));
+
+        // when
+        final List<CourseReviewDTO> result1 = sut.handle(query1);
+        final List<CourseReviewDTO> result2 = sut.handle(query2);
+
+        // then
+        assertThat(result1).hasSize(1);
+        assertThat(result1.getFirst().course()).isEqualTo(courseId1);
+        assertThat(result2).hasSize(1);
+        assertThat(result2.getFirst().course()).isEqualTo(courseId2);
+        verify(courseReviewRepository).listCourseReviews(courseId1);
+        verify(courseReviewRepository).listCourseReviews(courseId2);
+    }
+
+    @Test
+    void handle_repositoryCalledExactlyOnce() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ListCourseReviewsByCourseUUIDQuery query = new ListCourseReviewsByCourseUUIDQuery(courseId);
+        when(courseReviewRepository.listCourseReviews(courseId)).thenReturn(List.of());
+
+        // when
+        sut.handle(query);
+
+        // then
+        org.mockito.Mockito.verify(courseReviewRepository, org.mockito.Mockito.times(1)).listCourseReviews(courseId);
+    }
 }

@@ -612,6 +612,55 @@ public class CourseReviewControllerTest {
     }
 
     @Test
+    void review_nullCourseUuid_delegatesWithNullCourseUuid() {
+        // given — null path variable is passed through to command
+        final ReviewCourseRequest request = new ReviewCourseRequest(4.0, "comment");
+        when(reviewCourseCommandHandler.handle(any(ReviewCourseCommand.class)))
+                .thenReturn(UUID.fromString("123e4567-e89b-12d3-a456-426655440002"));
+
+        // when
+        sut.review(null, request);
+
+        // then
+        final ArgumentCaptor<ReviewCourseCommand> captor = ArgumentCaptor.forClass(ReviewCourseCommand.class);
+        verify(reviewCourseCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().courseId()).isNull();
+    }
+
+    @Test
+    void updateReview_nullReviewUuid_delegatesWithNullUuid() {
+        // given — null review UUID is passed through to command
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(3.0, "updated");
+
+        // when
+        sut.updateReview(courseUuid, null, request);
+
+        // then
+        final ArgumentCaptor<UpdateCourseReviewCommand> captor = ArgumentCaptor.forClass(UpdateCourseReviewCommand.class);
+        verify(updateCourseReviewCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().uuid()).isNull();
+    }
+
+    @Test
+    void review_longComment_delegatesWithFullComment() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final String longComment = "a".repeat(1000);
+        final ReviewCourseRequest request = new ReviewCourseRequest(4.0, longComment);
+        when(reviewCourseCommandHandler.handle(any(ReviewCourseCommand.class)))
+                .thenReturn(UUID.fromString("123e4567-e89b-12d3-a456-426655440002"));
+
+        // when
+        sut.review(courseUuid, request);
+
+        // then
+        final ArgumentCaptor<ReviewCourseCommand> captor = ArgumentCaptor.forClass(ReviewCourseCommand.class);
+        verify(reviewCourseCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().comment()).isEqualTo(longComment);
+    }
+
+    @Test
     void updateReview_courseUuidNotEmbeddedInCommand() {
         // given — courseUuid and reviewUuid are different; only reviewUuid should appear in the command
         final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

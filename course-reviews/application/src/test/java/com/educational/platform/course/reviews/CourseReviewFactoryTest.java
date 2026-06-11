@@ -495,4 +495,61 @@ public class CourseReviewFactoryTest {
         org.mockito.Mockito.verifyNoInteractions(currentUserAsReviewer);
     }
 
+    @Test
+    void createFrom_courseNotFound_exceptionMessageHasExpectedFormat() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then — verify the full exception message
+        final var exception = assertThrows(RelatedResourceIsNotResolvedException.class, createAction);
+        assertThat(exception.getMessage()).isEqualTo("Course cannot be found by uuid = " + uuid);
+    }
+
+    @Test
+    void createFrom_validCommand_courseLookedUpExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+
+        final ReviewableCourse course = new ReviewableCourse(new CreateReviewableCourseCommand(uuid));
+        org.springframework.test.util.ReflectionTestUtils.setField(course, "id", 11);
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.of(course));
+
+        final Reviewer reviewer = new Reviewer(new CreateReviewerCommand("username"));
+        org.springframework.test.util.ReflectionTestUtils.setField(reviewer, "id", 22);
+        when(currentUserAsReviewer.userAsReviewer()).thenReturn(reviewer);
+
+        // when
+        sut.createFrom(command);
+
+        // then
+        org.mockito.Mockito.verify(reviewableCourseRepository, org.mockito.Mockito.times(1)).findByOriginalCourseId(uuid);
+    }
+
+    @Test
+    void createFrom_validCommand_reviewerLookedUpExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+
+        final ReviewableCourse course = new ReviewableCourse(new CreateReviewableCourseCommand(uuid));
+        org.springframework.test.util.ReflectionTestUtils.setField(course, "id", 11);
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.of(course));
+
+        final Reviewer reviewer = new Reviewer(new CreateReviewerCommand("username"));
+        org.springframework.test.util.ReflectionTestUtils.setField(reviewer, "id", 22);
+        when(currentUserAsReviewer.userAsReviewer()).thenReturn(reviewer);
+
+        // when
+        sut.createFrom(command);
+
+        // then
+        org.mockito.Mockito.verify(currentUserAsReviewer, org.mockito.Mockito.times(1)).userAsReviewer();
+    }
+
 }
