@@ -1100,4 +1100,96 @@ class CourseProposalControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString("not found")));
     }
+
+    @Test
+    void approve_differentUuid_commandContainsCorrectUuid() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+
+        // when
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+
+        // then
+        final ArgumentCaptor<ApproveCourseProposalCommand> captor = ArgumentCaptor.forClass(ApproveCourseProposalCommand.class);
+        verify(approveCourseProposalCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().uuid()).isEqualTo(uuid);
+    }
+
+    @Test
+    void decline_differentUuid_commandContainsCorrectUuid() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+
+        // when
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+
+        // then
+        final ArgumentCaptor<DeclineCourseProposalCommand> captor = ArgumentCaptor.forClass(DeclineCourseProposalCommand.class);
+        verify(declineCourseProposalCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().uuid()).isEqualTo(uuid);
+    }
+
+    @Test
+    void approve_conflictResponse_errorMessageExactFormat() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyApprovedException(uuid))
+                .when(approveCourseProposalCommandHandler).handle(any(ApproveCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0]").value(
+                        "Course Proposal with uuid = " + uuid + " cannot be approved, course proposal was already approved"));
+    }
+
+    @Test
+    void decline_conflictResponse_errorMessageExactFormat() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyDeclinedException(uuid))
+                .when(declineCourseProposalCommandHandler).handle(any(DeclineCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0]").value(
+                        "Course Proposal with uuid = " + uuid + " cannot be declined, course proposal was already declined"));
+    }
+
+    @Test
+    void approve_notFound_errorMessageExactFormat() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final String message = "Course Proposal with uuid: " + uuid + " not found";
+        doThrow(new ResourceNotFoundException(message))
+                .when(approveCourseProposalCommandHandler).handle(any(ApproveCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errors[0]").value(message));
+    }
+
+    @Test
+    void decline_notFound_errorMessageExactFormat() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final String message = "Course Proposal with uuid: " + uuid + " not found";
+        doThrow(new ResourceNotFoundException(message))
+                .when(declineCourseProposalCommandHandler).handle(any(DeclineCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errors[0]").value(message));
+    }
 }

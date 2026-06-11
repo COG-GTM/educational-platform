@@ -249,4 +249,128 @@ public class CourseProposalRepositoryTest {
 		assertThat(dto.uuid()).isEqualTo(uuid);
 		assertThat(dto.status()).isEqualTo(CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
 	}
+
+	@Test
+	void findByUuid_loadedEntity_canBeApproved() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		sut.save(new CourseProposal(new CreateCourseProposalCommand(uuid)));
+
+		// when
+		final CourseProposal loaded = sut.findByUuid(uuid).orElseThrow();
+		loaded.approve();
+		sut.save(loaded);
+
+		// then
+		final Optional<CourseProposal> result = sut.findByUuid(uuid);
+		assertThat(result).isPresent();
+		assertThat(result.get().toDTO().status()).isEqualTo(CourseProposalStatusDTO.APPROVED);
+	}
+
+	@Test
+	void findByUuid_loadedEntity_canBeDeclined() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		sut.save(new CourseProposal(new CreateCourseProposalCommand(uuid)));
+
+		// when
+		final CourseProposal loaded = sut.findByUuid(uuid).orElseThrow();
+		loaded.decline();
+		sut.save(loaded);
+
+		// then
+		final Optional<CourseProposal> result = sut.findByUuid(uuid);
+		assertThat(result).isPresent();
+		assertThat(result.get().toDTO().status()).isEqualTo(CourseProposalStatusDTO.DECLINED);
+	}
+
+	@Test
+	void findByUuid_approvedEntity_canBeDeclined() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+		proposal.approve();
+		sut.save(proposal);
+
+		// when
+		final CourseProposal loaded = sut.findByUuid(uuid).orElseThrow();
+		loaded.decline();
+		sut.save(loaded);
+
+		// then
+		final Optional<CourseProposal> result = sut.findByUuid(uuid);
+		assertThat(result).isPresent();
+		assertThat(result.get().toDTO().status()).isEqualTo(CourseProposalStatusDTO.DECLINED);
+	}
+
+	@Test
+	void findByUuid_declinedEntity_canBeApproved() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+		proposal.decline();
+		sut.save(proposal);
+
+		// when
+		final CourseProposal loaded = sut.findByUuid(uuid).orElseThrow();
+		loaded.approve();
+		sut.save(loaded);
+
+		// then
+		final Optional<CourseProposal> result = sut.findByUuid(uuid);
+		assertThat(result).isPresent();
+		assertThat(result.get().toDTO().status()).isEqualTo(CourseProposalStatusDTO.APPROVED);
+	}
+
+	@Test
+	void findByUuid_approvedEntity_approveAgain_throwsAlreadyApproved() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+		proposal.approve();
+		sut.save(proposal);
+
+		// when
+		final CourseProposal loaded = sut.findByUuid(uuid).orElseThrow();
+
+		// then
+		org.assertj.core.api.Assertions.assertThatExceptionOfType(
+				com.educational.platform.administration.course.CourseProposalAlreadyApprovedException.class
+		).isThrownBy(loaded::approve);
+	}
+
+	@Test
+	void findByUuid_declinedEntity_declineAgain_throwsAlreadyDeclined() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+		proposal.decline();
+		sut.save(proposal);
+
+		// when
+		final CourseProposal loaded = sut.findByUuid(uuid).orElseThrow();
+
+		// then
+		org.assertj.core.api.Assertions.assertThatExceptionOfType(
+				com.educational.platform.administration.course.CourseProposalAlreadyDeclinedException.class
+		).isThrownBy(loaded::decline);
+	}
+
+	@Test
+	void listCourseProposals_afterApproveViaFindByUuid_reflectsUpdatedStatus() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		sut.save(new CourseProposal(new CreateCourseProposalCommand(uuid)));
+		final CourseProposal loaded = sut.findByUuid(uuid).orElseThrow();
+		loaded.approve();
+		sut.save(loaded);
+
+		// when
+		var result = sut.listCourseProposals();
+
+		// then
+		assertThat(result).hasSize(1);
+		assertThat(result.get(0).uuid()).isEqualTo(uuid);
+		assertThat(result.get(0).status()).isEqualTo(CourseProposalStatusDTO.APPROVED);
+	}
 }
