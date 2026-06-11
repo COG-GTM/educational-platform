@@ -1,6 +1,7 @@
 package com.educational.platform.administration.course.decline;
 
 import com.educational.platform.administration.course.CourseProposal;
+import com.educational.platform.administration.course.CourseProposalAlreadyDeclinedException;
 import com.educational.platform.administration.course.CourseProposalRepository;
 import com.educational.platform.administration.course.CourseProposalStatus;
 import com.educational.platform.administration.course.create.CreateCourseProposalCommand;
@@ -23,7 +24,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -89,5 +90,46 @@ public class DeclineCourseProposalCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_alreadyDeclinedProposal_throwsAlreadyDeclinedException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "status", CourseProposalStatus.DECLINED);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(CourseProposalAlreadyDeclinedException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_alreadyDeclinedProposal_eventNotPublished() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "status", CourseProposalStatus.DECLINED);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        try {
+            sut.handle(command);
+        } catch (CourseProposalAlreadyDeclinedException ignored) {
+        }
+
+        // then
+        verifyNoInteractions(eventPublisher);
     }
 }

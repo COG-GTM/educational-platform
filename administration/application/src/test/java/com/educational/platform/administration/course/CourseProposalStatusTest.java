@@ -31,4 +31,10 @@ class CourseProposalStatusTest {
     void toDTO_allValues_nonNull(CourseProposalStatus status) {
         assertThat(status.toDTO()).isNotNull();
     }
+
+    @Test
+    void values_count_matchesStatusDTOCount() {
+        assertThat(CourseProposalStatus.values())
+                .hasSameSizeAs(CourseProposalStatusDTO.values());
+    }
 }

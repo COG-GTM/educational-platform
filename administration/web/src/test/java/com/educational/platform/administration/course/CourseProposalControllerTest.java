@@ -6,6 +6,7 @@ import com.educational.platform.administration.course.decline.DeclineCoursePropo
 import com.educational.platform.administration.course.decline.DeclineCourseProposalCommandHandler;
 import com.educational.platform.administration.course.query.ListCourseProposalsQuery;
 import com.educational.platform.administration.course.query.ListCourseProposalsQueryHandler;
+import com.educational.platform.common.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -119,6 +120,34 @@ class CourseProposalControllerTest {
         mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString(uuid.toString())));
+    }
+
+    @Test
+    void approve_notFound_returnsNotFound() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new ResourceNotFoundException("Course Proposal with uuid: " + uuid + " not found"))
+                .when(approveCourseProposalCommandHandler).handle(any(ApproveCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString(uuid.toString())));
+    }
+
+    @Test
+    void decline_notFound_returnsNotFound() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new ResourceNotFoundException("Course Proposal with uuid: " + uuid + " not found"))
+                .when(declineCourseProposalCommandHandler).handle(any(DeclineCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString(uuid.toString())));
     }
 }

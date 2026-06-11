@@ -171,4 +171,34 @@ public class CourseProposalTest {
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.DECLINED);
     }
 
+    @Test
+    void approve_thenApproveAgain_throwsAlreadyApprovedException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(createCourseProposalCommand);
+        proposal.approve();
+
+        // when
+        final ThrowableAssert.ThrowingCallable secondApprove = proposal::approve;
+
+        // then
+        assertThatExceptionOfType(CourseProposalAlreadyApprovedException.class).isThrownBy(secondApprove);
+    }
+
+    @Test
+    void decline_thenDeclineAgain_throwsAlreadyDeclinedException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(createCourseProposalCommand);
+        proposal.decline();
+
+        // when
+        final ThrowableAssert.ThrowingCallable secondDecline = proposal::decline;
+
+        // then
+        assertThatExceptionOfType(CourseProposalAlreadyDeclinedException.class).isThrownBy(secondDecline);
+    }
+
 }
