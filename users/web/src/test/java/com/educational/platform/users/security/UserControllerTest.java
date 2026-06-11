@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -108,5 +109,42 @@ public class UserControllerTest {
         final ArgumentCaptor<UserRegistrationCommand> captor = ArgumentCaptor.forClass(UserRegistrationCommand.class);
         verify(userRegistrationCommandHandler).handle(captor.capture());
         assertThat(captor.getValue().role()).isEqualTo(RoleDTO.ROLE_STUDENT);
+    }
+
+    @Test
+    void signUp_handlerThrowsException_propagates() {
+        // given
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "user", "user@example.com", "password123");
+        when(userRegistrationCommandHandler.handle(any())).thenThrow(new RuntimeException("Registration failed"));
+
+        // when / then
+        assertThatExceptionOfType(RuntimeException.class)
+                .isThrownBy(() -> sut.signUp(request))
+                .withMessageContaining("Registration failed");
+    }
+
+    @Test
+    void signIn_handlerThrowsException_propagates() {
+        // given
+        final SignInRequest request = new SignInRequest("user", "password");
+        when(signInCommandHandler.handle(any())).thenThrow(new RuntimeException("Authentication failed"));
+
+        // when / then
+        assertThatExceptionOfType(RuntimeException.class)
+                .isThrownBy(() -> sut.signIn(request))
+                .withMessageContaining("Authentication failed");
+    }
+
+    @Test
+    void signUp_returnsNonNullToken() {
+        // given
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_STUDENT, "user", "user@example.com", "password123");
+        when(userRegistrationCommandHandler.handle(any())).thenReturn("non-null-token");
+
+        // when
+        final String result = sut.signUp(request);
+
+        // then
+        assertThat(result).isNotNull().isNotBlank();
     }
 }

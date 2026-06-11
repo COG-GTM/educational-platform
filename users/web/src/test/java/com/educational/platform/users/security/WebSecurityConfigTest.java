@@ -97,4 +97,30 @@ public class WebSecurityConfigTest {
                 .then()
                 .statusCode(HttpStatus.FORBIDDEN.value());
     }
+
+    @Test
+    void signUpEndpoint_invalidPayload_badRequest() {
+        given()
+                .contentType("application/json")
+                .body("{}")
+
+                .when()
+                .post("/users/sign-up")
+
+                .then()
+                .statusCode(HttpStatus.BAD_REQUEST.value());
+    }
+
+    @Test
+    void signInEndpoint_invalidPayload_badRequest() {
+        given()
+                .contentType("application/json")
+                .body("{}")
+
+                .when()
+                .post("/users/sign-in")
+
+                .then()
+                .statusCode(HttpStatus.BAD_REQUEST.value());
+    }
 }

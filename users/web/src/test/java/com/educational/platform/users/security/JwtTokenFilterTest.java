@@ -210,4 +210,47 @@ public class JwtTokenFilterTest {
         // then
         verify(jwtTokenProvider, never()).getAuthentication(any());
     }
+
+    @Test
+    void doFilterInternal_existingAuthInContext_overwrittenByNewToken() throws ServletException, IOException {
+        // given
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        final Authentication oldAuth = mock(Authentication.class);
+        SecurityContextHolder.getContext().setAuthentication(oldAuth);
+
+        final Authentication newAuth = mock(Authentication.class);
+        when(jwtTokenProvider.resolveToken(request)).thenReturn("new-token");
+        when(jwtTokenProvider.validateToken("new-token")).thenReturn(true);
+        when(jwtTokenProvider.getAuthentication("new-token")).thenReturn(newAuth);
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isEqualTo(newAuth);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotEqualTo(oldAuth);
+    }
+
+    @Test
+    void doFilterInternal_invalidToken_securityContextCleared() throws ServletException, IOException {
+        // given
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        final Authentication existingAuth = mock(Authentication.class);
+        SecurityContextHolder.getContext().setAuthentication(existingAuth);
+
+        when(jwtTokenProvider.resolveToken(request)).thenReturn("bad-token");
+        when(jwtTokenProvider.validateToken("bad-token")).thenThrow(new JwtTokenValidationException("Expired or invalid JWT token"));
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
 }

@@ -238,4 +238,44 @@ public class SignInCommandHandlerTest {
                 .isThrownBy(handle)
                 .withMessageContaining("Invalid username/password");
     }
+
+    @Test
+    void handle_userNotFoundAfterAuthentication_noSuchElementException() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("ghost")
+                .password("password")
+                .build();
+        when(repository.findByUsername("ghost")).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then
+        assertThatExceptionOfType(java.util.NoSuchElementException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_validCommand_returnsToken() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("password")
+                .build();
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User existingUser = new User(userRegistrationCommand, passwordEncoder);
+        when(repository.findByUsername("username")).thenReturn(Optional.of(existingUser));
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("expected-token");
+
+        // when
+        final String token = sut.handle(signInCommand);
+
+        // then
+        assertThat(token).isEqualTo("expected-token");
+    }
 }

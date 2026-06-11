@@ -298,4 +298,59 @@ public class JwtTokenProviderTest {
         // then
         assertThat(authentication.getCredentials()).isEqualTo("");
     }
+
+    @Test
+    void validateToken_nullToken_jwtTokenValidationException() {
+        // when / then
+        assertThatExceptionOfType(JwtTokenValidationException.class)
+                .isThrownBy(() -> sut.validateToken(null));
+    }
+
+    @Test
+    void getAuthentication_teacherUser_teacherAuthorityReturned() {
+        // given
+        final String token = sut.createToken("teacher", Collections.singletonList(Role.ROLE_TEACHER));
+
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("teacher")
+                .email("teacher@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("teacher")).thenReturn(Optional.of(user));
+
+        // when
+        final Authentication authentication = sut.getAuthentication(token);
+
+        // then
+        assertThat(authentication.getAuthorities())
+                .hasSize(1)
+                .first()
+                .satisfies(authority -> assertThat(authority.getAuthority()).isEqualTo("ROLE_TEACHER"));
+    }
+
+    @Test
+    void createToken_adminRole_tokenCreated() {
+        // when
+        final String token = sut.createToken("admin", Collections.singletonList(Role.ROLE_ADMIN));
+
+        // then
+        assertThat(token).isNotBlank();
+        assertThat(sut.getUsername(token)).isEqualTo("admin");
+    }
+
+    @Test
+    void resolveToken_bearerWithExtraSpaces_extractsTokenWithSpaces() {
+        // given
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer  token-with-leading-space");
+
+        // when
+        final String token = sut.resolveToken(request);
+
+        // then
+        assertThat(token).isEqualTo(" token-with-leading-space");
+    }
 }

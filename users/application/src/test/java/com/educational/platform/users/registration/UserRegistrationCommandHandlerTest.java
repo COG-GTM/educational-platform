@@ -284,4 +284,42 @@ public class UserRegistrationCommandHandlerTest {
                 .isThrownBy(handle)
                 .withMessageContaining("duplicate");
     }
+
+    @Test
+    void handle_validCommand_passwordEncoderInvoked() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("raw-password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        verify(passwordEncoder).encode("raw-password");
+    }
+
+    @Test
+    void handle_validCommand_tokenCreatedWithStudentRole() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("student")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("student")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        verify(jwtTokenProvider).createToken(eq("student"), eq(Collections.singletonList(Role.ROLE_STUDENT)));
+    }
 }
