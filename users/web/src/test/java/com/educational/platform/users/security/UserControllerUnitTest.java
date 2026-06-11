@@ -48,7 +48,25 @@ public class UserControllerUnitTest {
         verify(registrationHandler).handle(captor.capture());
         assertThat(captor.getValue().username()).isEqualTo("user");
         assertThat(captor.getValue().email()).isEqualTo("email@test.com");
+        assertThat(captor.getValue().password()).isEqualTo("pass");
         assertThat(captor.getValue().role()).isEqualTo(RoleDTO.ROLE_STUDENT);
+    }
+
+    @Test
+    void signUp_withTeacherRole_mapsRoleCorrectly() {
+        // given
+        final SignUpRequest request = new SignUpRequest(RoleDTO.ROLE_TEACHER, "teacher", "teacher@test.com", "secret");
+        when(registrationHandler.handle(any())).thenReturn("teacher-token");
+
+        // when
+        final String result = sut.signUp(request);
+
+        // then
+        assertThat(result).isEqualTo("teacher-token");
+        final ArgumentCaptor<UserRegistrationCommand> captor = ArgumentCaptor.forClass(UserRegistrationCommand.class);
+        verify(registrationHandler).handle(captor.capture());
+        assertThat(captor.getValue().role()).isEqualTo(RoleDTO.ROLE_TEACHER);
+        assertThat(captor.getValue().username()).isEqualTo("teacher");
     }
 
     @Test

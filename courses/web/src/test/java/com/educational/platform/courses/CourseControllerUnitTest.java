@@ -57,6 +57,23 @@ public class CourseControllerUnitTest {
     }
 
     @Test
+    void create_mapsRequestFieldsToCommand() {
+        // given
+        when(createHandler.handle(any())).thenReturn(UUID.randomUUID());
+        final CreateCourseRequest request = new CreateCourseRequest("Math 101", "Intro to mathematics");
+
+        // when
+        sut.create(request);
+
+        // then
+        final ArgumentCaptor<com.educational.platform.courses.course.create.CreateCourseCommand> captor =
+                ArgumentCaptor.forClass(com.educational.platform.courses.course.create.CreateCourseCommand.class);
+        verify(createHandler).handle(captor.capture());
+        assertThat(captor.getValue().name()).isEqualTo("Math 101");
+        assertThat(captor.getValue().description()).isEqualTo("Intro to mathematics");
+    }
+
+    @Test
     void publish_delegatesToPublishHandler() {
         // given
         final UUID uuid = UUID.randomUUID();
