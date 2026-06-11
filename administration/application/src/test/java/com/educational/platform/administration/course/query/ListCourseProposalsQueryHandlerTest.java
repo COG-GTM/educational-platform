@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.Collections;
 import java.util.List;
@@ -92,5 +93,26 @@ class ListCourseProposalsQueryHandlerTest {
                         CourseProposalStatusDTO.APPROVED,
                         CourseProposalStatusDTO.DECLINED
                 );
+    }
+
+    @Test
+    void handle_hasPreAuthorizeAnnotation() throws NoSuchMethodException {
+        // when
+        final var method = ListCourseProposalsQueryHandler.class
+                .getMethod("handle", ListCourseProposalsQuery.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(PreAuthorize.class)).isTrue();
+    }
+
+    @Test
+    void handle_preAuthorizeAnnotation_requiresAdminRole() throws NoSuchMethodException {
+        // when
+        final var method = ListCourseProposalsQueryHandler.class
+                .getMethod("handle", ListCourseProposalsQuery.class);
+        final PreAuthorize annotation = method.getAnnotation(PreAuthorize.class);
+
+        // then
+        assertThat(annotation.value()).contains("hasRole('ADMIN')");
     }
 }

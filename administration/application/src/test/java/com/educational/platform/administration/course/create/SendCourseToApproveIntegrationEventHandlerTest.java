@@ -8,7 +8,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -84,6 +87,26 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("handler failure");
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_hasEventListenerAnnotation() throws NoSuchMethodException {
+        // when
+        final Method method = SendCourseToApproveIntegrationEventHandler.class
+                .getMethod("handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(EventListener.class)).isTrue();
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_hasAsyncAnnotation() throws NoSuchMethodException {
+        // when
+        final Method method = SendCourseToApproveIntegrationEventHandler.class
+                .getMethod("handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(Async.class)).isTrue();
     }
 
 }

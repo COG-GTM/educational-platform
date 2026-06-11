@@ -237,4 +237,66 @@ public class CourseProposalTest {
         assertThatExceptionOfType(CourseProposalAlreadyDeclinedException.class).isThrownBy(secondDecline);
     }
 
+    @Test
+    void create_nullUuid_createsProposalWithNullUuid() {
+        // given
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(null);
+
+        // when
+        final CourseProposal proposal = new CourseProposal(command);
+
+        // then
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("uuid", null)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void toDTO_nullUuid_dtoContainsNullUuid() {
+        // given
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(null);
+        final CourseProposal proposal = new CourseProposal(command);
+
+        // when
+        final CourseProposalDTO dto = proposal.toDTO();
+
+        // then
+        assertThat(dto.uuid()).isNull();
+        assertThat(dto.status()).isEqualTo(CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void approve_alreadyApproved_exceptionContainsUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(createCourseProposalCommand);
+        proposal.approve();
+
+        // when
+        final ThrowableAssert.ThrowingCallable secondApprove = proposal::approve;
+
+        // then
+        assertThatExceptionOfType(CourseProposalAlreadyApprovedException.class)
+                .isThrownBy(secondApprove)
+                .withMessageContaining(uuid.toString());
+    }
+
+    @Test
+    void decline_alreadyDeclined_exceptionContainsUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(createCourseProposalCommand);
+        proposal.decline();
+
+        // when
+        final ThrowableAssert.ThrowingCallable secondDecline = proposal::decline;
+
+        // then
+        assertThatExceptionOfType(CourseProposalAlreadyDeclinedException.class)
+                .isThrownBy(secondDecline)
+                .withMessageContaining(uuid.toString());
+    }
+
 }

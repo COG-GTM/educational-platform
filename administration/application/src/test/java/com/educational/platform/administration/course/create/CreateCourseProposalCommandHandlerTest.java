@@ -13,6 +13,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -55,6 +58,37 @@ public class CreateCourseProposalCommandHandlerTest {
         verify(repository).save(argument.capture());
         final CourseProposal proposal = argument.getValue();
         assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void handle_repositorySaveThrows_exceptionPropagates() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        doThrow(new RuntimeException("DB error"))
+                .when(repository).save(any(CourseProposal.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(command))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("DB error");
+    }
+
+    @Test
+    void handle_nullUuidCommand_courseProposalSavedWithNullUuid() {
+        // given
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(null);
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseProposal> argument = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository).save(argument.capture());
+        final CourseProposal proposal = argument.getValue();
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("uuid", null)
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL);
     }
 }

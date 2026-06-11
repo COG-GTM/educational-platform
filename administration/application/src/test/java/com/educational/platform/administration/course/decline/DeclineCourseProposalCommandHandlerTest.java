@@ -233,4 +233,50 @@ public class DeclineCourseProposalCommandHandlerTest {
                 .isThrownBy(handle)
                 .withMessageContaining(uuid.toString());
     }
+
+    @Test
+    void handle_existingCourseProposal_repositorySaveCalledExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(repository, times(1)).save(any(CourseProposal.class));
+    }
+
+    @Test
+    void handle_existingCourseProposal_eventPublishedExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(eventPublisher, times(1)).publishEvent(any(CourseDeclinedByAdminIntegrationEvent.class));
+    }
+
+    @Test
+    void handle_hasPreAuthorizeAnnotation() throws NoSuchMethodException {
+        // when
+        final var method = DeclineCourseProposalCommandHandler.class
+                .getMethod("handle", DeclineCourseProposalCommand.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(org.springframework.security.access.prepost.PreAuthorize.class)).isTrue();
+    }
 }
