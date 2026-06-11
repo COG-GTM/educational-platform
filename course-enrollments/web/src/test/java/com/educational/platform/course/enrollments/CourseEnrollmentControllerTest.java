@@ -142,4 +142,15 @@ public class CourseEnrollmentControllerTest {
         org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
                 () -> sut.enroll(courseUuid, new CourseEnrollmentRequest("student")));
     }
+
+    @Test
+    void courseEnrollments_handlerThrowsException_propagatesToCaller() {
+        // given
+        when(listHandler.handle(any(ListCourseEnrollmentsQuery.class)))
+                .thenThrow(new RuntimeException("list failed"));
+
+        // when / then
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> sut.courseEnrollments());
+    }
 }

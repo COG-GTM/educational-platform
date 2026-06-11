@@ -159,6 +159,22 @@ public class CourseEnrollmentApiTest {
     }
 
     @Test
+    void register_nonExistentCourse_badRequest() {
+        var token = SignUpHelper.signUpStudent();
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .body("{\n" +
+                        "  \"student\": \"username\"\n" +
+                        "}")
+                .when()
+                .post("/courses/{uuid}/course-enrollments", UUID.fromString("00000000-0000-0000-0000-000000000099"))
+                .then()
+                .statusCode(HttpStatus.BAD_REQUEST.value());
+    }
+
+    @Test
     void listCourseEnrollments_studentAuthenticated_responseContainsDTOFields() {
         var token = SignUpHelper.signUpStudent();
 

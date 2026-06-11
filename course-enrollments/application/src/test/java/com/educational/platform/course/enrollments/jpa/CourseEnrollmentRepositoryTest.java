@@ -139,6 +139,36 @@ public class CourseEnrollmentRepositoryTest {
 		assertThat(result).extracting("course").containsExactlyInAnyOrder(FIRST_COURSE, SECOND_COURSE);
 	}
 
+	@Test
+	void queryByUuidAndStudent_completedEnrollment_dtoHasCompletedStatus() {
+		// given
+		var enrollment = createAndSaveEnrollment(FIRST_COURSE);
+		enrollment.complete();
+		courseEnrollmentRepository.save(enrollment);
+
+		// when
+		var result = courseEnrollmentRepository.query(enrollment.getUuid(), STUDENT);
+
+		// then
+		assertThat(result).isPresent();
+		assertThat(result.get().completionStatus()).isEqualTo(com.educational.platform.course.enrollments.CompletionStatusDTO.COMPLETED);
+	}
+
+	@Test
+	void queryByStudent_completedEnrollment_dtoHasCompletedStatus() {
+		// given
+		var enrollment = createAndSaveEnrollment(FIRST_COURSE);
+		enrollment.complete();
+		courseEnrollmentRepository.save(enrollment);
+
+		// when
+		var result = courseEnrollmentRepository.query(STUDENT);
+
+		// then
+		assertThat(result).hasSize(1);
+		assertThat(result.getFirst().completionStatus()).isEqualTo(com.educational.platform.course.enrollments.CompletionStatusDTO.COMPLETED);
+	}
+
 	private CourseEnrollment createAndSaveEnrollment(UUID courseUuid) {
 		var course = enrollCourseRepository.findByUuid(courseUuid);
 		var student = studentRepository.findByUsername(STUDENT);

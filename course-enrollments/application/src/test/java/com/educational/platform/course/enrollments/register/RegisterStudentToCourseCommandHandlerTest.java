@@ -204,4 +204,19 @@ public class RegisterStudentToCourseCommandHandlerTest {
         // then
         verify(eventPublisher, times(2)).publishEvent(any(StudentEnrolledToCourseIntegrationEvent.class));
     }
+
+    @Test
+    void handle_transactionCallbackThrows_eventNotPublished() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+
+        when(transactionTemplate.execute(any())).thenThrow(new RuntimeException("transaction failed"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(command))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("transaction failed");
+        verify(eventPublisher, never()).publishEvent(any());
+    }
 }

@@ -49,4 +49,17 @@ public class ListCourseEnrollmentsQueryHandlerSecurityTest {
 		// then
 		assertThat(result).isNotNull();
 	}
+
+	@Test
+	@WithMockUser(roles = {})
+	void handle_userHasNoRoles_accessDeniedException() {
+		// given
+		var query = new ListCourseEnrollmentsQuery();
+
+		// when
+		final ThrowingCallable queryAction = () -> sut.handle(query);
+
+		// then
+		assertThatThrownBy(queryAction).isInstanceOf(AccessDeniedException.class);
+	}
 }
