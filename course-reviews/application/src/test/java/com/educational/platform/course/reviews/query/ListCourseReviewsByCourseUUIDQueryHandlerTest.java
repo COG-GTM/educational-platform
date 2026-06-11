@@ -62,4 +62,23 @@ public class ListCourseReviewsByCourseUUIDQueryHandlerTest {
         // then
         assertThat(result).isEmpty();
     }
+
+    @Test
+    void handle_multipleReviews_allReturned() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ListCourseReviewsByCourseUUIDQuery query = new ListCourseReviewsByCourseUUIDQuery(courseId);
+        final CourseReviewDTO dto1 = new CourseReviewDTO(
+                UUID.fromString("123e4567-e89b-12d3-a456-426655440002"), courseId, "user1", "good", 4.0);
+        final CourseReviewDTO dto2 = new CourseReviewDTO(
+                UUID.fromString("123e4567-e89b-12d3-a456-426655440003"), courseId, "user2", "great", 5.0);
+        when(courseReviewRepository.listCourseReviews(courseId)).thenReturn(List.of(dto1, dto2));
+
+        // when
+        final List<CourseReviewDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(CourseReviewDTO::username).containsExactly("user1", "user2");
+    }
 }

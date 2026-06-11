@@ -1,5 +1,6 @@
 package com.educational.platform.course.reviews.create;
 
+import com.educational.platform.common.exception.RelatedResourceIsNotResolvedException;
 import com.educational.platform.course.reviews.*;
 import com.educational.platform.course.reviews.course.ReviewableCourse;
 import com.educational.platform.course.reviews.course.ReviewableCourseRepository;
@@ -14,12 +15,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -70,5 +73,45 @@ public class ReviewCourseCommandHandlerTest {
         assertThat(savedReview)
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(4))
                 .hasFieldOrPropertyWithValue("comment", new Comment("comment"));
+    }
+
+    @Test
+    void handle_invalidRating_constraintViolationException() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, -1.0, "comment");
+
+        // when
+        final org.assertj.core.api.ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_nullRating_constraintViolationException() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, null, "comment");
+
+        // when
+        final org.assertj.core.api.ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_courseNotFound_relatedResourceIsNotResolvedException() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+        when(reviewableCourseRepository.findByOriginalCourseId(courseId)).thenReturn(Optional.empty());
+
+        // when
+        final org.assertj.core.api.ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(RelatedResourceIsNotResolvedException.class).isThrownBy(handle);
     }
 }

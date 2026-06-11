@@ -112,6 +112,36 @@ public class UpdateCourseReviewCommandHandlerTest {
         assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
     }
 
+    @Test
+    void handle_validUpdate_uuidPreserved() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 2.0, "changed");
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void handle_uuidEmpty_resourceNotFoundException() {
+        // given
+        final UUID uuid = UUID.fromString("00000000-0000-0000-0000-000000000000");
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, "comment");
+        when(courseReviewRepository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));

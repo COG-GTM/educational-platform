@@ -10,6 +10,7 @@ import org.springframework.security.core.Authentication;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,5 +55,19 @@ public class CourseReviewCheckerTest {
 
         // then
         assertThat(result).isFalse();
+    }
+
+    @Test
+    void hasAccess_delegatesToRepositoryWithCorrectArguments() {
+        // given
+        final UUID reviewId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(authentication.getName()).thenReturn("test-user");
+        when(courseReviewRepository.isReviewer(reviewId, "test-user")).thenReturn(true);
+
+        // when
+        sut.hasAccess(authentication, reviewId);
+
+        // then
+        verify(courseReviewRepository).isReviewer(reviewId, "test-user");
     }
 }
