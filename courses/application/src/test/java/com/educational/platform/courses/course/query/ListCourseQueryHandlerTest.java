@@ -419,4 +419,101 @@ public class ListCourseQueryHandlerTest {
         assertThat(result.get(1)).isNull();
     }
 
+    @Test
+    void handle_courseWithWhitespaceOnlyFields_preservedInResults() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO whitespaceCourse = new CourseLightDTO(UUID.randomUUID(), "   ", "\t\n", 0);
+        when(repository.list()).thenReturn(List.of(whitespaceCourse));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().name()).isEqualTo("   ");
+        assertThat(result.getFirst().description()).isEqualTo("\t\n");
+    }
+
+    @Test
+    void handle_repositoryReturnsMutableList_returnedDirectly() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final java.util.ArrayList<CourseLightDTO> mutableList = new java.util.ArrayList<>();
+        mutableList.add(new CourseLightDTO(UUID.randomUUID(), "course", "desc", 1));
+        when(repository.list()).thenReturn(mutableList);
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(mutableList);
+    }
+
+    @Test
+    void handle_consecutiveCallsReturnFreshResults() {
+        // given
+        final CourseLightDTO course1 = new CourseLightDTO(UUID.randomUUID(), "first", "desc1", 1);
+        final CourseLightDTO course2 = new CourseLightDTO(UUID.randomUUID(), "second", "desc2", 2);
+        when(repository.list())
+                .thenReturn(List.of(course1))
+                .thenReturn(List.of(course2));
+
+        // when
+        final List<CourseLightDTO> result1 = sut.handle(new ListCourseQuery());
+        final List<CourseLightDTO> result2 = sut.handle(new ListCourseQuery());
+
+        // then
+        assertThat(result1).hasSize(1);
+        assertThat(result1.getFirst().name()).isEqualTo("first");
+        assertThat(result2).hasSize(1);
+        assertThat(result2.getFirst().name()).isEqualTo("second");
+    }
+
+    @Test
+    void handle_courseWithUnicodeFields_preservedInResults() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO unicodeCourse = new CourseLightDTO(UUID.randomUUID(), "日本語コース", "Описание αβγ", 5);
+        when(repository.list()).thenReturn(List.of(unicodeCourse));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().name()).isEqualTo("日本語コース");
+        assertThat(result.getFirst().description()).isEqualTo("Описание αβγ");
+    }
+
+    @Test
+    void handle_repositoryThrowsNullPointerException_exceptionPropagated() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        when(repository.list()).thenThrow(new NullPointerException("unexpected null"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("unexpected null");
+    }
+
+    @Test
+    void handle_firstCallEmpty_secondCallPopulated_bothDelegated() {
+        // given
+        final CourseLightDTO course = new CourseLightDTO(UUID.randomUUID(), "c", "d", 1);
+        when(repository.list())
+                .thenReturn(List.of())
+                .thenReturn(List.of(course));
+
+        // when
+        final List<CourseLightDTO> result1 = sut.handle(new ListCourseQuery());
+        final List<CourseLightDTO> result2 = sut.handle(new ListCourseQuery());
+
+        // then
+        assertThat(result1).isEmpty();
+        assertThat(result2).hasSize(1);
+        verify(repository, org.mockito.Mockito.times(2)).list();
+    }
+
 }

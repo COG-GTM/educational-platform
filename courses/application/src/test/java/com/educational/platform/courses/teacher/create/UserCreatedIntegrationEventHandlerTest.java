@@ -387,4 +387,99 @@ public class UserCreatedIntegrationEventHandlerTest {
                 .containsExactly("user1", "user2", "user3");
     }
 
+    @Test
+    void handleUserCreatedEvent_usernameWithSqlInjectionChars_preservedInCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(
+                "'; DROP TABLE teachers; --", "sql@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("'; DROP TABLE teachers; --");
+    }
+
+    @Test
+    void handleUserCreatedEvent_usernameWithBackslashes_preservedInCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(
+                "domain\\user\\name", "bs@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("domain\\user\\name");
+    }
+
+    @Test
+    void handleUserCreatedEvent_multipleEventsAlternatingNullAndNonNull_allProcessed() {
+        // given
+        final UserCreatedIntegrationEvent event1 = new UserCreatedIntegrationEvent(null, "e1@example.com");
+        final UserCreatedIntegrationEvent event2 = new UserCreatedIntegrationEvent("teacher", "e2@example.com");
+        final UserCreatedIntegrationEvent event3 = new UserCreatedIntegrationEvent(null, "e3@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event1);
+        sut.handleUserCreatedEvent(event2);
+        sut.handleUserCreatedEvent(event3);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler, times(3)).handle(argument.capture());
+        assertThat(argument.getAllValues())
+                .extracting(CreateTeacherCommand::username)
+                .containsExactly(null, "teacher", null);
+    }
+
+    @Test
+    void handleUserCreatedEvent_commandHandlerThrowsNullPointerException_exceptionPropagated() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher", "teacher@example.com");
+        doThrow(new NullPointerException("null command")).when(createTeacherCommandHandler).handle(any(CreateTeacherCommand.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("null command");
+    }
+
+    @Test
+    void handleUserCreatedEvent_sameEventObjectProcessedTwice_handlerCalledTwice() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher", "teacher@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler, times(2)).handle(argument.capture());
+        assertThat(argument.getAllValues())
+                .extracting(CreateTeacherCommand::username)
+                .containsExactly("teacher", "teacher");
+        assertThat(argument.getAllValues().get(0)).isNotSameAs(argument.getAllValues().get(1));
+    }
+
+    @Test
+    void handleUserCreatedEvent_usernameWithHtmlChars_preservedInCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(
+                "<script>alert('xss')</script>", "html@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("<script>alert('xss')</script>");
+    }
+
 }
