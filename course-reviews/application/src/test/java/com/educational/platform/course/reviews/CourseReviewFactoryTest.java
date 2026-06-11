@@ -86,4 +86,25 @@ public class CourseReviewFactoryTest {
         assertThatExceptionOfType(ConstraintViolationException.class)
                 .isThrownBy(() -> sut.createFrom(command));
     }
+
+    @Test
+    void createFrom_courseIdIsNull_constraintViolationException() {
+        // given
+        final ReviewCourseCommand command = new ReviewCourseCommand(null, 4.0, "comment");
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.createFrom(command));
+    }
+
+    @Test
+    void createFrom_nullRating_constraintViolationException() {
+        // given
+        final UUID courseId = UUID.randomUUID();
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, null, "comment");
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.createFrom(command));
+    }
 }
