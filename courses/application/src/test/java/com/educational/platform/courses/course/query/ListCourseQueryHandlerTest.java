@@ -648,4 +648,48 @@ public class ListCourseQueryHandlerTest {
                 .containsExactly("Zebra", "Mango", "Apple");
     }
 
+    @Test
+    void handle_repositoryThrowsOutOfMemoryError_errorPropagated() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        when(repository.list()).thenThrow(new OutOfMemoryError("test OOM"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(OutOfMemoryError.class)
+                .hasMessage("test OOM");
+    }
+
+    @Test
+    void handle_repositoryReturnsSingletonList_returnedAsIs() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final List<CourseLightDTO> singletonList = java.util.Collections.singletonList(
+                new CourseLightDTO(UUID.randomUUID(), "only", "desc", 1));
+        when(repository.list()).thenReturn(singletonList);
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(singletonList);
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().name()).isEqualTo("only");
+    }
+
+    @Test
+    void handle_threeConsecutiveCalls_allDelegatedToRepository() {
+        // given
+        final CourseLightDTO course = new CourseLightDTO(UUID.randomUUID(), "c", "d", 1);
+        when(repository.list()).thenReturn(List.of(course));
+
+        // when
+        sut.handle(new ListCourseQuery());
+        sut.handle(new ListCourseQuery());
+        sut.handle(new ListCourseQuery());
+
+        // then
+        verify(repository, org.mockito.Mockito.times(3)).list();
+    }
+
 }

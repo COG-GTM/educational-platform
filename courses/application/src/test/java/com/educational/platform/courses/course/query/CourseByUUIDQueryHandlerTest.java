@@ -716,4 +716,57 @@ public class CourseByUUIDQueryHandlerTest {
         verify(repository, times(2)).findDTOByUuid(uuid);
     }
 
+    @Test
+    void handle_courseWithAllNullableFieldsNull_returnedAsIs() {
+        // given
+        final UUID queryUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440038");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(queryUuid);
+        final CourseDTO courseDTO = new CourseDTO(null, null, null, 0, null);
+        when(repository.findDTOByUuid(queryUuid)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().uuid()).isNull();
+        assertThat(result.get().name()).isNull();
+        assertThat(result.get().description()).isNull();
+        assertThat(result.get().numberOfStudents()).isZero();
+        assertThat(result.get().curriculumItems()).isNull();
+    }
+
+    @Test
+    void handle_repositoryThrowsOutOfMemoryError_errorPropagated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440039");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        when(repository.findDTOByUuid(uuid)).thenThrow(new OutOfMemoryError("test OOM"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(OutOfMemoryError.class)
+                .hasMessage("test OOM");
+    }
+
+    @Test
+    void handle_largeCurriculumItemsList_allItemsPreserved() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440040");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        final List<CurriculumItemDTO> items = java.util.stream.IntStream.rangeClosed(1, 100)
+                .mapToObj(i -> mock(CurriculumItemDTO.class))
+                .collect(java.util.stream.Collectors.toList());
+        final CourseDTO courseDTO = new CourseDTO(uuid, "big course", "desc", 50, items);
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().curriculumItems()).hasSize(100);
+        assertThat(result.get().curriculumItems()).isSameAs(items);
+    }
+
 }

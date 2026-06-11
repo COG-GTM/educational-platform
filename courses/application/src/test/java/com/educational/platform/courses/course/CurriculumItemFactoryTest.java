@@ -1861,4 +1861,104 @@ public class CurriculumItemFactoryTest {
                 .doesNotHaveDuplicates();
     }
 
+    @Test
+    void createFrom_quizCommand_nullCourse_questionsStillReferenceQuiz() {
+        // given
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(List.of(
+                        new CreateQuestionCommand("Q1"),
+                        new CreateQuestionCommand("Q2")))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, null);
+
+        // then
+        assertThat(result).isInstanceOf(Quiz.class);
+        assertThat(result).extracting("course").isNull();
+        assertThat(result).extracting("questions")
+                .asInstanceOf(LIST)
+                .hasSize(2)
+                .allSatisfy(question ->
+                        assertThat(question).extracting("quiz").isSameAs(result));
+    }
+
+    @Test
+    void createFrom_lectureAndQuiz_sameTitleDescription_fieldsNotCrossContaminated() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateLectureCommand lectureCommand = CreateLectureCommand.builder()
+                .title("Shared Title")
+                .description("Shared Desc")
+                .serialNumber(1)
+                .text("Lecture specific text")
+                .build();
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Shared Title")
+                .description("Shared Desc")
+                .serialNumber(2)
+                .text("Quiz specific text")
+                .questions(List.of(new CreateQuestionCommand("Quiz Q")))
+                .build();
+
+        // when
+        final CurriculumItem lecture = CurriculumItemFactory.createFrom(lectureCommand, course);
+        final CurriculumItem quiz = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(lecture).isInstanceOf(Lecture.class);
+        assertThat(lecture)
+                .hasFieldOrPropertyWithValue("title", "Shared Title")
+                .hasFieldOrPropertyWithValue("content", "Lecture specific text");
+        assertThat(quiz).isInstanceOf(Quiz.class);
+        assertThat(quiz).hasFieldOrPropertyWithValue("title", "Shared Title");
+        assertThat(quiz).extracting("questions")
+                .asInstanceOf(LIST)
+                .hasSize(1)
+                .first()
+                .hasFieldOrPropertyWithValue("content", "Quiz Q");
+    }
+
+    @Test
+    void createFrom_quizCommand_uuidDistinctFromCourseUuid() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(List.of(new CreateQuestionCommand("Q1")))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(List.of(result, course))
+                .extracting("uuid")
+                .doesNotContainNull()
+                .doesNotHaveDuplicates();
+    }
+
 }
