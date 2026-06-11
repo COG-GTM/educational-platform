@@ -33,8 +33,8 @@ public class CourseTeacherCheckerTest {
     void hasAccess_userIsTeacher_returnsTrue() {
         // given
         final UUID courseId = UUID.randomUUID();
-        when(authentication.getName()).thenReturn("teacher");
-        when(courseRepository.isTeacher(courseId, "teacher")).thenReturn(true);
+        when(authentication.getName()).thenReturn("teacher_user");
+        when(courseRepository.isTeacher(courseId, "teacher_user")).thenReturn(true);
 
         // when
         final boolean result = sut.hasAccess(authentication, courseId);
@@ -47,8 +47,8 @@ public class CourseTeacherCheckerTest {
     void hasAccess_userIsNotTeacher_returnsFalse() {
         // given
         final UUID courseId = UUID.randomUUID();
-        when(authentication.getName()).thenReturn("other-user");
-        when(courseRepository.isTeacher(courseId, "other-user")).thenReturn(false);
+        when(authentication.getName()).thenReturn("student_user");
+        when(courseRepository.isTeacher(courseId, "student_user")).thenReturn(false);
 
         // when
         final boolean result = sut.hasAccess(authentication, courseId);

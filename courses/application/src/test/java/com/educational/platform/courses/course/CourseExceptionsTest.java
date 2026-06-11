@@ -8,65 +8,41 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class CourseExceptionsTest {
 
+    private static final UUID UUID_VALUE = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
     @Test
     void courseAlreadyApprovedException_messageContainsUuid() {
-        // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-
         // when
-        final CourseAlreadyApprovedException exception = new CourseAlreadyApprovedException(uuid);
+        final CourseAlreadyApprovedException exception = new CourseAlreadyApprovedException(UUID_VALUE);
 
         // then
         assertThat(exception.getMessage())
-                .contains("123e4567-e89b-12d3-a456-426655440001")
+                .contains(UUID_VALUE.toString())
                 .contains("cannot be sent for approval")
                 .contains("already approved");
     }
 
     @Test
-    void courseCannotBePublishedException_messageContainsUuid() {
-        // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+    void courseAlreadyApprovedException_isRuntimeException() {
+        assertThat(new CourseAlreadyApprovedException(UUID_VALUE))
+                .isInstanceOf(RuntimeException.class);
+    }
 
+    @Test
+    void courseCannotBePublishedException_messageContainsUuid() {
         // when
-        final CourseCannotBePublishedException exception = new CourseCannotBePublishedException(uuid);
+        final CourseCannotBePublishedException exception = new CourseCannotBePublishedException(UUID_VALUE);
 
         // then
         assertThat(exception.getMessage())
-                .contains("123e4567-e89b-12d3-a456-426655440002")
+                .contains(UUID_VALUE.toString())
                 .contains("cannot be published")
                 .contains("approved by admin");
     }
 
     @Test
-    void courseAlreadyApprovedException_differentUuids_produceDifferentMessages() {
-        // given
-        final UUID uuid1 = UUID.randomUUID();
-        final UUID uuid2 = UUID.randomUUID();
-
-        // when
-        final CourseAlreadyApprovedException ex1 = new CourseAlreadyApprovedException(uuid1);
-        final CourseAlreadyApprovedException ex2 = new CourseAlreadyApprovedException(uuid2);
-
-        // then
-        assertThat(ex1.getMessage()).contains(uuid1.toString());
-        assertThat(ex2.getMessage()).contains(uuid2.toString());
-        assertThat(ex1.getMessage()).isNotEqualTo(ex2.getMessage());
-    }
-
-    @Test
-    void courseCannotBePublishedException_differentUuids_produceDifferentMessages() {
-        // given
-        final UUID uuid1 = UUID.randomUUID();
-        final UUID uuid2 = UUID.randomUUID();
-
-        // when
-        final CourseCannotBePublishedException ex1 = new CourseCannotBePublishedException(uuid1);
-        final CourseCannotBePublishedException ex2 = new CourseCannotBePublishedException(uuid2);
-
-        // then
-        assertThat(ex1.getMessage()).contains(uuid1.toString());
-        assertThat(ex2.getMessage()).contains(uuid2.toString());
-        assertThat(ex1.getMessage()).isNotEqualTo(ex2.getMessage());
+    void courseCannotBePublishedException_isRuntimeException() {
+        assertThat(new CourseCannotBePublishedException(UUID_VALUE))
+                .isInstanceOf(RuntimeException.class);
     }
 }

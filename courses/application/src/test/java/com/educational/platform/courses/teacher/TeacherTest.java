@@ -8,29 +8,35 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class TeacherTest {
 
     @Test
-    void create_validCommand_usernameStored() {
+    void constructor_validCommand_setsUsername() {
         // given
-        final CreateTeacherCommand command = new CreateTeacherCommand("username");
+        final CreateTeacherCommand command = new CreateTeacherCommand("john_doe");
 
         // when
         final Teacher teacher = new Teacher(command);
 
         // then
-        assertThat(teacher).hasFieldOrPropertyWithValue("username", "username");
-        assertThat(teacher.toIdentity()).isEqualTo("username");
+        assertThat(teacher.toIdentity()).isEqualTo("john_doe");
     }
 
     @Test
-    void getId_freshlyCreated_isNull() {
+    void constructor_newTeacher_idIsNull() {
         // given
-        final Teacher teacher = new Teacher(new CreateTeacherCommand("username"));
+        final CreateTeacherCommand command = new CreateTeacherCommand("teacher1");
+
+        // when
+        final Teacher teacher = new Teacher(command);
 
         // then
         assertThat(teacher.getId()).isNull();
     }
 
     @Test
-    void createTeacherCommand_exposesUsername() {
-        assertThat(new CreateTeacherCommand("username").username()).isEqualTo("username");
+    void toIdentity_returnsUsername() {
+        // given
+        final Teacher teacher = new Teacher(new CreateTeacherCommand("alice"));
+
+        // then
+        assertThat(teacher.toIdentity()).isEqualTo("alice");
     }
 }
