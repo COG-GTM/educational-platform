@@ -706,4 +706,30 @@ public class UserCreatedIntegrationEventHandlerTest {
                 .hasMessage(null);
     }
 
+    @Test
+    void handleUserCreatedEvent_usernameStringReferencePreservedInCommand() {
+        // given
+        final String username = new String("uniqueRef");
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(username, "ref@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isSameAs(username);
+    }
+
+    @Test
+    void handleUserCreatedEvent_hasEventListenerAndAsyncAnnotations() throws NoSuchMethodException {
+        // given
+        final java.lang.reflect.Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(org.springframework.context.event.EventListener.class)).isTrue();
+        assertThat(method.isAnnotationPresent(org.springframework.scheduling.annotation.Async.class)).isTrue();
+    }
+
 }

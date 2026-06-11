@@ -2149,4 +2149,135 @@ public class CurriculumItemFactoryTest {
                 .containsExactly("Valid question", null, "", "Another valid");
     }
 
+    @Test
+    void createFrom_quizCommand_allQuestionsHaveNullIdBeforePersistence() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(List.of(
+                        new CreateQuestionCommand("Q1"),
+                        new CreateQuestionCommand("Q2"),
+                        new CreateQuestionCommand("Q3")))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Quiz.class);
+        assertThat(result).extracting("questions")
+                .asInstanceOf(LIST)
+                .hasSize(3)
+                .allSatisfy(question ->
+                        assertThat(question).hasFieldOrPropertyWithValue("id", null));
+    }
+
+    @Test
+    void createFrom_lectureCommandViaDirectConstructor_correctFieldMapping() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateLectureCommand lectureCommand = new CreateLectureCommand(
+                "Direct Title", "Direct Desc", 42, "Direct Content");
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(lectureCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Lecture.class);
+        assertThat(result)
+                .hasFieldOrPropertyWithValue("title", "Direct Title")
+                .hasFieldOrPropertyWithValue("description", "Direct Desc")
+                .hasFieldOrPropertyWithValue("serialNumber", 42)
+                .hasFieldOrPropertyWithValue("content", "Direct Content");
+        assertThat(result).extracting("course").isSameAs(course);
+    }
+
+    @Test
+    void createFrom_quizCommandViaDirectConstructor_correctFieldMapping() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = new CreateQuizCommand(
+                List.of(new CreateQuestionCommand("DQ1"), new CreateQuestionCommand("DQ2")),
+                "Direct Quiz", "Direct Quiz Desc", 88, "Direct Text");
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Quiz.class);
+        assertThat(result)
+                .hasFieldOrPropertyWithValue("title", "Direct Quiz")
+                .hasFieldOrPropertyWithValue("description", "Direct Quiz Desc")
+                .hasFieldOrPropertyWithValue("serialNumber", 88);
+        assertThat(result).extracting("questions")
+                .asInstanceOf(LIST)
+                .hasSize(2)
+                .extracting("content")
+                .containsExactly("DQ1", "DQ2");
+        assertThat(result).extracting("course").isSameAs(course);
+    }
+
+    @Test
+    void createFrom_quizCommand_questionEntityDoesNotHaveUuidField() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(List.of(new CreateQuestionCommand("Q1")))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Quiz.class);
+        assertThat(result).extracting("questions")
+                .asInstanceOf(LIST)
+                .first()
+                .satisfies(question ->
+                        assertThat(question.getClass().getDeclaredFields())
+                                .extracting("name")
+                                .contains("id", "content", "quiz")
+                                .doesNotContain("uuid"));
+    }
+
 }

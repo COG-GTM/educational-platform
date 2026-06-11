@@ -835,4 +835,60 @@ public class CourseByUUIDQueryHandlerTest {
         assertThat(returned.curriculumItems()).isNull();
     }
 
+    @Test
+    void handle_sameUuidDifferentResultsOnConsecutiveCalls_noCaching() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440045");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        when(repository.findDTOByUuid(uuid))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(new CourseDTO(uuid, "name", "desc", 1, List.of())));
+
+        // when
+        final Optional<CourseDTO> firstResult = sut.handle(query);
+        final Optional<CourseDTO> secondResult = sut.handle(query);
+
+        // then
+        assertThat(firstResult).isEmpty();
+        assertThat(secondResult).isPresent();
+        assertThat(secondResult.get().name()).isEqualTo("name");
+        verify(repository, times(2)).findDTOByUuid(uuid);
+    }
+
+    @Test
+    void handle_optionalEmptyIdentityPreserved() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440046");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        final Optional<CourseDTO> emptyOptional = Optional.empty();
+        when(repository.findDTOByUuid(uuid)).thenReturn(emptyOptional);
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(emptyOptional);
+    }
+
+    @Test
+    void handle_queryRecordEquality_equalQueriesProduceSameResult() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440047");
+        final CourseByUUIDQuery query1 = new CourseByUUIDQuery(uuid);
+        final CourseByUUIDQuery query2 = new CourseByUUIDQuery(uuid);
+        assertThat(query1).isEqualTo(query2);
+        assertThat(query1).isNotSameAs(query2);
+        final CourseDTO dto = new CourseDTO(uuid, "name", "desc", 5, List.of());
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.of(dto));
+
+        // when
+        final Optional<CourseDTO> result1 = sut.handle(query1);
+        final Optional<CourseDTO> result2 = sut.handle(query2);
+
+        // then
+        assertThat(result1).isPresent();
+        assertThat(result2).isPresent();
+        assertThat(result1.get()).isSameAs(result2.get());
+    }
+
 }

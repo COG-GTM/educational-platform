@@ -14,6 +14,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -752,6 +753,44 @@ public class ListCourseQueryHandlerTest {
         assertThatThrownBy(() -> sut.handle(query))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage(null);
+    }
+
+    @Test
+    void handle_sameQueryDifferentResultsOnConsecutiveCalls_noCaching() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final List<CourseLightDTO> firstList = List.of();
+        final List<CourseLightDTO> secondList = List.of(
+                new CourseLightDTO(UUID.randomUUID(), "course", "desc", 5));
+        when(repository.list())
+                .thenReturn(firstList)
+                .thenReturn(secondList);
+
+        // when
+        final List<CourseLightDTO> result1 = sut.handle(query);
+        final List<CourseLightDTO> result2 = sut.handle(query);
+
+        // then
+        assertThat(result1).isEmpty();
+        assertThat(result2).hasSize(1);
+        assertThat(result1).isNotSameAs(result2);
+        verify(repository, times(2)).list();
+    }
+
+    @Test
+    void handle_repositoryReturnsArrayList_identityPreserved() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final java.util.ArrayList<CourseLightDTO> arrayList = new java.util.ArrayList<>();
+        arrayList.add(new CourseLightDTO(UUID.randomUUID(), "course1", "desc1", 1));
+        when(repository.list()).thenReturn(arrayList);
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(arrayList);
+        assertThat(result).hasSize(1);
     }
 
 }
