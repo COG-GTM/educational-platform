@@ -410,4 +410,74 @@ public class CourseProposalTest {
                 .anyMatch(c -> c.getParameterCount() == 0);
     }
 
+    @Test
+    void fullLifecycle_approveDeclineApprove_correctStatesAtEachStep() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+
+        // initial state
+        assertThat(proposal).hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL);
+
+        // first approve
+        proposal.approve();
+        assertThat(proposal).hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED);
+
+        // then decline
+        proposal.decline();
+        assertThat(proposal).hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED);
+
+        // then approve again
+        proposal.approve();
+        assertThat(proposal).hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED);
+    }
+
+    @Test
+    void approve_preservesUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+
+        // when
+        proposal.approve();
+
+        // then
+        assertThat(proposal).hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void decline_preservesUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+
+        // when
+        proposal.decline();
+
+        // then
+        assertThat(proposal).hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void toDTO_afterFullLifecycle_reflectsLatestState() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+        proposal.approve();
+        proposal.decline();
+        proposal.approve();
+
+        // when
+        final CourseProposalDTO dto = proposal.toDTO();
+
+        // then
+        assertThat(dto)
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.APPROVED);
+    }
+
 }

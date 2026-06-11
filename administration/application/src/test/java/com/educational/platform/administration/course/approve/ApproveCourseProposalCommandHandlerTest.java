@@ -334,4 +334,56 @@ class ApproveCourseProposalCommandHandlerTest {
         verify(eventPublisher).publishEvent(eventArgument.capture());
         assertThat(eventArgument.getValue().courseId()).isEqualTo(command.uuid());
     }
+
+    @Test
+    void handle_preAuthorizeAnnotation_exactValue() throws NoSuchMethodException {
+        // when
+        final var method = ApproveCourseProposalCommandHandler.class
+                .getMethod("handle", ApproveCourseProposalCommand.class);
+        final org.springframework.security.access.prepost.PreAuthorize annotation =
+                method.getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class);
+
+        // then
+        assertThat(annotation.value()).isEqualTo("hasRole('ADMIN')");
+    }
+
+    @Test
+    void handle_existingCourseProposal_savedProposalIsSameInstanceFromRepository() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseProposal> argument = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue()).isSameAs(correspondingCourseProposal);
+    }
+
+    @Test
+    void handle_existingCourseProposal_noMoreRepositoryInteractions() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(repository).findByUuid(uuid);
+        verify(repository).save(any(CourseProposal.class));
+        verifyNoMoreInteractions(repository);
+    }
 }

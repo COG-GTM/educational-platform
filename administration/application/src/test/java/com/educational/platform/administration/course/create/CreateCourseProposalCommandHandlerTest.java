@@ -128,4 +128,36 @@ public class CreateCourseProposalCommandHandlerTest {
         // then
         verify(repository, org.mockito.Mockito.times(1)).save(any(CourseProposal.class));
     }
+
+    @Test
+    void handle_savedProposalHasCorrectUuidAndWaitingForApprovalStatus() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseProposal> argument = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository).save(argument.capture());
+        final CourseProposal proposal = argument.getValue();
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void handle_noMoreRepositoryInteractions() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(repository).save(any(CourseProposal.class));
+        org.mockito.Mockito.verifyNoMoreInteractions(repository);
+    }
 }

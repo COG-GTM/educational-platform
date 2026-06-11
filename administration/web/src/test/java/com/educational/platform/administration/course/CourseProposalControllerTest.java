@@ -529,4 +529,105 @@ class CourseProposalControllerTest {
         verifyNoInteractions(approveCourseProposalCommandHandler);
         verifyNoInteractions(declineCourseProposalCommandHandler);
     }
+
+    @Test
+    void approve_notFound_responseContentTypeIsJson() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new ResourceNotFoundException("Course Proposal with uuid: " + uuid + " not found"))
+                .when(approveCourseProposalCommandHandler).handle(any(ApproveCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
+    }
+
+    @Test
+    void decline_notFound_responseContentTypeIsJson() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new ResourceNotFoundException("Course Proposal with uuid: " + uuid + " not found"))
+                .when(declineCourseProposalCommandHandler).handle(any(DeclineCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
+    }
+
+    @Test
+    void approve_notFound_responseHasErrorsArray() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new ResourceNotFoundException("Course Proposal with uuid: " + uuid + " not found"))
+                .when(approveCourseProposalCommandHandler).handle(any(ApproveCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errors").isArray())
+                .andExpect(jsonPath("$.errors.length()").value(1));
+    }
+
+    @Test
+    void decline_notFound_responseHasErrorsArray() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new ResourceNotFoundException("Course Proposal with uuid: " + uuid + " not found"))
+                .when(declineCourseProposalCommandHandler).handle(any(DeclineCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errors").isArray())
+                .andExpect(jsonPath("$.errors.length()").value(1));
+    }
+
+    @Test
+    void courseProposals_singleApprovedProposal_correctJsonStructure() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposalDTO dto = new CourseProposalDTO(uuid, CourseProposalStatusDTO.APPROVED);
+        when(listCourseProposalsQueryHandler.handle(any(ListCourseProposalsQuery.class))).thenReturn(List.of(dto));
+
+        // when / then
+        mockMvc.perform(get("/administration/course-proposals"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].uuid").value(uuid.toString()))
+                .andExpect(jsonPath("$[0].status").value("APPROVED"));
+    }
+
+    @Test
+    void approve_success_listHandlerNotInteracted() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+
+        // then
+        verifyNoInteractions(listCourseProposalsQueryHandler);
+    }
+
+    @Test
+    void decline_success_listHandlerNotInteracted() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+
+        // then
+        verifyNoInteractions(listCourseProposalsQueryHandler);
+    }
 }

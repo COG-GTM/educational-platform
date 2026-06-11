@@ -163,4 +163,20 @@ class ListCourseProposalsQueryHandlerTest {
         // then
         assertThat(annotation.value()).isEqualTo("hasRole('ADMIN')");
     }
+
+    @Test
+    void handle_returnedListIsSameReferenceFromRepository() {
+        // given
+        final List<CourseProposalDTO> repositoryResult = List.of(
+                new CourseProposalDTO(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"),
+                        CourseProposalStatusDTO.WAITING_FOR_APPROVAL));
+        when(repository.listCourseProposals()).thenReturn(repositoryResult);
+        final ListCourseProposalsQuery query = new ListCourseProposalsQuery();
+
+        // when
+        final List<CourseProposalDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(repositoryResult);
+    }
 }
