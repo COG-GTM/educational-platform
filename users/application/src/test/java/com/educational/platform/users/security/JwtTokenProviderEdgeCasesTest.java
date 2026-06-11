@@ -74,8 +74,8 @@ public class JwtTokenProviderEdgeCasesTest {
 
     @Test
     void validateToken_expiredToken_throwsValidationException() {
-        // given - create provider with 0ms validity to force expired token
-        final JwtTokenProvider expiredProvider = new JwtTokenProvider(myUserDetails, 0, "test-secret-key");
+        // given - negative validity puts expiration firmly in the past so the token is reliably expired
+        final JwtTokenProvider expiredProvider = new JwtTokenProvider(myUserDetails, -10000, "test-secret-key");
         final String token = expiredProvider.createToken("user", List.of(Role.ROLE_STUDENT));
 
         // when / then
