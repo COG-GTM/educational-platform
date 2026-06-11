@@ -49,4 +49,32 @@ public class CourseEnrollmentApiTest {
                 .statusCode(HttpStatus.CREATED.value());
     }
 
+    @Test
+    void listCourseEnrollments_studentAuthenticated_ok() {
+        var token = SignUpHelper.signUpStudent();
+
+        // first register an enrollment
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .body("{\n" +
+                        "  \"student\": \"username\"\n" +
+                        "}")
+                .when()
+                .post("/courses/{uuid}/course-enrollments", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+                .then()
+                .statusCode(HttpStatus.CREATED.value());
+
+        // then list enrollments
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+
+                .when()
+                .get("/course-enrollments")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
 }

@@ -1,0 +1,71 @@
+package com.educational.platform.course.enrollments.query;
+
+import com.educational.platform.course.enrollments.CompletionStatusDTO;
+import com.educational.platform.course.enrollments.CourseEnrollmentDTO;
+import com.educational.platform.course.enrollments.CourseEnrollmentRepository;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+
+import java.util.Collections;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+public class CourseEnrollmentByUUIDQueryHandlerTest {
+
+    @Mock
+    private CourseEnrollmentRepository repository;
+
+    private CourseEnrollmentByUUIDQueryHandler sut;
+
+    @BeforeEach
+    void setUp() {
+        sut = new CourseEnrollmentByUUIDQueryHandler(repository);
+        UserDetails userDetails = new User("student", "password", Collections.emptyList());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(userDetails, "password", Collections.emptyList()));
+    }
+
+    @Test
+    void handle_existingEnrollment_returnsCourseEnrollmentDTO() {
+        // given
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(enrollmentUuid);
+        final CourseEnrollmentDTO dto = new CourseEnrollmentDTO(enrollmentUuid, courseUuid, "student", CompletionStatusDTO.IN_PROGRESS);
+        when(repository.query(enrollmentUuid, "student")).thenReturn(Optional.of(dto));
+
+        // when
+        final Optional<CourseEnrollmentDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().uuid()).isEqualTo(enrollmentUuid);
+        assertThat(result.get().student()).isEqualTo("student");
+    }
+
+    @Test
+    void handle_nonExistingEnrollment_returnsEmpty() {
+        // given
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(enrollmentUuid);
+        when(repository.query(enrollmentUuid, "student")).thenReturn(Optional.empty());
+
+        // when
+        final Optional<CourseEnrollmentDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isEmpty();
+    }
+}
