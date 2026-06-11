@@ -645,4 +645,75 @@ public class CourseByUUIDQueryHandlerTest {
         assertThat(result.get().curriculumItems().get(1)).isNull();
     }
 
+    @Test
+    void handle_repositoryReturnsNull_nullPropagated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440034");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        when(repository.findDTOByUuid(uuid)).thenReturn(null);
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void handle_equivalentUuidObjects_bothDelegatedCorrectly() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440035");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440035");
+        assertThat(uuid1).isEqualTo(uuid2);
+        assertThat(uuid1).isNotSameAs(uuid2);
+
+        final CourseDTO courseDTO = new CourseDTO(uuid1, "name", "desc", 1, List.of());
+        when(repository.findDTOByUuid(uuid1)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(new CourseByUUIDQuery(uuid2));
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get()).isSameAs(courseDTO);
+        verify(repository).findDTOByUuid(uuid2);
+    }
+
+    @Test
+    void handle_courseWithSpecialCharsInName_returnedAsIs() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440036");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        final String specialName = "C++ & Java <> \"Rust\" 'Go' \\ /path/to/course";
+        final CourseDTO courseDTO = new CourseDTO(uuid, specialName, "desc", 1, List.of());
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().name()).isEqualTo(specialName);
+    }
+
+    @Test
+    void handle_handlerIsStateless_identicalCallsReturnFreshRepositoryResult() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440037");
+        final CourseDTO dto1 = new CourseDTO(uuid, "v1", "desc1", 1, List.of());
+        final CourseDTO dto2 = new CourseDTO(uuid, "v2", "desc2", 2, List.of());
+        when(repository.findDTOByUuid(uuid))
+                .thenReturn(Optional.of(dto1))
+                .thenReturn(Optional.of(dto2));
+
+        // when
+        final Optional<CourseDTO> result1 = sut.handle(new CourseByUUIDQuery(uuid));
+        final Optional<CourseDTO> result2 = sut.handle(new CourseByUUIDQuery(uuid));
+
+        // then
+        assertThat(result1.get().name()).isEqualTo("v1");
+        assertThat(result2.get().name()).isEqualTo("v2");
+        verify(repository, times(2)).findDTOByUuid(uuid);
+    }
+
 }

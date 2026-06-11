@@ -584,4 +584,68 @@ public class ListCourseQueryHandlerTest {
         verify(repository, org.mockito.Mockito.times(2)).list();
     }
 
+    @Test
+    void handle_repositoryReturnsNull_nullPropagated() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        when(repository.list()).thenReturn(null);
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void handle_repositoryReturnsUnmodifiableList_returnedAsIs() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final List<CourseLightDTO> unmodifiable = java.util.Collections.unmodifiableList(
+                List.of(new CourseLightDTO(UUID.randomUUID(), "course", "desc", 5)));
+        when(repository.list()).thenReturn(unmodifiable);
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(unmodifiable);
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void handle_courseWithSpecialCharsInFields_preservedInResults() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final String specialName = "C++ & Java <> \"Rust\" 'Go' \\ /path";
+        final String specialDesc = "SELECT * FROM courses; DROP TABLE --";
+        final CourseLightDTO course = new CourseLightDTO(UUID.randomUUID(), specialName, specialDesc, 1);
+        when(repository.list()).thenReturn(List.of(course));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().name()).isEqualTo(specialName);
+        assertThat(result.getFirst().description()).isEqualTo(specialDesc);
+    }
+
+    @Test
+    void handle_handlerDoesNotSortOrFilter_reverseOrderPreserved() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO z = new CourseLightDTO(UUID.randomUUID(), "Zebra", "z", 100);
+        final CourseLightDTO m = new CourseLightDTO(UUID.randomUUID(), "Mango", "m", 50);
+        final CourseLightDTO a = new CourseLightDTO(UUID.randomUUID(), "Apple", "a", 1);
+        when(repository.list()).thenReturn(List.of(z, m, a));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).extracting(CourseLightDTO::name)
+                .containsExactly("Zebra", "Mango", "Apple");
+    }
+
 }

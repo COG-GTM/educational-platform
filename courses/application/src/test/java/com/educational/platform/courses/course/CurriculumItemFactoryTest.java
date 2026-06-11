@@ -1701,4 +1701,164 @@ public class CurriculumItemFactoryTest {
                 .hasFieldOrPropertyWithValue("content", "Single");
     }
 
+    @Test
+    void createFrom_sameQuizCommandOnSameCourse_producesIndependentItems() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand sharedQuizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(List.of(new CreateQuestionCommand("Q1"), new CreateQuestionCommand("Q2")))
+                .build();
+
+        // when
+        final CurriculumItem item1 = CurriculumItemFactory.createFrom(sharedQuizCommand, course);
+        final CurriculumItem item2 = CurriculumItemFactory.createFrom(sharedQuizCommand, course);
+
+        // then
+        assertThat(item1).isInstanceOf(Quiz.class);
+        assertThat(item2).isInstanceOf(Quiz.class);
+        assertThat(item1).isNotSameAs(item2);
+        assertThat(List.of(item1, item2))
+                .extracting("uuid")
+                .doesNotHaveDuplicates();
+        assertThat(item1).extracting("course").isSameAs(course);
+        assertThat(item2).extracting("course").isSameAs(course);
+    }
+
+    @Test
+    void createFrom_quizCommand_questionsListNotSharedBetweenItems() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(List.of(new CreateQuestionCommand("Q1")))
+                .build();
+
+        // when
+        final CurriculumItem quiz1 = CurriculumItemFactory.createFrom(quizCommand, course);
+        final CurriculumItem quiz2 = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(quiz1).extracting("questions").isNotSameAs(quiz2.getClass().cast(quiz2));
+        assertThat(quiz1).extracting("questions").asInstanceOf(LIST).hasSize(1);
+        assertThat(quiz2).extracting("questions").asInstanceOf(LIST).hasSize(1);
+    }
+
+    @Test
+    void createFrom_lectureCommand_doesNotHaveQuestionsField() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateLectureCommand lectureCommand = CreateLectureCommand.builder()
+                .title("Title")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(lectureCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Lecture.class);
+        assertThat(result.getClass().getDeclaredFields())
+                .extracting("name")
+                .contains("content")
+                .doesNotContain("questions");
+    }
+
+    @Test
+    void createFrom_quizCommand_veryLongQuestionContent_preserved() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final String longQuestion = "Q".repeat(10000);
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(List.of(new CreateQuestionCommand(longQuestion)))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Quiz.class);
+        assertThat(result).extracting("questions")
+                .asInstanceOf(LIST)
+                .hasSize(1)
+                .first()
+                .hasFieldOrPropertyWithValue("content", longQuestion);
+    }
+
+    @Test
+    void createFrom_sameLectureCommandOnSameCourse_producesIndependentItems() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateLectureCommand sharedLectureCommand = CreateLectureCommand.builder()
+                .title("Shared Lecture")
+                .description("Shared Desc")
+                .serialNumber(5)
+                .text("Shared Content")
+                .build();
+
+        // when
+        final CurriculumItem item1 = CurriculumItemFactory.createFrom(sharedLectureCommand, course);
+        final CurriculumItem item2 = CurriculumItemFactory.createFrom(sharedLectureCommand, course);
+
+        // then
+        assertThat(item1).isInstanceOf(Lecture.class);
+        assertThat(item2).isInstanceOf(Lecture.class);
+        assertThat(item1).isNotSameAs(item2);
+        assertThat(List.of(item1, item2))
+                .extracting("uuid")
+                .doesNotHaveDuplicates();
+    }
+
 }

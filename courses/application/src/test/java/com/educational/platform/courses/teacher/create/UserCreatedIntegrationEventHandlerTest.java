@@ -546,4 +546,69 @@ public class UserCreatedIntegrationEventHandlerTest {
         assertThat(argument.getValue().username()).isEqualTo("teacher");
     }
 
+    @Test
+    void handleUserCreatedEvent_nullByteInUsername_preservedInCommand() {
+        // given
+        final String nullByteUsername = "user\u0000name";
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(nullByteUsername, "nb@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo(nullByteUsername);
+    }
+
+    @Test
+    void handleUserCreatedEvent_highFrequencySequentialCalls_allProcessed() {
+        // given
+        final int count = 50;
+        final java.util.List<UserCreatedIntegrationEvent> events = java.util.stream.IntStream.rangeClosed(1, count)
+                .mapToObj(i -> new UserCreatedIntegrationEvent("user" + i, "user" + i + "@example.com"))
+                .toList();
+
+        // when
+        events.forEach(sut::handleUserCreatedEvent);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler, times(count)).handle(argument.capture());
+        assertThat(argument.getAllValues()).hasSize(count);
+        assertThat(argument.getAllValues())
+                .extracting(CreateTeacherCommand::username)
+                .containsExactlyElementsOf(
+                        java.util.stream.IntStream.rangeClosed(1, count)
+                                .mapToObj(i -> "user" + i)
+                                .toList());
+    }
+
+    @Test
+    void handleUserCreatedEvent_surrogateCharactersInUsername_preservedInCommand() {
+        // given
+        final String surrogate = "user\uD83D\uDE00\uD83D\uDE01name";
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(surrogate, "surr@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo(surrogate);
+    }
+
+    @Test
+    void handleUserCreatedEvent_commandHandlerThrowsOutOfMemoryError_errorPropagated() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher", "teacher@example.com");
+        doThrow(new OutOfMemoryError("test OOM")).when(createTeacherCommandHandler).handle(any(CreateTeacherCommand.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(OutOfMemoryError.class)
+                .hasMessage("test OOM");
+    }
+
 }
