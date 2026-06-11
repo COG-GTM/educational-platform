@@ -679,4 +679,56 @@ public class CourseReviewControllerTest {
         assertThat(captured.comment()).isEqualTo("ok");
         // courseUuid is a path variable but is not part of the UpdateCourseReviewCommand
     }
+
+    @Test
+    void reviews_twoDifferentCourseUuids_delegatesWithCorrectUuidEachTime() {
+        // given
+        final UUID courseUuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseUuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        when(listCourseReviewsByCourseUUIDQueryHandler.handle(any(ListCourseReviewsByCourseUUIDQuery.class)))
+                .thenReturn(List.of());
+
+        // when
+        sut.reviews(courseUuid1);
+        sut.reviews(courseUuid2);
+
+        // then
+        final ArgumentCaptor<ListCourseReviewsByCourseUUIDQuery> captor =
+                ArgumentCaptor.forClass(ListCourseReviewsByCourseUUIDQuery.class);
+        verify(listCourseReviewsByCourseUUIDQueryHandler, times(2)).handle(captor.capture());
+        assertThat(captor.getAllValues().get(0).uuid()).isEqualTo(courseUuid1);
+        assertThat(captor.getAllValues().get(1).uuid()).isEqualTo(courseUuid2);
+    }
+
+    @Test
+    void review_whitespaceComment_delegatesWithWhitespaceComment() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseRequest request = new ReviewCourseRequest(4.0, "   ");
+        when(reviewCourseCommandHandler.handle(any(ReviewCourseCommand.class)))
+                .thenReturn(UUID.fromString("123e4567-e89b-12d3-a456-426655440002"));
+
+        // when
+        sut.review(courseUuid, request);
+
+        // then
+        final ArgumentCaptor<ReviewCourseCommand> captor = ArgumentCaptor.forClass(ReviewCourseCommand.class);
+        verify(reviewCourseCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().comment()).isEqualTo("   ");
+    }
+
+    @Test
+    void review_responseType_isCourseReviewCreatedResponse() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseRequest request = new ReviewCourseRequest(4.0, "great");
+        when(reviewCourseCommandHandler.handle(any(ReviewCourseCommand.class)))
+                .thenReturn(UUID.fromString("123e4567-e89b-12d3-a456-426655440002"));
+
+        // when
+        final Object response = sut.review(courseUuid, request);
+
+        // then
+        assertThat(response).isInstanceOf(CourseReviewCreatedResponse.class);
+    }
 }

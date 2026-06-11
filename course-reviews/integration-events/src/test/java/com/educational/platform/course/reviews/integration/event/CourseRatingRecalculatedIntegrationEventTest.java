@@ -104,4 +104,27 @@ public class CourseRatingRecalculatedIntegrationEventTest {
         // then
         assertThat(event.rating()).isEqualTo(3.75);
     }
+
+    @Test
+    void equals_bothNullCourseId_returnsTrue() {
+        // given
+        final CourseRatingRecalculatedIntegrationEvent first = new CourseRatingRecalculatedIntegrationEvent(null, 4.0);
+        final CourseRatingRecalculatedIntegrationEvent second = new CourseRatingRecalculatedIntegrationEvent(null, 4.0);
+
+        // then
+        assertThat(first).isEqualTo(second);
+        assertThat(first.hashCode()).isEqualTo(second.hashCode());
+    }
+
+    @Test
+    void equals_oneNullCourseId_returnsFalse() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent withId = new CourseRatingRecalculatedIntegrationEvent(courseId, 4.0);
+        final CourseRatingRecalculatedIntegrationEvent withNull = new CourseRatingRecalculatedIntegrationEvent(null, 4.0);
+
+        // then
+        assertThat(withId).isNotEqualTo(withNull);
+        assertThat(withNull).isNotEqualTo(withId);
+    }
 }

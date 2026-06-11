@@ -552,4 +552,15 @@ public class CourseReviewFactoryTest {
         org.mockito.Mockito.verify(currentUserAsReviewer, org.mockito.Mockito.times(1)).userAsReviewer();
     }
 
+    @Test
+    void createFrom_validationFails_neitherRepositoryNorReviewerConsulted() {
+        // given — invalid command (null courseId); factory should short-circuit before any lookup
+        final ReviewCourseCommand command = new ReviewCourseCommand(null, 4.0, "comment");
+
+        // when/then
+        assertThrows(ConstraintViolationException.class, () -> sut.createFrom(command));
+        org.mockito.Mockito.verifyNoInteractions(reviewableCourseRepository);
+        org.mockito.Mockito.verifyNoInteractions(currentUserAsReviewer);
+    }
+
 }

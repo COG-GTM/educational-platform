@@ -327,4 +327,69 @@ public class CourseReviewTest {
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0))
                 .hasFieldOrPropertyWithValue("comment", new Comment("second update"));
     }
+
+    @Test
+    void toIdentifier_calledMultipleTimes_sameValueReturned() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+        final CourseReview courseReview = new CourseReview(command, 11, 22);
+
+        // when
+        final UUID first = courseReview.toIdentifier();
+        final UUID second = courseReview.toIdentifier();
+        final UUID third = courseReview.toIdentifier();
+
+        // then — toIdentifier() is a pure read, always returns the same value
+        assertThat(first).isEqualTo(second).isEqualTo(third);
+    }
+
+    @Test
+    void constructor_differentCourseAndReviewerCombinations_allGetUniqueUuids() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+
+        // when — three instances with different course/reviewer combos
+        final CourseReview review1 = new CourseReview(command, 1, 1);
+        final CourseReview review2 = new CourseReview(command, 2, 1);
+        final CourseReview review3 = new CourseReview(command, 1, 2);
+
+        // then — each gets a unique uuid
+        assertThat(review1.toIdentifier())
+                .isNotEqualTo(review2.toIdentifier())
+                .isNotEqualTo(review3.toIdentifier());
+        assertThat(review2.toIdentifier()).isNotEqualTo(review3.toIdentifier());
+    }
+
+    @Test
+    void implementsAggregateRoot() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+
+        // when
+        final CourseReview courseReview = new CourseReview(command, 11, 22);
+
+        // then
+        assertThat(courseReview).isInstanceOf(com.educational.platform.common.domain.AggregateRoot.class);
+    }
+
+    @Test
+    void update_whitespaceComment_commentUpdatedWithWhitespace() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "comment");
+        final CourseReview courseReview = new CourseReview(createCommand, 11, 22);
+        final UUID uuid = courseReview.toIdentifier();
+
+        final UpdateCourseReviewCommand updateCommand = new UpdateCourseReviewCommand(uuid, 3.0, "   ");
+
+        // when
+        courseReview.update(updateCommand);
+
+        // then — whitespace is preserved as-is
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("comment", new Comment("   "));
+    }
 }

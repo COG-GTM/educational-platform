@@ -63,4 +63,39 @@ public class CommentTest {
         // then
         assertThat(first).isEqualTo(second);
     }
+
+    @Test
+    void constructor_whitespaceOnlyComment_commentStoredAsIs() {
+        // when — whitespace is not trimmed by the value object
+        final Comment comment = new Comment("   ");
+
+        // then
+        assertThat(comment.comment()).isEqualTo("   ");
+    }
+
+    @Test
+    void constructor_longComment_commentStoredInFull() {
+        // when
+        final String longText = "a".repeat(10_000);
+        final Comment comment = new Comment(longText);
+
+        // then
+        assertThat(comment.comment()).hasSize(10_000).isEqualTo(longText);
+    }
+
+    @Test
+    void implementsValueObject() {
+        // then
+        assertThat(new Comment("text")).isInstanceOf(com.educational.platform.common.domain.ValueObject.class);
+    }
+
+    @Test
+    void equals_nullVsEmpty_returnsFalse() {
+        // given
+        final Comment nullComment = new Comment(null);
+        final Comment emptyComment = new Comment("");
+
+        // then
+        assertThat(nullComment).isNotEqualTo(emptyComment);
+    }
 }

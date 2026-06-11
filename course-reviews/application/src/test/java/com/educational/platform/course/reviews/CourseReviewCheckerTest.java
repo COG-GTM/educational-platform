@@ -157,4 +157,19 @@ public class CourseReviewCheckerTest {
         // then
         org.mockito.Mockito.verify(courseReviewRepository, org.mockito.Mockito.times(1)).isReviewer(reviewId, "user");
     }
+
+    @Test
+    void hasAccess_calledTwiceWithSameArgs_doesNotCache() {
+        // given — checker must not cache; each call must delegate
+        final UUID reviewId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(authentication.getName()).thenReturn("user");
+        when(courseReviewRepository.isReviewer(reviewId, "user")).thenReturn(true);
+
+        // when
+        sut.hasAccess(authentication, reviewId);
+        sut.hasAccess(authentication, reviewId);
+
+        // then
+        org.mockito.Mockito.verify(courseReviewRepository, org.mockito.Mockito.times(2)).isReviewer(reviewId, "user");
+    }
 }

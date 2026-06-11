@@ -62,4 +62,42 @@ public class CourseReviewDTOTest {
         // then
         assertThat(first).isNotEqualTo(second);
     }
+
+    @Test
+    void constructor_allNullObjectFields_storedAsNull() {
+        // when — all reference-type fields are null
+        final CourseReviewDTO dto = new CourseReviewDTO(null, null, null, null, 0.0);
+
+        // then
+        assertThat(dto.uuid()).isNull();
+        assertThat(dto.course()).isNull();
+        assertThat(dto.username()).isNull();
+        assertThat(dto.comment()).isNull();
+        assertThat(dto.rating()).isEqualTo(0.0);
+    }
+
+    @Test
+    void equals_differentRating_returnsFalse() {
+        // given
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseReviewDTO first = new CourseReviewDTO(reviewUuid, courseUuid, "user", "good", 4.0);
+        final CourseReviewDTO second = new CourseReviewDTO(reviewUuid, courseUuid, "user", "good", 4.1);
+
+        // then
+        assertThat(first).isNotEqualTo(second);
+    }
+
+    @Test
+    void equals_differentUuid_returnsFalse() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseReviewDTO first = new CourseReviewDTO(
+                UUID.fromString("123e4567-e89b-12d3-a456-426655440001"), courseUuid, "user", "good", 4.0);
+        final CourseReviewDTO second = new CourseReviewDTO(
+                UUID.fromString("123e4567-e89b-12d3-a456-426655440099"), courseUuid, "user", "good", 4.0);
+
+        // then
+        assertThat(first).isNotEqualTo(second);
+    }
 }
