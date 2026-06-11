@@ -372,4 +372,42 @@ public class CourseProposalTest {
                 .isNotEqualTo(CourseProposalStatus.WAITING_FOR_APPROVAL);
     }
 
+    @Test
+    void statusField_hasEnumeratedStringAnnotation() throws NoSuchFieldException {
+        // when
+        final var field = CourseProposal.class.getDeclaredField("status");
+
+        // then
+        assertThat(field.isAnnotationPresent(jakarta.persistence.Enumerated.class)).isTrue();
+        assertThat(field.getAnnotation(jakarta.persistence.Enumerated.class).value())
+                .isEqualTo(jakarta.persistence.EnumType.STRING);
+    }
+
+    @Test
+    void idField_hasIdAnnotation() throws NoSuchFieldException {
+        // when
+        final var field = CourseProposal.class.getDeclaredField("id");
+
+        // then
+        assertThat(field.isAnnotationPresent(jakarta.persistence.Id.class)).isTrue();
+    }
+
+    @Test
+    void idField_hasGeneratedValueIdentityStrategy() throws NoSuchFieldException {
+        // when
+        final var field = CourseProposal.class.getDeclaredField("id");
+
+        // then
+        assertThat(field.isAnnotationPresent(jakarta.persistence.GeneratedValue.class)).isTrue();
+        assertThat(field.getAnnotation(jakarta.persistence.GeneratedValue.class).strategy())
+                .isEqualTo(jakarta.persistence.GenerationType.IDENTITY);
+    }
+
+    @Test
+    void jpaNoArgConstructor_exists() {
+        // then
+        assertThat(CourseProposal.class.getDeclaredConstructors())
+                .anyMatch(c -> c.getParameterCount() == 0);
+    }
+
 }

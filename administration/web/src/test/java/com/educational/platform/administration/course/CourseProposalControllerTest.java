@@ -427,4 +427,106 @@ class CourseProposalControllerTest {
                 .andExpect(jsonPath("$.errors").isArray())
                 .andExpect(jsonPath("$.errors.length()").value(1));
     }
+
+    @Test
+    void approveMethod_hasPutMappingAnnotation() throws NoSuchMethodException {
+        // when
+        final var method = CourseProposalController.class.getMethod("approve", UUID.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(
+                org.springframework.web.bind.annotation.PutMapping.class)).isTrue();
+        final var mapping = method.getAnnotation(
+                org.springframework.web.bind.annotation.PutMapping.class);
+        assertThat(mapping.value()).contains("/{uuid}/approval-status");
+    }
+
+    @Test
+    void declineMethod_hasDeleteMappingAnnotation() throws NoSuchMethodException {
+        // when
+        final var method = CourseProposalController.class.getMethod("decline", UUID.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(
+                org.springframework.web.bind.annotation.DeleteMapping.class)).isTrue();
+        final var mapping = method.getAnnotation(
+                org.springframework.web.bind.annotation.DeleteMapping.class);
+        assertThat(mapping.value()).contains("/{uuid}/approval-status");
+    }
+
+    @Test
+    void courseProposalsMethod_hasGetMappingAnnotation() throws NoSuchMethodException {
+        // when
+        final var method = CourseProposalController.class.getMethod("courseProposals");
+
+        // then
+        assertThat(method.isAnnotationPresent(
+                org.springframework.web.bind.annotation.GetMapping.class)).isTrue();
+    }
+
+    @Test
+    void exceptionHandler_handlesBothConflictExceptionTypes() throws NoSuchMethodException {
+        // when
+        final var method = CourseProposalController.class.getMethod("onConflictException", Exception.class);
+        final var annotation = method.getAnnotation(
+                org.springframework.web.bind.annotation.ExceptionHandler.class);
+
+        // then
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.value())
+                .containsExactlyInAnyOrder(
+                        CourseProposalAlreadyDeclinedException.class,
+                        CourseProposalAlreadyApprovedException.class
+                );
+    }
+
+    @Test
+    void approveMethod_hasResponseStatusNoContent() throws NoSuchMethodException {
+        // when
+        final var method = CourseProposalController.class.getMethod("approve", UUID.class);
+        final var annotation = method.getAnnotation(
+                org.springframework.web.bind.annotation.ResponseStatus.class);
+
+        // then
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.value()).isEqualTo(org.springframework.http.HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void declineMethod_hasResponseStatusNoContent() throws NoSuchMethodException {
+        // when
+        final var method = CourseProposalController.class.getMethod("decline", UUID.class);
+        final var annotation = method.getAnnotation(
+                org.springframework.web.bind.annotation.ResponseStatus.class);
+
+        // then
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.value()).isEqualTo(org.springframework.http.HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void courseProposalsMethod_hasResponseStatusOk() throws NoSuchMethodException {
+        // when
+        final var method = CourseProposalController.class.getMethod("courseProposals");
+        final var annotation = method.getAnnotation(
+                org.springframework.web.bind.annotation.ResponseStatus.class);
+
+        // then
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.value()).isEqualTo(org.springframework.http.HttpStatus.OK);
+    }
+
+    @Test
+    void patchOnApprovalStatus_handlerNotCalled() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        mockMvc.perform(patch("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON));
+
+        // then
+        verifyNoInteractions(approveCourseProposalCommandHandler);
+        verifyNoInteractions(declineCourseProposalCommandHandler);
+    }
 }

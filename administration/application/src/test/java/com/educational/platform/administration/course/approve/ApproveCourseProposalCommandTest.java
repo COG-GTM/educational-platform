@@ -56,4 +56,16 @@ class ApproveCourseProposalCommandTest {
         // then
         assertThat(command1).isNotEqualTo(command2);
     }
+
+    @Test
+    void toString_containsUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+
+        // then
+        assertThat(command.toString()).contains(uuid.toString());
+    }
 }

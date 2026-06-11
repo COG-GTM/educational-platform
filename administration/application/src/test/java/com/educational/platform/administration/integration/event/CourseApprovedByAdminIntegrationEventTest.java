@@ -56,4 +56,16 @@ class CourseApprovedByAdminIntegrationEventTest {
         // then
         assertThat(event1).isNotEqualTo(event2);
     }
+
+    @Test
+    void toString_containsUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+
+        // then
+        assertThat(event.toString()).contains(uuid.toString());
+    }
 }

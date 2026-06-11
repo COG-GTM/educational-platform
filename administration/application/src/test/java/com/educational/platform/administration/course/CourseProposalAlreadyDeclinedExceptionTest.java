@@ -58,4 +58,17 @@ class CourseProposalAlreadyDeclinedExceptionTest {
         // then
         assertThat(exception.getCause()).isNull();
     }
+
+    @Test
+    void getMessage_exactFormat() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        final CourseProposalAlreadyDeclinedException exception = new CourseProposalAlreadyDeclinedException(uuid);
+
+        // then
+        assertThat(exception.getMessage())
+                .isEqualTo("Course Proposal with uuid = " + uuid + " cannot be declined, course proposal was already declined");
+    }
 }

@@ -58,4 +58,17 @@ class CourseProposalAlreadyApprovedExceptionTest {
         // then
         assertThat(exception.getCause()).isNull();
     }
+
+    @Test
+    void getMessage_exactFormat() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        final CourseProposalAlreadyApprovedException exception = new CourseProposalAlreadyApprovedException(uuid);
+
+        // then
+        assertThat(exception.getMessage())
+                .isEqualTo("Course Proposal with uuid = " + uuid + " cannot be approved, course proposal was already approved");
+    }
 }

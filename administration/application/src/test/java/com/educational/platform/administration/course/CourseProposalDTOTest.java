@@ -125,4 +125,18 @@ class CourseProposalDTOTest {
         // then
         assertThat(dto1).isNotEqualTo(dto2);
     }
+
+    @Test
+    void toString_containsUuidAndStatus() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when
+        final CourseProposalDTO dto = new CourseProposalDTO(uuid, CourseProposalStatusDTO.APPROVED);
+
+        // then
+        assertThat(dto.toString())
+                .contains(uuid.toString())
+                .contains("APPROVED");
+    }
 }

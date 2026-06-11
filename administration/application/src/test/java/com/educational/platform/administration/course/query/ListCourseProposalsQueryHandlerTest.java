@@ -146,4 +146,21 @@ class ListCourseProposalsQueryHandlerTest {
         verify(repository).listCourseProposals();
         verifyNoMoreInteractions(repository);
     }
+
+    @Test
+    void class_doesNotHaveTransactionalAnnotation() {
+        assertThat(ListCourseProposalsQueryHandler.class
+                .isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class)).isFalse();
+    }
+
+    @Test
+    void handle_preAuthorizeAnnotation_exactValue() throws NoSuchMethodException {
+        // when
+        final var method = ListCourseProposalsQueryHandler.class
+                .getMethod("handle", ListCourseProposalsQuery.class);
+        final PreAuthorize annotation = method.getAnnotation(PreAuthorize.class);
+
+        // then
+        assertThat(annotation.value()).isEqualTo("hasRole('ADMIN')");
+    }
 }
