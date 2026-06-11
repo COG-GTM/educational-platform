@@ -12,6 +12,8 @@ import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -88,6 +90,20 @@ public class UpdateCourseReviewCommandHandlerTest {
         // given
         final UUID uuid = configureCourseReview();
         final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, null, "updated comment");
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {-1, 6})
+    void handle_invalidRating_constraintViolationException(double rating) {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, rating, "comment");
 
         // when
         final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);

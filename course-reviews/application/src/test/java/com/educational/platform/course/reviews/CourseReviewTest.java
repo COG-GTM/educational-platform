@@ -61,4 +61,79 @@ public class CourseReviewTest {
         // then
         assertThat(identifier).isNotNull();
     }
+
+    @Test
+    void constructor_twoDifferentInstances_uniqueUUIDs() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+
+        // when
+        final CourseReview first = new CourseReview(command, 11, 22);
+        final CourseReview second = new CourseReview(command, 11, 22);
+
+        // then
+        assertThat(first.toIdentifier()).isNotEqualTo(second.toIdentifier());
+    }
+
+    @Test
+    void update_validCommand_courseAndReviewerUnchanged() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "comment");
+        final CourseReview courseReview = new CourseReview(createCommand, 11, 22);
+        final UUID uuid = courseReview.toIdentifier();
+
+        final UpdateCourseReviewCommand updateCommand = new UpdateCourseReviewCommand(uuid, 2.0, "new comment");
+
+        // when
+        courseReview.update(updateCommand);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("course", 11)
+                .hasFieldOrPropertyWithValue("reviewer", 22);
+    }
+
+    @Test
+    void constructor_zeroRating_courseReviewCreated() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 0.0, "comment");
+
+        // when
+        final CourseReview courseReview = new CourseReview(command, 11, 22);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0.0));
+    }
+
+    @Test
+    void constructor_maxRating_courseReviewCreated() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 5.0, "max");
+
+        // when
+        final CourseReview courseReview = new CourseReview(command, 11, 22);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0));
+    }
+
+    @Test
+    void constructor_nullComment_courseReviewCreated() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, null);
+
+        // when
+        final CourseReview courseReview = new CourseReview(command, 11, 22);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("comment", new Comment(null));
+    }
 }

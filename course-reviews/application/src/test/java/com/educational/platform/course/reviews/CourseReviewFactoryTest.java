@@ -1,5 +1,6 @@
 package com.educational.platform.course.reviews;
 
+import com.educational.platform.common.exception.RelatedResourceIsNotResolvedException;
 import com.educational.platform.course.reviews.course.ReviewableCourse;
 import com.educational.platform.course.reviews.course.ReviewableCourseRepository;
 import com.educational.platform.course.reviews.course.create.CreateReviewableCourseCommand;
@@ -110,6 +111,20 @@ public class CourseReviewFactoryTest {
 
         // then
         assertThrows(ConstraintViolationException.class, createAction);
+    }
+
+    @Test
+    void createFrom_courseNotFound_relatedResourceIsNotResolvedException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(RelatedResourceIsNotResolvedException.class, createAction);
     }
 
 }

@@ -39,6 +39,8 @@ public class CreateReviewableCourseCommandHandlerTest {
         // then
         final ArgumentCaptor<ReviewableCourse> argument = ArgumentCaptor.forClass(ReviewableCourse.class);
         verify(reviewableCourseRepository).save(argument.capture());
-        assertThat(argument.getValue()).isNotNull();
+        assertThat(argument.getValue())
+                .isNotNull()
+                .hasFieldOrPropertyWithValue("originalCourseId", courseId);
     }
 }

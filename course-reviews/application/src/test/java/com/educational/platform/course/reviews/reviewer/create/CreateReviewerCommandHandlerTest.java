@@ -36,6 +36,8 @@ public class CreateReviewerCommandHandlerTest {
         // then
         final ArgumentCaptor<Reviewer> argument = ArgumentCaptor.forClass(Reviewer.class);
         verify(reviewerRepository).save(argument.capture());
-        assertThat(argument.getValue()).isNotNull();
+        assertThat(argument.getValue())
+                .isNotNull()
+                .hasFieldOrPropertyWithValue("username", "username");
     }
 }
