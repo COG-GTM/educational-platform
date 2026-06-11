@@ -116,4 +116,15 @@ public class CurrentUserAsReviewerTest {
         assertThatThrownBy(() -> sut.userAsReviewer())
                 .isInstanceOf(NullPointerException.class);
     }
+
+    @Test
+    void userAsReviewer_principalIsNotUserDetails_throwsClassCastException() {
+        // given — authentication with a String principal instead of UserDetails
+        final var authentication = new UsernamePasswordAuthenticationToken("plain-string-principal", "password");
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        // when/then
+        assertThatThrownBy(() -> sut.userAsReviewer())
+                .isInstanceOf(ClassCastException.class);
+    }
 }

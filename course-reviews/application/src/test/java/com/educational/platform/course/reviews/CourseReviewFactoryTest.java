@@ -348,6 +348,41 @@ public class CourseReviewFactoryTest {
     }
 
     @Test
+    void createFrom_ratingJustBelowZero_constraintViolationException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, -0.1, "comment");
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(ConstraintViolationException.class, createAction);
+    }
+
+    @Test
+    void createFrom_courseNotPersistedNullId_courseReviewCreatedWithNullCourseRef() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+
+        final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(uuid));
+        // id is null because the course was never persisted
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.of(reviewableCourse));
+
+        final Reviewer reviewer = new Reviewer(new CreateReviewerCommand("username"));
+        ReflectionTestUtils.setField(reviewer, "id", 22);
+        when(currentUserAsReviewer.userAsReviewer()).thenReturn(reviewer);
+
+        // when
+        final CourseReview courseReview = sut.createFrom(command);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("course", null);
+    }
+
+    @Test
     void createFrom_courseNotFound_reviewerNotConsulted() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

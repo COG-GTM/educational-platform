@@ -84,4 +84,14 @@ public class CourseReviewCheckerTest {
         assertThat(result).isFalse();
         verify(courseReviewRepository).isReviewer(null, "user");
     }
+
+    @Test
+    void hasAccess_nullAuthentication_throwsNullPointerException() {
+        // given
+        final UUID reviewId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // when/then
+        org.junit.jupiter.api.Assertions.assertThrows(NullPointerException.class,
+                () -> sut.hasAccess(null, reviewId));
+    }
 }

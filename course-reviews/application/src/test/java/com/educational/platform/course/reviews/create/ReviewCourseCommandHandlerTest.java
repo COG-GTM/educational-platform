@@ -406,6 +406,19 @@ public class ReviewCourseCommandHandlerTest {
     }
 
     @Test
+    void handle_ratingJustBelowZero_constraintViolationException() {
+        // given — -0.1 is just below the @PositiveOrZero boundary
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, -0.1, "comment");
+
+        // when
+        final org.assertj.core.api.ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
     void handle_twoCalls_differentUuidsReturned() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

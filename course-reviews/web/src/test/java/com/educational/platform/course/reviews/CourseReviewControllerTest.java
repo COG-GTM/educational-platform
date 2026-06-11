@@ -516,4 +516,38 @@ public class CourseReviewControllerTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("unexpected");
     }
+
+    @Test
+    void review_handlerReturnsNull_responseContainsNullUuid() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseRequest request = new ReviewCourseRequest(4.0, "great");
+        when(reviewCourseCommandHandler.handle(any(ReviewCourseCommand.class))).thenReturn(null);
+
+        // when
+        final CourseReviewCreatedResponse response = sut.review(courseUuid, request);
+
+        // then
+        assertThat(response.uuid()).isNull();
+    }
+
+    @Test
+    void updateReview_courseUuidNotEmbeddedInCommand() {
+        // given — courseUuid and reviewUuid are different; only reviewUuid should appear in the command
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(4.0, "ok");
+
+        // when
+        sut.updateReview(courseUuid, reviewUuid, request);
+
+        // then
+        final ArgumentCaptor<UpdateCourseReviewCommand> captor = ArgumentCaptor.forClass(UpdateCourseReviewCommand.class);
+        verify(updateCourseReviewCommandHandler).handle(captor.capture());
+        final UpdateCourseReviewCommand captured = captor.getValue();
+        assertThat(captured.uuid()).isEqualTo(reviewUuid);
+        assertThat(captured.rating()).isEqualTo(4.0);
+        assertThat(captured.comment()).isEqualTo("ok");
+        // courseUuid is a path variable but is not part of the UpdateCourseReviewCommand
+    }
 }

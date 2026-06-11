@@ -242,6 +242,22 @@ public class CourseReviewTest {
     }
 
     @Test
+    void constructor_nullCourseAndReviewerIds_courseReviewCreated() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "comment");
+
+        // when
+        final CourseReview courseReview = new CourseReview(command, null, null);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("course", null)
+                .hasFieldOrPropertyWithValue("reviewer", null);
+        assertThat(courseReview.toIdentifier()).isNotNull();
+    }
+
+    @Test
     void update_multipleUpdates_lastUpdateWins() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

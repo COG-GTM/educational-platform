@@ -353,6 +353,35 @@ public class UpdateCourseReviewCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("comment", new Comment("second"));
     }
 
+    @Test
+    void handle_ratingJustBelowZero_constraintViolationException() {
+        // given — -0.1 is just below the @PositiveOrZero boundary
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, -0.1, "comment");
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_fractionalRating_reviewSaved() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 2.5, "decent");
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(2.5));
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
