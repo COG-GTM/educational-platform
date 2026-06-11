@@ -202,4 +202,66 @@ class CourseProposalControllerTest {
         // then
         verifyNoInteractions(approveCourseProposalCommandHandler);
     }
+
+    @Test
+    void approve_invalidUuidFormat_errorResponse() throws Exception {
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", "not-a-uuid")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isInternalServerError());
+
+        verifyNoInteractions(approveCourseProposalCommandHandler);
+    }
+
+    @Test
+    void decline_invalidUuidFormat_errorResponse() throws Exception {
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", "not-a-uuid")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isInternalServerError());
+
+        verifyNoInteractions(declineCourseProposalCommandHandler);
+    }
+
+    @Test
+    void approve_alreadyApproved_conflictResponseContainsCannotBeApprovedMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyApprovedException(uuid))
+                .when(approveCourseProposalCommandHandler).handle(any(ApproveCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString("cannot be approved")))
+                .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString("already approved")));
+    }
+
+    @Test
+    void decline_alreadyDeclined_conflictResponseContainsCannotBeDeclinedMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyDeclinedException(uuid))
+                .when(declineCourseProposalCommandHandler).handle(any(DeclineCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString("cannot be declined")))
+                .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString("already declined")));
+    }
+
+    @Test
+    void courseProposals_responseContentTypeIsJson() throws Exception {
+        // given
+        when(listCourseProposalsQueryHandler.handle(any(ListCourseProposalsQuery.class)))
+                .thenReturn(Collections.emptyList());
+
+        // when / then
+        mockMvc.perform(get("/administration/course-proposals"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
+    }
 }
