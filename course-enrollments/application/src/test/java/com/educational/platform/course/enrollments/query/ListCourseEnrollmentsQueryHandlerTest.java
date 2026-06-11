@@ -215,4 +215,32 @@ public class ListCourseEnrollmentsQueryHandlerTest {
         assertThat(result).extracting(CourseEnrollmentDTO::completionStatus)
                 .containsExactly(CompletionStatusDTO.IN_PROGRESS, CompletionStatusDTO.COMPLETED);
     }
+
+    @Test
+    void handle_nullQuery_doesNotThrow() {
+        // given — query parameter is not used in method body (username comes from SecurityContext)
+        when(repository.query("student")).thenReturn(Collections.emptyList());
+
+        // when
+        final List<CourseEnrollmentDTO> result = sut.handle(null);
+
+        // then — null query is safe since it's never dereferenced
+        assertThat(result).isEmpty();
+        verify(repository).query("student");
+    }
+
+    @Test
+    void handle_multipleCalls_delegatesEachTime() {
+        // given
+        final ListCourseEnrollmentsQuery query = new ListCourseEnrollmentsQuery();
+        when(repository.query("student")).thenReturn(Collections.emptyList());
+
+        // when
+        sut.handle(query);
+        sut.handle(query);
+        sut.handle(query);
+
+        // then — no caching; repository is queried each time
+        verify(repository, org.mockito.Mockito.times(3)).query("student");
+    }
 }

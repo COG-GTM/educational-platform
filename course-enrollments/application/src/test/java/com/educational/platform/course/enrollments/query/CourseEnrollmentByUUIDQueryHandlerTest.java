@@ -225,4 +225,28 @@ public class CourseEnrollmentByUUIDQueryHandlerTest {
         // then
         assertThat(result).isNull();
     }
+
+    @Test
+    void handle_nullQuery_throwsNullPointerException() {
+        // when / then — accessing query.uuid() on null query throws NPE
+        assertThatThrownBy(() -> sut.handle(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void handle_sameUuidDifferentQueryInstances_produceSameResult() {
+        // given
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseEnrollmentDTO dto = new CourseEnrollmentDTO(enrollmentUuid, courseUuid, "student", CompletionStatusDTO.IN_PROGRESS);
+        when(repository.query(enrollmentUuid, "student")).thenReturn(Optional.of(dto));
+
+        // when
+        final Optional<CourseEnrollmentDTO> result1 = sut.handle(new CourseEnrollmentByUUIDQuery(enrollmentUuid));
+        final Optional<CourseEnrollmentDTO> result2 = sut.handle(new CourseEnrollmentByUUIDQuery(enrollmentUuid));
+
+        // then — same UUID in different query instances yields same result
+        assertThat(result1).isEqualTo(result2);
+        verify(repository, org.mockito.Mockito.times(2)).query(enrollmentUuid, "student");
+    }
 }

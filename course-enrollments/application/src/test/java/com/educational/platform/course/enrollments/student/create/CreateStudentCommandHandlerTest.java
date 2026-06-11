@@ -140,4 +140,28 @@ public class CreateStudentCommandHandlerTest {
         verify(studentRepository).save(captor.capture());
         assertThat(captor.getValue().toReference()).isEqualTo("user@domain.com");
     }
+
+    @Test
+    void handle_nullCommand_throwsNullPointerException() {
+        // when / then — new Student(null) accesses null.username()
+        org.junit.jupiter.api.Assertions.assertThrows(NullPointerException.class,
+                () -> sut.handle(null));
+    }
+
+    @Test
+    void handle_multipleCommands_eachSavesDistinctStudent() {
+        // given
+        final CreateStudentCommand cmd1 = new CreateStudentCommand("alice");
+        final CreateStudentCommand cmd2 = new CreateStudentCommand("bob");
+
+        // when
+        sut.handle(cmd1);
+        sut.handle(cmd2);
+
+        // then
+        ArgumentCaptor<Student> captor = ArgumentCaptor.forClass(Student.class);
+        verify(studentRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(0).toReference()).isEqualTo("alice");
+        assertThat(captor.getAllValues().get(1).toReference()).isEqualTo("bob");
+    }
 }

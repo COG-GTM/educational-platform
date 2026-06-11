@@ -423,4 +423,62 @@ public class RegisterStudentToCourseCommandHandlerTest {
         inOrder.verify(transactionTemplate).execute(any(TransactionCallback.class));
         inOrder.verify(eventPublisher).publishEvent(any(StudentEnrolledToCourseIntegrationEvent.class));
     }
+
+    @Test
+    void handle_studentWithNullUsername_eventPublishedWithNullUsername() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment courseEnrollment = new CourseEnrollment(1, 1);
+
+        when(transactionTemplate.execute(any())).thenReturn(courseEnrollment);
+
+        final Student student = new Student(new CreateStudentCommand(null));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        sut.handle(command);
+
+        // then — event is published with null username since student.toReference() returns null
+        ArgumentCaptor<StudentEnrolledToCourseIntegrationEvent> captor = ArgumentCaptor.forClass(StudentEnrolledToCourseIntegrationEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().username()).isNull();
+        assertThat(captor.getValue().courseId()).isEqualTo(courseId);
+    }
+
+    @Test
+    void handle_nullCommand_throwsNullPointerException() {
+        // given
+        final CourseEnrollment courseEnrollment = new CourseEnrollment(1, 1);
+        when(transactionTemplate.execute(any())).thenReturn(courseEnrollment);
+
+        // when / then — command.courseId() throws NPE when creating the integration event
+        assertThatThrownBy(() -> sut.handle(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void handle_differentStudents_eventContainsEachStudentUsername() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment enrollment1 = new CourseEnrollment(1, 1);
+        final CourseEnrollment enrollment2 = new CourseEnrollment(1, 2);
+
+        when(transactionTemplate.execute(any())).thenReturn(enrollment1, enrollment2);
+
+        final Student student1 = new Student(new CreateStudentCommand("alice"));
+        final Student student2 = new Student(new CreateStudentCommand("bob"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student1, student2);
+
+        // when
+        sut.handle(command);
+        sut.handle(command);
+
+        // then — each event has the corresponding student's username
+        ArgumentCaptor<StudentEnrolledToCourseIntegrationEvent> captor = ArgumentCaptor.forClass(StudentEnrolledToCourseIntegrationEvent.class);
+        verify(eventPublisher, times(2)).publishEvent(captor.capture());
+        assertThat(captor.getAllValues().get(0).username()).isEqualTo("alice");
+        assertThat(captor.getAllValues().get(1).username()).isEqualTo("bob");
+    }
 }

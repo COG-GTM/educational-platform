@@ -297,4 +297,33 @@ public class CourseEnrollmentControllerTest {
         assertThat(captor.getAllValues().get(0).courseId()).isEqualTo(courseUuid);
         assertThat(captor.getAllValues().get(1).courseId()).isEqualTo(courseUuid);
     }
+
+    @Test
+    void courseEnrollments_multipleCalls_handlerInvokedEachTime() {
+        // given
+        when(listHandler.handle(any(ListCourseEnrollmentsQuery.class))).thenReturn(List.of());
+
+        // when
+        sut.courseEnrollments();
+        sut.courseEnrollments();
+        sut.courseEnrollments();
+
+        // then — no caching; handler is called each time
+        verify(listHandler, times(3)).handle(any(ListCourseEnrollmentsQuery.class));
+    }
+
+    @Test
+    void enroll_handlerReturnsVersion4Uuid_returnedToClient() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID enrollmentUuid = UUID.randomUUID();
+        when(registerHandler.handle(any(RegisterStudentToCourseCommand.class))).thenReturn(enrollmentUuid);
+
+        // when
+        final UUID result = sut.enroll(courseUuid, new CourseEnrollmentRequest("student"));
+
+        // then — UUID returned by handler is passed through without modification
+        assertThat(result).isEqualTo(enrollmentUuid);
+        assertThat(result.version()).isEqualTo(4);
+    }
 }

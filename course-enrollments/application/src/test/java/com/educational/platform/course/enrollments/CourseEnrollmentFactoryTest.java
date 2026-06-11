@@ -335,4 +335,28 @@ public class CourseEnrollmentFactoryTest {
         verifyNoInteractions(currentUserAsStudent);
     }
 
+    @Test
+    void createFrom_validCommand_enrollmentUuidDiffersFromCourseUuid() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final EnrollCourse correspondingCourse = new EnrollCourse(new CreateCourseCommand(courseId));
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
+
+        final Student correspondingStudent = new Student(new CreateStudentCommand("username"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(correspondingStudent);
+
+        // when
+        final CourseEnrollment enrollment = sut.createFrom(command);
+
+        // then — enrollment UUID is independently generated, not the same as course UUID
+        assertThat(enrollment.getUuid()).isNotEqualTo(courseId);
+    }
+
+    @Test
+    void createFrom_nullCommand_throwsException() {
+        // when / then — null command causes NPE when validator.validate(null) is called
+        assertThrows(Exception.class, () -> sut.createFrom(null));
+    }
+
 }

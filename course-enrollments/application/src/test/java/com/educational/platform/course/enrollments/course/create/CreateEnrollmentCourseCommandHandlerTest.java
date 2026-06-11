@@ -118,4 +118,28 @@ public class CreateEnrollmentCourseCommandHandlerTest {
         verify(courseRepository).save(captor.capture());
         assertThat(captor.getValue().getId()).isNull();
     }
+
+    @Test
+    void handle_nullCommand_throwsNullPointerException() {
+        // when / then — new EnrollCourse(null) accesses null.uuid()
+        org.junit.jupiter.api.Assertions.assertThrows(NullPointerException.class,
+                () -> sut.handle(null));
+    }
+
+    @Test
+    void handle_multipleCommands_eachSavesDistinctEntity() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+
+        // when
+        sut.handle(new CreateCourseCommand(uuid1));
+        sut.handle(new CreateCourseCommand(uuid2));
+
+        // then
+        ArgumentCaptor<EnrollCourse> captor = ArgumentCaptor.forClass(EnrollCourse.class);
+        verify(courseRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(0).toReference()).isEqualTo(uuid1);
+        assertThat(captor.getAllValues().get(1).toReference()).isEqualTo(uuid2);
+    }
 }
