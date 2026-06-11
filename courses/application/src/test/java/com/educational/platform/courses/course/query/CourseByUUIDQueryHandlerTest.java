@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,6 +44,20 @@ public class CourseByUUIDQueryHandlerTest {
                 .hasFieldOrPropertyWithValue("name", "name")
                 .hasFieldOrPropertyWithValue("description", "description")
                 .hasFieldOrPropertyWithValue("numberOfStudents", 5);
+    }
+
+    @Test
+    void handle_queryDelegatesToRepositoryWithCorrectUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        sut.handle(query);
+
+        // then
+        verify(repository).findDTOByUuid(uuid);
     }
 
     @Test

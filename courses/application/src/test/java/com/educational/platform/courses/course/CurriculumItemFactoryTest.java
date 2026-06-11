@@ -17,6 +17,7 @@ import jakarta.validation.Validator;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.InstanceOfAssertFactories.LIST;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -93,6 +94,69 @@ public class CurriculumItemFactoryTest {
                 .hasFieldOrPropertyWithValue("title", "Quiz Title")
                 .hasFieldOrPropertyWithValue("description", "Quiz Description")
                 .hasFieldOrPropertyWithValue("serialNumber", 2);
+    }
+
+    @Test
+    void createFrom_lectureCommand_contentFieldPopulated() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateLectureCommand lectureCommand = CreateLectureCommand.builder()
+                .title("Title")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Lecture body content")
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(lectureCommand, course);
+
+        // then
+        assertThat(result)
+                .isInstanceOf(Lecture.class)
+                .hasFieldOrPropertyWithValue("content", "Lecture body content");
+    }
+
+    @Test
+    void createFrom_quizCommand_multipleQuestions_allQuestionsMapped() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz Title")
+                .description("Quiz Desc")
+                .serialNumber(1)
+                .text("Quiz Content")
+                .questions(List.of(
+                        new CreateQuestionCommand("Q1"),
+                        new CreateQuestionCommand("Q2"),
+                        new CreateQuestionCommand("Q3")))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Quiz.class);
+        assertThat(result).extracting("questions")
+                .asInstanceOf(LIST)
+                .hasSize(3)
+                .extracting("content")
+                .containsExactly("Q1", "Q2", "Q3");
     }
 
     @Test

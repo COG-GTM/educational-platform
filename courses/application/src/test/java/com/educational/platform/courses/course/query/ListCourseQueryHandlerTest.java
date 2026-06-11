@@ -41,6 +41,21 @@ public class ListCourseQueryHandlerTest {
     }
 
     @Test
+    void handle_singleCourseExists_singletonListReturned() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO course = new CourseLightDTO(UUID.randomUUID(), "single-course", "only course", 5);
+        when(repository.list()).thenReturn(List.of(course));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        assertThat(result).containsExactly(course);
+    }
+
+    @Test
     void handle_noCoursesExist_emptyListReturned() {
         // given
         final ListCourseQuery query = new ListCourseQuery();

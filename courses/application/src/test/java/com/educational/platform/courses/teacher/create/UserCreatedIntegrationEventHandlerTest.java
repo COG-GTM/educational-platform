@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @ExtendWith(MockitoExtension.class)
 public class UserCreatedIntegrationEventHandlerTest {
@@ -35,6 +36,19 @@ public class UserCreatedIntegrationEventHandlerTest {
         final CreateTeacherCommand createTeacherCommand = argument.getValue();
         assertThat(createTeacherCommand)
                 .hasFieldOrPropertyWithValue("username", "username");
+    }
+
+    @Test
+    void handleUserCreatedEvent_handlerCalledExactlyOnce() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        verify(createTeacherCommandHandler).handle(org.mockito.ArgumentMatchers.any(CreateTeacherCommand.class));
+        verifyNoMoreInteractions(createTeacherCommandHandler);
     }
 
 }
