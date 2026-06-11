@@ -17,6 +17,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -107,6 +108,21 @@ public class CourseByUUIDQueryHandlerTest {
         // then
         assertThat(result).isPresent();
         assertThat(result.get().curriculumItems()).hasSize(1);
+    }
+
+    @Test
+    void handle_repositoryCalledExactlyOnce_noExtraInteractions() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440005");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        sut.handle(query);
+
+        // then
+        verify(repository).findDTOByUuid(uuid);
+        verifyNoMoreInteractions(repository);
     }
 
 }

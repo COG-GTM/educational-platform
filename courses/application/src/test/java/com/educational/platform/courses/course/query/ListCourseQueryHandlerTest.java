@@ -118,4 +118,19 @@ public class ListCourseQueryHandlerTest {
         assertThat(returned.numberOfStudents()).isEqualTo(42);
     }
 
+    @Test
+    void handle_returnedListIsSameInstanceFromRepository() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final List<CourseLightDTO> repositoryList = List.of(
+                new CourseLightDTO(UUID.randomUUID(), "course", "desc", 1));
+        when(repository.list()).thenReturn(repositoryList);
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(repositoryList);
+    }
+
 }

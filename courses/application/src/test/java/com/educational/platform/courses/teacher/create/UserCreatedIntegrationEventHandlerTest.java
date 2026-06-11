@@ -80,4 +80,18 @@ public class UserCreatedIntegrationEventHandlerTest {
         assertThat(argument.getValue().username()).isEqualTo("user.name+tag@org");
     }
 
+    @Test
+    void handleUserCreatedEvent_emptyUsername_preservedInCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("", "empty@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEmpty();
+    }
+
 }
