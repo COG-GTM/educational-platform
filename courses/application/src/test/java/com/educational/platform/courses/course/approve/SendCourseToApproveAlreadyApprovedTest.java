@@ -6,7 +6,6 @@ import com.educational.platform.courses.teacher.Teacher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -18,15 +17,15 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
- * Verifies that after handling SendCourseToApproveCommand the course's approval
- * status transitions to WAITING_FOR_APPROVAL (complementing the existing test
- * that only verifies the integration event).
+ * Verifies that sending an already-approved course for approval throws {@link CourseAlreadyApprovedException}.
  */
 @ExtendWith(MockitoExtension.class)
-public class SendCourseToApproveCommandHandlerStatusTest {
+public class SendCourseToApproveAlreadyApprovedTest {
 
     private CourseFactory courseFactory;
 
@@ -49,23 +48,21 @@ public class SendCourseToApproveCommandHandlerStatusTest {
     }
 
     @Test
-    void handle_existingCourse_approvalStatusBecomesWaitingForApproval() {
+    void handle_alreadyApprovedCourse_throwsCourseAlreadyApprovedException() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final SendCourseToApproveCommand command = new SendCourseToApproveCommand(uuid);
 
         var teacher = mock(Teacher.class);
         when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
         when(teacher.getId()).thenReturn(15);
         final Course course = courseFactory.createFrom(
                 CreateCourseCommand.builder().name("name").description("desc").build());
+        course.approve();
         when(repository.findByUuid(uuid)).thenReturn(Optional.of(course));
 
-        // when
-        sut.handle(command);
-
-        // then
-        assertThat(course)
-                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+        // when / then
+        assertThatExceptionOfType(CourseAlreadyApprovedException.class)
+                .isThrownBy(() -> sut.handle(new SendCourseToApproveCommand(uuid)))
+                .satisfies(ex -> assertThat(ex.getMessage()).contains("cannot be sent for approval"));
     }
 }
