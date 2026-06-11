@@ -150,4 +150,16 @@ public class ReviewCourseCommandTest {
         // then
         assertThat(first).isNotEqualTo(second);
     }
+
+    @Test
+    void multipleNullFields_multipleViolations() {
+        // given
+        final ReviewCourseCommand command = new ReviewCourseCommand(null, null, "comment");
+
+        // when
+        final Set<ConstraintViolation<ReviewCourseCommand>> violations = validator.validate(command);
+
+        // then
+        assertThat(violations).hasSizeGreaterThanOrEqualTo(2);
+    }
 }

@@ -333,6 +333,26 @@ public class UpdateCourseReviewCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("comment", new Comment("half-star"));
     }
 
+    @Test
+    void handle_twoSequentialUpdates_lastStateApplied() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand firstUpdate = new UpdateCourseReviewCommand(uuid, 1.0, "first");
+        final UpdateCourseReviewCommand secondUpdate = new UpdateCourseReviewCommand(uuid, 5.0, "second");
+
+        // when
+        sut.handle(firstUpdate);
+        sut.handle(secondUpdate);
+
+        // then
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository, org.mockito.Mockito.times(2)).save(argument.capture());
+        final CourseReview lastSaved = argument.getAllValues().get(1);
+        assertThat(lastSaved)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0))
+                .hasFieldOrPropertyWithValue("comment", new Comment("second"));
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));

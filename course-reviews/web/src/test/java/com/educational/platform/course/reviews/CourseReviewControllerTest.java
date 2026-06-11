@@ -16,7 +16,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.educational.platform.common.exception.RelatedResourceIsNotResolvedException;
 import com.educational.platform.common.exception.ResourceNotFoundException;
 
+import jakarta.validation.ConstraintViolationException;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -473,5 +475,45 @@ public class CourseReviewControllerTest {
         // then
         verifyNoInteractions(reviewCourseCommandHandler);
         verifyNoInteractions(updateCourseReviewCommandHandler);
+    }
+
+    @Test
+    void review_handlerThrowsConstraintViolation_exceptionPropagates() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseRequest request = new ReviewCourseRequest(4.0, "comment");
+        when(reviewCourseCommandHandler.handle(any(ReviewCourseCommand.class)))
+                .thenThrow(new ConstraintViolationException(Set.of()));
+
+        // when/then
+        assertThatThrownBy(() -> sut.review(courseUuid, request))
+                .isInstanceOf(ConstraintViolationException.class);
+    }
+
+    @Test
+    void updateReview_handlerThrowsConstraintViolation_exceptionPropagates() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(3.0, "updated");
+        doThrow(new ConstraintViolationException(Set.of()))
+                .when(updateCourseReviewCommandHandler).handle(any(UpdateCourseReviewCommand.class));
+
+        // when/then
+        assertThatThrownBy(() -> sut.updateReview(courseUuid, reviewUuid, request))
+                .isInstanceOf(ConstraintViolationException.class);
+    }
+
+    @Test
+    void reviews_handlerThrowsRuntimeException_exceptionPropagates() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(listCourseReviewsByCourseUUIDQueryHandler.handle(any(ListCourseReviewsByCourseUUIDQuery.class)))
+                .thenThrow(new RuntimeException("unexpected"));
+
+        // when/then
+        assertThatThrownBy(() -> sut.reviews(courseUuid))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("unexpected");
     }
 }

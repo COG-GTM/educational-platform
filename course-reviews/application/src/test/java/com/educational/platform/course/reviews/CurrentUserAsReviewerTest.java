@@ -3,6 +3,7 @@ package com.educational.platform.course.reviews;
 import com.educational.platform.course.reviews.reviewer.Reviewer;
 import com.educational.platform.course.reviews.reviewer.ReviewerRepository;
 import com.educational.platform.course.reviews.reviewer.create.CreateReviewerCommand;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +31,11 @@ public class CurrentUserAsReviewerTest {
     @BeforeEach
     void setUp() {
         sut = new CurrentUserAsReviewer(reviewerRepository);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test

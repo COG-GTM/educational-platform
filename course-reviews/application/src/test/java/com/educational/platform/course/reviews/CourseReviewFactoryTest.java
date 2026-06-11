@@ -322,6 +322,32 @@ public class CourseReviewFactoryTest {
     }
 
     @Test
+    void createFrom_ratingAboveMax_constraintViolationException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 6.0, "comment");
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(ConstraintViolationException.class, createAction);
+    }
+
+    @Test
+    void createFrom_ratingJustAboveMax_constraintViolationException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 5.1, "comment");
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(ConstraintViolationException.class, createAction);
+    }
+
+    @Test
     void createFrom_courseNotFound_reviewerNotConsulted() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
