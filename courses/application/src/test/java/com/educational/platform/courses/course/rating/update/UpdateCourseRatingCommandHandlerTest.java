@@ -88,4 +88,72 @@ public class UpdateCourseRatingCommandHandlerTest {
         // then
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
     }
+
+    @Test
+    void handle_zeroRating_courseSavedWithZeroRating() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 0.0);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0.0));
+    }
+
+    @Test
+    void handle_negativeRating_courseSavedWithNegativeRating() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, -1.5);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(-1.5));
+    }
+
+    @Test
+    void handle_invalidId_exceptionMessageContainsUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 4.0);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+                .isThrownBy(handle)
+                .withMessageContaining("123e4567-e89b-12d3-a456-426655440001");
+    }
 }
