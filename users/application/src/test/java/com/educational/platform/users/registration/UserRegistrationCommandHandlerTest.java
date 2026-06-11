@@ -31,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.inOrder;
 
 @ExtendWith(MockitoExtension.class)
 public class UserRegistrationCommandHandlerTest {
@@ -823,5 +824,115 @@ public class UserRegistrationCommandHandlerTest {
 
         // then
         assertThat(token).isNotNull().isNotBlank();
+    }
+
+    @Test
+    void handle_validCommand_ordering_existsByUsernameThenSaveThenEventThenToken() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("order@gmail.com")
+                .username("orderuser")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("orderuser")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then — verify ordering: existsByUsername → save → publishEvent → createToken
+        final var inOrderVerifier = inOrder(repository, eventPublisher, jwtTokenProvider);
+        inOrderVerifier.verify(repository).existsByUsername("orderuser");
+        inOrderVerifier.verify(repository).save(any(User.class));
+        inOrderVerifier.verify(eventPublisher).publishEvent(any(UserCreatedIntegrationEvent.class));
+        inOrderVerifier.verify(jwtTokenProvider).createToken(any(), any());
+    }
+
+    @Test
+    void handle_validationFails_existsByUsernameNeverCalled() {
+        // given — null role triggers @NotNull violation
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(null)
+                .build();
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (ConstraintViolationException ignored) {
+        }
+
+        // then
+        verify(repository, never()).existsByUsername(any());
+    }
+
+    @Test
+    void handle_validationFails_shortUsername_nothingPersisted() {
+        // given — username "ab" violates @Size(min=4)
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("ab")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (ConstraintViolationException ignored) {
+        }
+
+        // then
+        verify(repository, never()).existsByUsername(any());
+        verify(repository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
+        verify(jwtTokenProvider, never()).createToken(any(), any());
+    }
+
+    @Test
+    void handle_validationFails_invalidEmail_nothingPersisted() {
+        // given — "not-an-email" violates @Email
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("not-an-email")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (ConstraintViolationException ignored) {
+        }
+
+        // then
+        verify(repository, never()).existsByUsername(any());
+        verify(repository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
+        verify(jwtTokenProvider, never()).createToken(any(), any());
+    }
+
+    @Test
+    void handle_usernameAlreadyExists_tokenNeverCreated() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("taken")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("taken")).thenReturn(true);
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (UnprocessableEntityException ignored) {
+        }
+
+        // then
+        verify(jwtTokenProvider, never()).createToken(any(), any());
     }
 }

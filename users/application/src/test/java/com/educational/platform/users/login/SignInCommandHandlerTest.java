@@ -586,4 +586,71 @@ public class SignInCommandHandlerTest {
         verify(repository, never()).findByUsername(any());
         verify(jwtTokenProvider, never()).createToken(any(), any());
     }
+
+    @Test
+    void handle_validCommand_ordering_authenticateThenQueryThenCreateToken() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("password")
+                .build();
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User existingUser = new User(userRegistrationCommand, passwordEncoder);
+        when(repository.findByUsername("username")).thenReturn(Optional.of(existingUser));
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(signInCommand);
+
+        // then — verify ordering: authenticate → findByUsername → createToken
+        final var inOrderVerifier = inOrder(authenticationManager, repository, jwtTokenProvider);
+        inOrderVerifier.verify(authenticationManager).authenticate(any());
+        inOrderVerifier.verify(repository).findByUsername("username");
+        inOrderVerifier.verify(jwtTokenProvider).createToken(eq("username"), eq(Collections.singletonList(Role.ROLE_STUDENT)));
+    }
+
+    @Test
+    void handle_emptyStringUsername_noSideEffects() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("")
+                .password("password")
+                .build();
+
+        // when
+        try {
+            sut.handle(signInCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then — validation short-circuits all downstream interactions
+        verify(authenticationManager, never()).authenticate(any());
+        verify(repository, never()).findByUsername(any());
+        verify(jwtTokenProvider, never()).createToken(any(), any());
+    }
+
+    @Test
+    void handle_emptyStringPassword_noSideEffects() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("username")
+                .password("")
+                .build();
+
+        // when
+        try {
+            sut.handle(signInCommand);
+        } catch (Exception ignored) {
+        }
+
+        // then — validation short-circuits all downstream interactions
+        verify(authenticationManager, never()).authenticate(any());
+        verify(repository, never()).findByUsername(any());
+        verify(jwtTokenProvider, never()).createToken(any(), any());
+    }
 }
