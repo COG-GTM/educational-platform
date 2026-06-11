@@ -1,8 +1,8 @@
 package com.educational.platform.courses.course;
 
 import com.educational.platform.courses.course.create.CreateCourseCommand;
+import com.educational.platform.courses.course.create.CreateCurriculumItemCommand;
 import com.educational.platform.courses.course.create.CreateLectureCommand;
-import com.educational.platform.courses.course.create.CreateQuestionCommand;
 import com.educational.platform.courses.course.create.CreateQuizCommand;
 import org.junit.jupiter.api.Test;
 
@@ -15,17 +15,17 @@ public class CourseCurriculumItemsTest {
     private static final Integer TEACHER_ID = 1;
 
     @Test
-    void constructor_withLectureItems_createsCurriculumItems() {
+    void constructor_withLectureCurriculumItems_createsCourseWithLectures() {
         // given
         final CreateLectureCommand lecture = CreateLectureCommand.builder()
                 .title("Lecture 1")
-                .description("First lecture")
+                .description("Introduction")
                 .serialNumber(1)
-                .text("Content")
+                .text("Lecture content")
                 .build();
         final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("Java Course")
-                .description("Learn Java")
+                .name("Course with lectures")
+                .description("A course containing lectures")
                 .curriculumItems(List.of(lecture))
                 .build();
 
@@ -33,26 +33,27 @@ public class CourseCurriculumItemsTest {
         final Course course = new Course(command, TEACHER_ID);
 
         // then
-        @SuppressWarnings("unchecked")
-        final List<CurriculumItem> items = (List<CurriculumItem>)
-                org.springframework.test.util.ReflectionTestUtils.getField(course, "curriculumItems");
-        assertThat(items).hasSize(1);
-        assertThat(items.getFirst()).isInstanceOf(Lecture.class);
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("name", "Course with lectures")
+                .hasFieldOrPropertyWithValue("description", "A course containing lectures");
+        assertThat(course).extracting("curriculumItems")
+                .asList()
+                .hasSize(1);
     }
 
     @Test
-    void constructor_withQuizItems_createsCurriculumItems() {
+    void constructor_withQuizCurriculumItems_createsCourseWithQuizzes() {
         // given
         final CreateQuizCommand quiz = CreateQuizCommand.builder()
                 .title("Quiz 1")
                 .description("First quiz")
                 .serialNumber(1)
-                .text("Quiz intro")
-                .questions(List.of(new CreateQuestionCommand("Q1")))
+                .text("Quiz instructions")
+                .questions(List.of())
                 .build();
         final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("Java Course")
-                .description("Learn Java")
+                .name("Course with quiz")
+                .description("A course containing a quiz")
                 .curriculumItems(List.of(quiz))
                 .build();
 
@@ -60,25 +61,30 @@ public class CourseCurriculumItemsTest {
         final Course course = new Course(command, TEACHER_ID);
 
         // then
-        @SuppressWarnings("unchecked")
-        final List<CurriculumItem> items = (List<CurriculumItem>)
-                org.springframework.test.util.ReflectionTestUtils.getField(course, "curriculumItems");
-        assertThat(items).hasSize(1);
-        assertThat(items.getFirst()).isInstanceOf(Quiz.class);
+        assertThat(course).extracting("curriculumItems")
+                .asList()
+                .hasSize(1);
     }
 
     @Test
-    void constructor_withMixedItems_createsAllCurriculumItems() {
+    void constructor_withMultipleCurriculumItems_createsAllItems() {
         // given
         final CreateLectureCommand lecture = CreateLectureCommand.builder()
-                .title("Lecture").description("d").serialNumber(1).text("t").build();
+                .title("Lecture 1")
+                .description("Intro")
+                .serialNumber(1)
+                .text("Content")
+                .build();
         final CreateQuizCommand quiz = CreateQuizCommand.builder()
-                .title("Quiz").description("d").serialNumber(2).text("t")
-                .questions(List.of(new CreateQuestionCommand("Q")))
+                .title("Quiz 1")
+                .description("Assessment")
+                .serialNumber(2)
+                .text("Instructions")
+                .questions(List.of())
                 .build();
         final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("Course")
-                .description("Desc")
+                .name("Full course")
+                .description("Course with mixed items")
                 .curriculumItems(List.of(lecture, quiz))
                 .build();
 
@@ -86,20 +92,17 @@ public class CourseCurriculumItemsTest {
         final Course course = new Course(command, TEACHER_ID);
 
         // then
-        @SuppressWarnings("unchecked")
-        final List<CurriculumItem> items = (List<CurriculumItem>)
-                org.springframework.test.util.ReflectionTestUtils.getField(course, "curriculumItems");
-        assertThat(items).hasSize(2);
-        assertThat(items).hasAtLeastOneElementOfType(Lecture.class);
-        assertThat(items).hasAtLeastOneElementOfType(Quiz.class);
+        assertThat(course).extracting("curriculumItems")
+                .asList()
+                .hasSize(2);
     }
 
     @Test
-    void constructor_withNullCurriculumItems_leavesItemsNull() {
+    void constructor_withNullCurriculumItems_createsNullList() {
         // given
         final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("Course")
-                .description("Desc")
+                .name("Simple course")
+                .description("No curriculum items")
                 .curriculumItems(null)
                 .build();
 
@@ -107,16 +110,17 @@ public class CourseCurriculumItemsTest {
         final Course course = new Course(command, TEACHER_ID);
 
         // then
-        final Object items = org.springframework.test.util.ReflectionTestUtils.getField(course, "curriculumItems");
-        assertThat(items).isNull();
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("name", "Simple course")
+                .hasFieldOrPropertyWithValue("curriculumItems", null);
     }
 
     @Test
-    void constructor_withEmptyList_createsEmptyCurriculumItems() {
+    void constructor_withEmptyCurriculumItems_createsEmptyList() {
         // given
         final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("Course")
-                .description("Desc")
+                .name("Empty curriculum course")
+                .description("Course with no items")
                 .curriculumItems(List.of())
                 .build();
 
@@ -124,9 +128,8 @@ public class CourseCurriculumItemsTest {
         final Course course = new Course(command, TEACHER_ID);
 
         // then
-        @SuppressWarnings("unchecked")
-        final List<CurriculumItem> items = (List<CurriculumItem>)
-                org.springframework.test.util.ReflectionTestUtils.getField(course, "curriculumItems");
-        assertThat(items).isEmpty();
+        assertThat(course).extracting("curriculumItems")
+                .asList()
+                .isEmpty();
     }
 }

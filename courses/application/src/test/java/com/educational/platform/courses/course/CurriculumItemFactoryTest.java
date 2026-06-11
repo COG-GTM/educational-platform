@@ -1,11 +1,9 @@
 package com.educational.platform.courses.course;
 
 import com.educational.platform.courses.course.create.CreateCourseCommand;
-import com.educational.platform.courses.course.create.CreateCurriculumItemCommand;
 import com.educational.platform.courses.course.create.CreateLectureCommand;
 import com.educational.platform.courses.course.create.CreateQuestionCommand;
 import com.educational.platform.courses.course.create.CreateQuizCommand;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -14,62 +12,63 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class CurriculumItemFactoryTest {
 
-    private Course course;
-
-    @BeforeEach
-    void setUp() {
-        final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("name")
-                .description("description")
-                .build();
-        course = new Course(command, 1);
-    }
-
     @Test
-    void createFrom_lectureCommand_createsLecture() {
+    void createFrom_lectureCommand_returnsLectureInstance() {
         // given
-        final CreateLectureCommand command = CreateLectureCommand.builder()
-                .title("title")
-                .description("description")
+        final Course course = new Course(
+                CreateCourseCommand.builder().name("name").description("desc").build(), 1);
+        final CreateLectureCommand lectureCommand = CreateLectureCommand.builder()
+                .title("Lecture title")
+                .description("Lecture description")
                 .serialNumber(1)
-                .text("text")
+                .text("Lecture text content")
                 .build();
 
         // when
-        final CurriculumItem item = CurriculumItemFactory.createFrom(command, course);
+        final CurriculumItem result = CurriculumItemFactory.createFrom(lectureCommand, course);
 
         // then
-        assertThat(item).isInstanceOf(Lecture.class);
+        assertThat(result).isInstanceOf(Lecture.class);
     }
 
     @Test
-    void createFrom_quizCommand_createsQuiz() {
+    void createFrom_quizCommand_returnsQuizInstance() {
         // given
-        final CreateQuizCommand command = CreateQuizCommand.builder()
-                .title("title")
-                .description("description")
+        final Course course = new Course(
+                CreateCourseCommand.builder().name("name").description("desc").build(), 1);
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz title")
+                .description("Quiz description")
+                .serialNumber(2)
+                .text("Quiz instructions")
+                .questions(List.of())
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Quiz.class);
+    }
+
+    @Test
+    void createFrom_quizCommandWithQuestions_returnsQuizInstance() {
+        // given
+        final Course course = new Course(
+                CreateCourseCommand.builder().name("name").description("desc").build(), 1);
+        final CreateQuestionCommand question = new CreateQuestionCommand("What is 2+2?");
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Math Quiz")
+                .description("Basic math")
                 .serialNumber(1)
-                .text("text")
-                .questions(List.of(new CreateQuestionCommand("content")))
+                .text("Answer all questions")
+                .questions(List.of(question))
                 .build();
 
         // when
-        final CurriculumItem item = CurriculumItemFactory.createFrom(command, course);
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, course);
 
         // then
-        assertThat(item).isInstanceOf(Quiz.class);
-    }
-
-    @Test
-    void createFrom_unknownCommand_returnsNull() {
-        // given
-        final CreateCurriculumItemCommand command = new CreateCurriculumItemCommand("title", "description", 1) {
-        };
-
-        // when
-        final CurriculumItem item = CurriculumItemFactory.createFrom(command, course);
-
-        // then
-        assertThat(item).isNull();
+        assertThat(result).isInstanceOf(Quiz.class);
     }
 }

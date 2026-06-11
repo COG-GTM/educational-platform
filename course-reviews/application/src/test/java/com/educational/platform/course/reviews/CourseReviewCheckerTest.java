@@ -32,8 +32,8 @@ public class CourseReviewCheckerTest {
     void hasAccess_userIsReviewer_returnsTrue() {
         // given
         final UUID reviewId = UUID.randomUUID();
-        when(authentication.getName()).thenReturn("username");
-        when(courseReviewRepository.isReviewer(reviewId, "username")).thenReturn(true);
+        when(authentication.getName()).thenReturn("reviewer");
+        when(courseReviewRepository.isReviewer(reviewId, "reviewer")).thenReturn(true);
 
         // when
         final boolean result = sut.hasAccess(authentication, reviewId);
@@ -46,13 +46,27 @@ public class CourseReviewCheckerTest {
     void hasAccess_userIsNotReviewer_returnsFalse() {
         // given
         final UUID reviewId = UUID.randomUUID();
-        when(authentication.getName()).thenReturn("username");
-        when(courseReviewRepository.isReviewer(reviewId, "username")).thenReturn(false);
+        when(authentication.getName()).thenReturn("other-user");
+        when(courseReviewRepository.isReviewer(reviewId, "other-user")).thenReturn(false);
 
         // when
         final boolean result = sut.hasAccess(authentication, reviewId);
 
         // then
         assertThat(result).isFalse();
+    }
+
+    @Test
+    void hasAccess_differentReviewIds_queriesCorrectId() {
+        // given
+        final UUID reviewId1 = UUID.randomUUID();
+        final UUID reviewId2 = UUID.randomUUID();
+        when(authentication.getName()).thenReturn("user");
+        when(courseReviewRepository.isReviewer(reviewId1, "user")).thenReturn(true);
+        when(courseReviewRepository.isReviewer(reviewId2, "user")).thenReturn(false);
+
+        // when / then
+        assertThat(sut.hasAccess(authentication, reviewId1)).isTrue();
+        assertThat(sut.hasAccess(authentication, reviewId2)).isFalse();
     }
 }
