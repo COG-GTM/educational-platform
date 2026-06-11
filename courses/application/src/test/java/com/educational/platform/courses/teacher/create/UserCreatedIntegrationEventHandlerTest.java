@@ -94,4 +94,32 @@ public class UserCreatedIntegrationEventHandlerTest {
         assertThat(argument.getValue().username()).isEmpty();
     }
 
+    @Test
+    void handleUserCreatedEvent_nullUsername_nullPreservedInCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(null, "email@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isNull();
+    }
+
+    @Test
+    void handleUserCreatedEvent_whitespaceOnlyUsername_preservedInCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("   ", "ws@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("   ");
+    }
+
 }

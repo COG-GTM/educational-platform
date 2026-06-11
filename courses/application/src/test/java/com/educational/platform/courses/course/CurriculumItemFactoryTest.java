@@ -406,4 +406,93 @@ public class CurriculumItemFactoryTest {
                 .isSameAs(result);
     }
 
+    @Test
+    void createFrom_lectureCommand_nullCourse_lectureCreatedWithNullCourse() {
+        // given
+        final CreateLectureCommand lectureCommand = CreateLectureCommand.builder()
+                .title("Title")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(lectureCommand, null);
+
+        // then
+        assertThat(result).isInstanceOf(Lecture.class);
+        assertThat(result).extracting("course").isNull();
+        assertThat(result)
+                .hasFieldOrPropertyWithValue("title", "Title")
+                .hasFieldOrPropertyWithValue("serialNumber", 1);
+    }
+
+    @Test
+    void createFrom_quizCommand_nullCourse_quizCreatedWithNullCourse() {
+        // given
+        final CreateQuizCommand quizCommand = CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Desc")
+                .serialNumber(1)
+                .text("Content")
+                .questions(List.of(new CreateQuestionCommand("Q1")))
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(quizCommand, null);
+
+        // then
+        assertThat(result).isInstanceOf(Quiz.class);
+        assertThat(result).extracting("course").isNull();
+    }
+
+    @Test
+    void createFrom_lectureCommand_nullFields_fieldsAreNull() {
+        // given
+        final CreateLectureCommand lectureCommand = CreateLectureCommand.builder()
+                .title(null)
+                .description(null)
+                .serialNumber(null)
+                .text(null)
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(lectureCommand, null);
+
+        // then
+        assertThat(result).isInstanceOf(Lecture.class);
+        assertThat(result)
+                .hasFieldOrPropertyWithValue("title", null)
+                .hasFieldOrPropertyWithValue("description", null)
+                .hasFieldOrPropertyWithValue("serialNumber", null)
+                .hasFieldOrPropertyWithValue("content", null);
+    }
+
+    @Test
+    void createFrom_lectureCommand_serialNumberZero_accepted() {
+        // given
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = courseFactory.createFrom(createCourseCommand);
+
+        final CreateLectureCommand lectureCommand = CreateLectureCommand.builder()
+                .title("Title")
+                .description("Desc")
+                .serialNumber(0)
+                .text("Content")
+                .build();
+
+        // when
+        final CurriculumItem result = CurriculumItemFactory.createFrom(lectureCommand, course);
+
+        // then
+        assertThat(result).isInstanceOf(Lecture.class);
+        assertThat(result).hasFieldOrPropertyWithValue("serialNumber", 0);
+    }
+
 }

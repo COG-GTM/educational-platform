@@ -133,4 +133,33 @@ public class ListCourseQueryHandlerTest {
         assertThat(result).isSameAs(repositoryList);
     }
 
+    @Test
+    void handle_nullQuery_delegatesToRepository() {
+        // given
+        when(repository.list()).thenReturn(List.of());
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(null);
+
+        // then
+        assertThat(result).isEmpty();
+        verify(repository).list();
+    }
+
+    @Test
+    void handle_calledMultipleTimes_delegatesEachCall() {
+        // given
+        final CourseLightDTO course = new CourseLightDTO(UUID.randomUUID(), "c", "d", 1);
+        when(repository.list()).thenReturn(List.of(course));
+
+        // when
+        final List<CourseLightDTO> result1 = sut.handle(new ListCourseQuery());
+        final List<CourseLightDTO> result2 = sut.handle(new ListCourseQuery());
+
+        // then
+        assertThat(result1).hasSize(1);
+        assertThat(result2).hasSize(1);
+        verify(repository, org.mockito.Mockito.times(2)).list();
+    }
+
 }

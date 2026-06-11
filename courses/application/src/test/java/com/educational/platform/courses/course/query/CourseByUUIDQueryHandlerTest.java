@@ -125,4 +125,41 @@ public class CourseByUUIDQueryHandlerTest {
         verifyNoMoreInteractions(repository);
     }
 
+    @Test
+    void handle_nullUuidInQuery_delegatesToRepository() {
+        // given
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(null);
+        when(repository.findDTOByUuid(null)).thenReturn(Optional.empty());
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isEmpty();
+        verify(repository).findDTOByUuid(null);
+    }
+
+    @Test
+    void handle_calledTwiceWithDifferentUuids_delegatesBothCalls() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440006");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440007");
+        final CourseDTO dto1 = new CourseDTO(uuid1, "course1", "desc1", 1, List.of());
+        final CourseDTO dto2 = new CourseDTO(uuid2, "course2", "desc2", 2, List.of());
+        when(repository.findDTOByUuid(uuid1)).thenReturn(Optional.of(dto1));
+        when(repository.findDTOByUuid(uuid2)).thenReturn(Optional.of(dto2));
+
+        // when
+        final Optional<CourseDTO> result1 = sut.handle(new CourseByUUIDQuery(uuid1));
+        final Optional<CourseDTO> result2 = sut.handle(new CourseByUUIDQuery(uuid2));
+
+        // then
+        assertThat(result1).isPresent();
+        assertThat(result1.get().name()).isEqualTo("course1");
+        assertThat(result2).isPresent();
+        assertThat(result2.get().name()).isEqualTo("course2");
+        verify(repository).findDTOByUuid(uuid1);
+        verify(repository).findDTOByUuid(uuid2);
+    }
+
 }
