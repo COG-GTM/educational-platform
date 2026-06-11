@@ -41,31 +41,31 @@ public class CourseReviewControllerUnitTest {
     }
 
     @Test
-    void review_delegatesToHandlerAndReturnsCreatedResponse() {
+    void review_delegatesToReviewHandler_returnsCreatedResponse() {
         // given
         final UUID courseUuid = UUID.randomUUID();
         final UUID reviewUuid = UUID.randomUUID();
-        final ReviewCourseRequest request = new ReviewCourseRequest(4.0, "Great course");
-        when(reviewHandler.handle(any(ReviewCourseCommand.class))).thenReturn(reviewUuid);
+        when(reviewHandler.handle(any())).thenReturn(reviewUuid);
+        final ReviewCourseRequest request = new ReviewCourseRequest(4.5, "Great course");
 
         // when
-        final CourseReviewCreatedResponse response = sut.review(courseUuid, request);
+        final CourseReviewCreatedResponse result = sut.review(courseUuid, request);
 
         // then
-        assertThat(response.uuid()).isEqualTo(reviewUuid);
+        assertThat(result.uuid()).isEqualTo(reviewUuid);
         final ArgumentCaptor<ReviewCourseCommand> captor = ArgumentCaptor.forClass(ReviewCourseCommand.class);
         verify(reviewHandler).handle(captor.capture());
         assertThat(captor.getValue().courseId()).isEqualTo(courseUuid);
-        assertThat(captor.getValue().rating()).isEqualTo(4.0);
+        assertThat(captor.getValue().rating()).isEqualTo(4.5);
         assertThat(captor.getValue().comment()).isEqualTo("Great course");
     }
 
     @Test
-    void reviews_delegatesToQueryHandler() {
+    void reviews_delegatesToListHandler_returnsDTOs() {
         // given
         final UUID courseUuid = UUID.randomUUID();
-        final CourseReviewDTO dto = new CourseReviewDTO(UUID.randomUUID(), courseUuid, "reviewer", "Good", 4.5);
-        when(listHandler.handle(any(ListCourseReviewsByCourseUUIDQuery.class))).thenReturn(List.of(dto));
+        final CourseReviewDTO dto = new CourseReviewDTO(UUID.randomUUID(), courseUuid, "reviewer", "Nice", 4.0);
+        when(listHandler.handle(any())).thenReturn(List.of(dto));
 
         // when
         final List<CourseReviewDTO> result = sut.reviews(courseUuid);
@@ -79,10 +79,10 @@ public class CourseReviewControllerUnitTest {
     }
 
     @Test
-    void reviews_emptyList_returnsEmpty() {
+    void reviews_noReviews_returnsEmptyList() {
         // given
         final UUID courseUuid = UUID.randomUUID();
-        when(listHandler.handle(any(ListCourseReviewsByCourseUUIDQuery.class))).thenReturn(List.of());
+        when(listHandler.handle(any())).thenReturn(List.of());
 
         // when
         final List<CourseReviewDTO> result = sut.reviews(courseUuid);
@@ -96,7 +96,7 @@ public class CourseReviewControllerUnitTest {
         // given
         final UUID courseUuid = UUID.randomUUID();
         final UUID reviewUuid = UUID.randomUUID();
-        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(3.5, "Updated comment");
+        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(3.0, "Updated comment");
 
         // when
         sut.updateReview(courseUuid, reviewUuid, request);
@@ -106,7 +106,7 @@ public class CourseReviewControllerUnitTest {
                 ArgumentCaptor.forClass(UpdateCourseReviewCommand.class);
         verify(updateHandler).handle(captor.capture());
         assertThat(captor.getValue().uuid()).isEqualTo(reviewUuid);
-        assertThat(captor.getValue().rating()).isEqualTo(3.5);
+        assertThat(captor.getValue().rating()).isEqualTo(3.0);
         assertThat(captor.getValue().comment()).isEqualTo("Updated comment");
     }
 }

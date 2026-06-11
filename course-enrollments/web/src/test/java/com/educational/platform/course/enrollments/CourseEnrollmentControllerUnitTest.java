@@ -36,12 +36,12 @@ public class CourseEnrollmentControllerUnitTest {
     }
 
     @Test
-    void enroll_delegatesToHandlerAndReturnsUuid() {
+    void enroll_delegatesToRegisterHandler_returnsUuid() {
         // given
         final UUID courseUuid = UUID.randomUUID();
         final UUID enrollmentUuid = UUID.randomUUID();
+        when(registerHandler.handle(any())).thenReturn(enrollmentUuid);
         final CourseEnrollmentRequest request = new CourseEnrollmentRequest("student1");
-        when(registerHandler.handle(any(RegisterStudentToCourseCommand.class))).thenReturn(enrollmentUuid);
 
         // when
         final UUID result = sut.enroll(courseUuid, request);
@@ -55,23 +55,24 @@ public class CourseEnrollmentControllerUnitTest {
     }
 
     @Test
-    void courseEnrollments_delegatesToQueryHandler() {
+    void courseEnrollments_delegatesToListHandler_returnsDTOs() {
         // given
         final CourseEnrollmentDTO dto = new CourseEnrollmentDTO(
                 UUID.randomUUID(), UUID.randomUUID(), "student1", CompletionStatusDTO.IN_PROGRESS);
-        when(listHandler.handle(any(ListCourseEnrollmentsQuery.class))).thenReturn(List.of(dto));
+        when(listHandler.handle(any())).thenReturn(List.of(dto));
 
         // when
         final List<CourseEnrollmentDTO> result = sut.courseEnrollments();
 
         // then
         assertThat(result).containsExactly(dto);
+        verify(listHandler).handle(any(ListCourseEnrollmentsQuery.class));
     }
 
     @Test
-    void courseEnrollments_emptyList_returnsEmpty() {
+    void courseEnrollments_noEnrollments_returnsEmptyList() {
         // given
-        when(listHandler.handle(any(ListCourseEnrollmentsQuery.class))).thenReturn(List.of());
+        when(listHandler.handle(any())).thenReturn(List.of());
 
         // when
         final List<CourseEnrollmentDTO> result = sut.courseEnrollments();
