@@ -1,7 +1,6 @@
 package com.educational.platform.users;
 
 import com.educational.platform.users.registration.UserRegistrationCommand;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -13,7 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 /**
- * Verifies User mapping for ROLE_TEACHER — the existing UserTest only covers ROLE_STUDENT.
+ * Tests {@link User} creation and DTO/UserDetails mapping for the TEACHER role.
+ * Complements {@link UserTest} which covers the STUDENT role.
  */
 @ExtendWith(MockitoExtension.class)
 public class UserTeacherRoleTest {
@@ -21,51 +21,49 @@ public class UserTeacherRoleTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
-    private User user;
-
-    @BeforeEach
-    void setUp() {
-        when(passwordEncoder.encode("password")).thenReturn("encoded-password");
+    @Test
+    void toDTO_teacherRole_mapsCorrectly() {
+        // given
+        when(passwordEncoder.encode("secret")).thenReturn("encoded-secret");
         final UserRegistrationCommand command = UserRegistrationCommand.builder()
                 .role(RoleDTO.ROLE_TEACHER)
-                .username("teacher")
-                .email("teacher@example.com")
-                .password("password")
+                .username("teacher1")
+                .email("teacher@school.com")
+                .password("secret")
                 .build();
-        user = new User(command, passwordEncoder);
-    }
+        final User user = new User(command, passwordEncoder);
 
-    @Test
-    void toDTO_mapsTeacherRole() {
         // when
         final UserDTO dto = user.toDTO();
 
         // then
-        assertThat(dto.username()).isEqualTo("teacher");
-        assertThat(dto.email()).isEqualTo("teacher@example.com");
+        assertThat(dto.username()).isEqualTo("teacher1");
+        assertThat(dto.email()).isEqualTo("teacher@school.com");
         assertThat(dto.role()).isEqualTo(RoleDTO.ROLE_TEACHER);
     }
 
     @Test
     void toUserDetails_teacherRole_hasTeacherAuthority() {
+        // given
+        when(passwordEncoder.encode("secret")).thenReturn("encoded-secret");
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_TEACHER)
+                .username("teacher1")
+                .email("teacher@school.com")
+                .password("secret")
+                .build();
+        final User user = new User(command, passwordEncoder);
+
         // when
-        final UserDetails details = user.toUserDetails();
+        final UserDetails userDetails = user.toUserDetails();
 
         // then
-        assertThat(details.getUsername()).isEqualTo("teacher");
-        assertThat(details.getPassword()).isEqualTo("encoded-password");
-        assertThat(details.getAuthorities()).extracting("authority").containsExactly("ROLE_TEACHER");
-    }
-
-    @Test
-    void toUserDetails_accountFlags_allEnabled() {
-        // when
-        final UserDetails details = user.toUserDetails();
-
-        // then
-        assertThat(details.isAccountNonExpired()).isTrue();
-        assertThat(details.isAccountNonLocked()).isTrue();
-        assertThat(details.isCredentialsNonExpired()).isTrue();
-        assertThat(details.isEnabled()).isTrue();
+        assertThat(userDetails.getUsername()).isEqualTo("teacher1");
+        assertThat(userDetails.getPassword()).isEqualTo("encoded-secret");
+        assertThat(userDetails.getAuthorities()).extracting("authority").containsExactly("ROLE_TEACHER");
+        assertThat(userDetails.isAccountNonExpired()).isTrue();
+        assertThat(userDetails.isAccountNonLocked()).isTrue();
+        assertThat(userDetails.isCredentialsNonExpired()).isTrue();
+        assertThat(userDetails.isEnabled()).isTrue();
     }
 }
