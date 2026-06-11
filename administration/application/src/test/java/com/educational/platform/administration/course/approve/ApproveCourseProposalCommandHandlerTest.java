@@ -36,16 +36,13 @@ class ApproveCourseProposalCommandHandlerTest {
     private PlatformTransactionManager transactionManager;
 
     @Mock
-    private TransactionTemplate transactionTemplate;
-
-    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private ApproveCourseProposalCommandHandler sut;
 
     @BeforeEach
     void setUp() {
-        transactionTemplate = new TransactionTemplate(transactionManager);
+        final TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
         sut = new ApproveCourseProposalCommandHandler(transactionTemplate, repository, eventPublisher);
     }
 

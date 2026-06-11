@@ -75,4 +75,29 @@ public class CourseEnrollmentQueryHandlersTest {
         // then
         assertThat(result).containsExactly(dto);
     }
+
+    @Test
+    void list_noEnrollments_returnsEmptyList() {
+        // given
+        when(repository.query("student")).thenReturn(List.of());
+
+        // when
+        final List<CourseEnrollmentDTO> result = listQueryHandler.handle(new ListCourseEnrollmentsQuery());
+
+        // then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void byUUID_enrollmentNotFound_returnsEmpty() {
+        // given
+        final UUID uuid = UUID.randomUUID();
+        when(repository.query(uuid, "student")).thenReturn(Optional.empty());
+
+        // when
+        final Optional<CourseEnrollmentDTO> result = byUUIDQueryHandler.handle(new CourseEnrollmentByUUIDQuery(uuid));
+
+        // then
+        assertThat(result).isEmpty();
+    }
 }

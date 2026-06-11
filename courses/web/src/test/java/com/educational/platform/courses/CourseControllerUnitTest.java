@@ -1,6 +1,7 @@
 package com.educational.platform.courses;
 
 import com.educational.platform.courses.course.CourseCannotBePublishedException;
+import com.educational.platform.courses.course.create.CreateCourseCommand;
 import com.educational.platform.courses.course.create.CreateCourseCommandHandler;
 import com.educational.platform.courses.course.publish.PublishCourseCommand;
 import com.educational.platform.courses.course.publish.PublishCourseCommandHandler;
@@ -49,6 +50,10 @@ public class CourseControllerUnitTest {
 
         // then
         assertThat(result.uuid()).isEqualTo(uuid);
+        final ArgumentCaptor<CreateCourseCommand> captor = ArgumentCaptor.forClass(CreateCourseCommand.class);
+        verify(createHandler).handle(captor.capture());
+        assertThat(captor.getValue().name()).isEqualTo("Course");
+        assertThat(captor.getValue().description()).isEqualTo("Description");
     }
 
     @Test

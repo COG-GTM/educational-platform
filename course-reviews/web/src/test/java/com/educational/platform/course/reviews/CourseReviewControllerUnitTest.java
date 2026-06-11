@@ -92,6 +92,26 @@ public class CourseReviewControllerUnitTest {
     }
 
     @Test
+    void review_withNullComment_passesNullToHandler() {
+        // given
+        final UUID courseUuid = UUID.randomUUID();
+        final UUID reviewUuid = UUID.randomUUID();
+        when(reviewHandler.handle(any())).thenReturn(reviewUuid);
+        final ReviewCourseRequest request = new ReviewCourseRequest(3.0, null);
+
+        // when
+        final CourseReviewCreatedResponse result = sut.review(courseUuid, request);
+
+        // then
+        assertThat(result.uuid()).isEqualTo(reviewUuid);
+        final ArgumentCaptor<ReviewCourseCommand> captor = ArgumentCaptor.forClass(ReviewCourseCommand.class);
+        verify(reviewHandler).handle(captor.capture());
+        assertThat(captor.getValue().courseId()).isEqualTo(courseUuid);
+        assertThat(captor.getValue().rating()).isEqualTo(3.0);
+        assertThat(captor.getValue().comment()).isNull();
+    }
+
+    @Test
     void updateReview_delegatesToUpdateHandler() {
         // given
         final UUID courseUuid = UUID.randomUUID();
