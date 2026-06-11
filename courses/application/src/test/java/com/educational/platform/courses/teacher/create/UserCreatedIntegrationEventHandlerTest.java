@@ -51,4 +51,33 @@ public class UserCreatedIntegrationEventHandlerTest {
         verifyNoMoreInteractions(createTeacherCommandHandler);
     }
 
+    @Test
+    void handleUserCreatedEvent_onlyUsernamePassedToCommand_emailNotIncluded() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("alice", "alice@school.edu");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        final CreateTeacherCommand command = argument.getValue();
+        assertThat(command.username()).isEqualTo("alice");
+    }
+
+    @Test
+    void handleUserCreatedEvent_specialCharactersInUsername_preservedInCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user.name+tag@org", "email@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo("user.name+tag@org");
+    }
+
 }

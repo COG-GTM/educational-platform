@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -66,6 +67,55 @@ public class ListCourseQueryHandlerTest {
 
         // then
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    void handle_delegatesToRepositoryListMethod() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        when(repository.list()).thenReturn(List.of());
+
+        // when
+        sut.handle(query);
+
+        // then
+        verify(repository).list();
+    }
+
+    @Test
+    void handle_coursesExist_preservesReturnedOrder() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO first = new CourseLightDTO(UUID.randomUUID(), "alpha", "first", 1);
+        final CourseLightDTO second = new CourseLightDTO(UUID.randomUUID(), "beta", "second", 2);
+        final CourseLightDTO third = new CourseLightDTO(UUID.randomUUID(), "gamma", "third", 3);
+        when(repository.list()).thenReturn(List.of(first, second, third));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).containsExactly(first, second, third);
+    }
+
+    @Test
+    void handle_coursesExist_dtoFieldsAccessible() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseLightDTO course = new CourseLightDTO(uuid, "Java Basics", "Intro to Java", 42);
+        when(repository.list()).thenReturn(List.of(course));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(1);
+        final CourseLightDTO returned = result.getFirst();
+        assertThat(returned.uuid()).isEqualTo(uuid);
+        assertThat(returned.name()).isEqualTo("Java Basics");
+        assertThat(returned.description()).isEqualTo("Intro to Java");
+        assertThat(returned.numberOfStudents()).isEqualTo(42);
     }
 
 }
