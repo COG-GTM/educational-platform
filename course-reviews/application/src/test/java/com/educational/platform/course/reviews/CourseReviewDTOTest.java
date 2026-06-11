@@ -44,4 +44,10 @@ public class CourseReviewDTOTest {
         // then
         assertThat(first).isNotEqualTo(second);
     }
+
+    @Test
+    void equals_differentUsername_notEqual() {
+        assertThat(new CourseReviewDTO(UUID_VALUE, COURSE_VALUE, "user1", "comment", 3.0))
+                .isNotEqualTo(new CourseReviewDTO(UUID_VALUE, COURSE_VALUE, "user2", "comment", 3.0));
+    }
 }

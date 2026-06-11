@@ -1,11 +1,10 @@
 package com.educational.platform.administration.course.create;
 
 import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
-
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -15,29 +14,31 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
-class SendCourseToApproveIntegrationEventHandlerTest {
+public class SendCourseToApproveIntegrationEventHandlerTest {
 
     @Mock
     private CreateCourseProposalCommandHandler createCourseProposalCommandHandler;
 
-    @InjectMocks
     private SendCourseToApproveIntegrationEventHandler sut;
 
+    @BeforeEach
+    void setUp() {
+        sut = new SendCourseToApproveIntegrationEventHandler(createCourseProposalCommandHandler);
+    }
+
     @Test
-    void handleCourseApprovedByAdminEvent_approveCourseCommandExecuted() {
+    void handleSendCourseToApproveEvent_delegatesToCreateHandler() {
         // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(courseId);
 
         // when
         sut.handleSendCourseToApproveEvent(event);
 
         // then
-        final ArgumentCaptor<CreateCourseProposalCommand> argument = ArgumentCaptor.forClass(CreateCourseProposalCommand.class);
-        verify(createCourseProposalCommandHandler).handle(argument.capture());
-        final CreateCourseProposalCommand createCourseProposalCommand = argument.getValue();
-        assertThat(createCourseProposalCommand)
-                .hasFieldOrPropertyWithValue("uuid", uuid);
+        final ArgumentCaptor<CreateCourseProposalCommand> captor =
+                ArgumentCaptor.forClass(CreateCourseProposalCommand.class);
+        verify(createCourseProposalCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().uuid()).isEqualTo(courseId);
     }
-
 }

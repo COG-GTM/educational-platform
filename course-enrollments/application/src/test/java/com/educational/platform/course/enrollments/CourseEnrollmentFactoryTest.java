@@ -10,9 +10,9 @@ import com.educational.platform.course.enrollments.student.create.CreateStudentC
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.function.Executable;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
@@ -21,7 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,23 +42,28 @@ public class CourseEnrollmentFactoryTest {
     }
 
     @Test
-    void create_validCommand_courseEnrollmentSaved() {
+    void createFrom_validCommand_returnsEnrollmentWithCourseAndStudent() {
         // given
-        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseId = UUID.randomUUID();
         final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
-        final CreateCourseCommand createCourseCommand = new CreateCourseCommand(courseId);
-        final EnrollCourse correspondingCourse = new EnrollCourse(createCourseCommand);
-        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
 
-        final CreateStudentCommand createStudentCommand = new CreateStudentCommand("username");
-        final Student correspondingStudent = new Student(createStudentCommand);
-        when(currentUserAsStudent.userAsStudent()).thenReturn(correspondingStudent);
+        final EnrollCourse course = new EnrollCourse(new CreateCourseCommand(courseId));
+        ReflectionTestUtils.setField(course, "id", 10);
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(course));
+
+        final Student student = new Student(new CreateStudentCommand("username"));
+        ReflectionTestUtils.setField(student, "id", 20);
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
 
         // when
         final CourseEnrollment enrollment = sut.createFrom(command);
 
         // then
+        assertThat(enrollment).isNotNull();
+        assertThat(enrollment.getUuid()).isNotNull();
         assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
+        assertThat(enrollment).hasFieldOrPropertyWithValue("course", 10);
+        assertThat(enrollment).hasFieldOrPropertyWithValue("student", 20);
     }
 
     @Test
@@ -66,25 +71,21 @@ public class CourseEnrollmentFactoryTest {
         // given
         final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(null);
 
-        // when
-        final Executable createAction = () -> sut.createFrom(command);
-
-        // then
-        assertThrows(ConstraintViolationException.class, createAction);
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.createFrom(command));
     }
 
     @Test
-    void createFrom_invalidCourseId_relatedResourceIsNotResolvedException() {
+    void createFrom_courseNotFound_relatedResourceIsNotResolvedException() {
         // given
-        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseId = UUID.randomUUID();
         final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
         when(courseRepository.findByUuid(courseId)).thenReturn(Optional.empty());
 
-        // when
-        final Executable createAction = () -> sut.createFrom(command);
-
-        // then
-        assertThrows(RelatedResourceIsNotResolvedException.class, createAction);
+        // when / then
+        assertThatExceptionOfType(RelatedResourceIsNotResolvedException.class)
+                .isThrownBy(() -> sut.createFrom(command))
+                .withMessageContaining(courseId.toString());
     }
-
 }
