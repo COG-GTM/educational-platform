@@ -835,4 +835,81 @@ class CourseProposalControllerTest {
         // then
         verify(listCourseProposalsQueryHandler, times(1)).handle(any(ListCourseProposalsQuery.class));
     }
+
+    @Test
+    void constructor_acceptsThreeHandlers() throws NoSuchMethodException {
+        // when
+        final var constructor = CourseProposalController.class.getConstructor(
+                ApproveCourseProposalCommandHandler.class,
+                DeclineCourseProposalCommandHandler.class,
+                ListCourseProposalsQueryHandler.class
+        );
+
+        // then
+        assertThat(constructor).isNotNull();
+        assertThat(constructor.getParameterCount()).isEqualTo(3);
+    }
+
+    @Test
+    void approve_conflictResponse_doesNotContainStackTrace() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyApprovedException(uuid))
+                .when(approveCourseProposalCommandHandler).handle(any(ApproveCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0]").value(
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("at com.educational"))));
+    }
+
+    @Test
+    void decline_conflictResponse_doesNotContainStackTrace() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyDeclinedException(uuid))
+                .when(declineCourseProposalCommandHandler).handle(any(DeclineCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0]").value(
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("at com.educational"))));
+    }
+
+    @Test
+    void courseProposals_multipleProposals_responsePreservesOrder() throws Exception {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseProposalDTO dto1 = new CourseProposalDTO(uuid1, CourseProposalStatusDTO.APPROVED);
+        final CourseProposalDTO dto2 = new CourseProposalDTO(uuid2, CourseProposalStatusDTO.DECLINED);
+        when(listCourseProposalsQueryHandler.handle(any(ListCourseProposalsQuery.class)))
+                .thenReturn(List.of(dto1, dto2));
+
+        // when / then
+        mockMvc.perform(get("/administration/course-proposals"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].uuid").value(uuid1.toString()))
+                .andExpect(jsonPath("$[1].uuid").value(uuid2.toString()));
+    }
+
+    @Test
+    void approve_alreadyApproved_conflictResponseHasNoAdditionalFields() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyApprovedException(uuid))
+                .when(approveCourseProposalCommandHandler).handle(any(ApproveCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors").exists())
+                .andExpect(jsonPath("$.status").doesNotExist())
+                .andExpect(jsonPath("$.message").doesNotExist());
+    }
 }

@@ -165,4 +165,37 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(captor.getAllValues().get(0).uuid()).isEqualTo(uuid1);
         assertThat(captor.getAllValues().get(1).uuid()).isEqualTo(uuid2);
     }
+
+    @Test
+    void handleSendCourseToApproveEvent_doesNotHavePreAuthorizeAnnotation() throws NoSuchMethodException {
+        // when
+        final Method method = SendCourseToApproveIntegrationEventHandler.class
+                .getMethod("handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(
+                org.springframework.security.access.prepost.PreAuthorize.class)).isFalse();
+    }
+
+    @Test
+    void class_doesNotHaveNamedAnnotation() {
+        assertThat(SendCourseToApproveIntegrationEventHandler.class
+                .isAnnotationPresent(jakarta.inject.Named.class)).isFalse();
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_createsNewCommandWithEventCourseId() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+
+        // when
+        sut.handleSendCourseToApproveEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateCourseProposalCommand> argument = ArgumentCaptor.forClass(CreateCourseProposalCommand.class);
+        verify(createCourseProposalCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue()).isNotNull();
+        assertThat(argument.getValue().uuid()).isSameAs(uuid);
+    }
 }

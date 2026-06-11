@@ -225,4 +225,44 @@ class ListCourseProposalsQueryHandlerTest {
         assertThat(firstResult).hasSize(1);
         assertThat(secondResult).isEmpty();
     }
+
+    @Test
+    void constructor_acceptsOnlyRepository() throws NoSuchMethodException {
+        // when
+        final var constructor = ListCourseProposalsQueryHandler.class.getConstructor(
+                CourseProposalRepository.class
+        );
+
+        // then
+        assertThat(constructor).isNotNull();
+        assertThat(constructor.getParameterCount()).isEqualTo(1);
+    }
+
+    @Test
+    void handle_doesNotHaveTransactionalAnnotation() throws NoSuchMethodException {
+        // when
+        final var method = ListCourseProposalsQueryHandler.class
+                .getMethod("handle", ListCourseProposalsQuery.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(
+                org.springframework.transaction.annotation.Transactional.class)).isFalse();
+    }
+
+    @Test
+    void handle_resultPreservesOrderFromRepository() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseProposalDTO dto1 = new CourseProposalDTO(uuid1, CourseProposalStatusDTO.APPROVED);
+        final CourseProposalDTO dto2 = new CourseProposalDTO(uuid2, CourseProposalStatusDTO.DECLINED);
+        when(repository.listCourseProposals()).thenReturn(List.of(dto1, dto2));
+        final ListCourseProposalsQuery query = new ListCourseProposalsQuery();
+
+        // when
+        final List<CourseProposalDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).containsExactly(dto1, dto2);
+    }
 }

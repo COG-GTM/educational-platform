@@ -427,4 +427,68 @@ class ApproveCourseProposalCommandHandlerTest {
         assertThat(constructor).isNotNull();
         assertThat(constructor.getParameterCount()).isEqualTo(3);
     }
+
+    @Test
+    void handle_eventPublisherThrows_exceptionPropagatesAndSaveWasStillCalled() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+        doThrow(new RuntimeException("event publish failure")).when(eventPublisher).publishEvent(any(CourseApprovedByAdminIntegrationEvent.class));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(handle)
+                .withMessageContaining("event publish failure");
+        verify(repository).save(any(CourseProposal.class));
+    }
+
+    @Test
+    void handle_existingCourseProposal_publishedEventTypeIsCourseApproved() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Object> eventArgument = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher).publishEvent(eventArgument.capture());
+        assertThat(eventArgument.getValue()).isInstanceOf(CourseApprovedByAdminIntegrationEvent.class);
+        assertThat(eventArgument.getValue()).isNotInstanceOf(
+                com.educational.platform.administration.integration.event.CourseDeclinedByAdminIntegrationEvent.class);
+    }
+
+    @Test
+    void handle_existingCourseProposal_savedProposalUuidMatchesCommand() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseProposal> argument = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid);
+    }
 }
