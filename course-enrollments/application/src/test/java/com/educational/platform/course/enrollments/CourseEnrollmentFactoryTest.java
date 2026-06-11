@@ -379,6 +379,40 @@ public class CourseEnrollmentFactoryTest {
     }
 
     @Test
+    void createFrom_courseRepositoryThrowsRuntimeException_propagates() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        when(courseRepository.findByUuid(courseId)).thenThrow(new RuntimeException("DB connection lost"));
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        final RuntimeException exception = assertThrows(RuntimeException.class, createAction);
+        assertThat(exception.getMessage()).isEqualTo("DB connection lost");
+        verifyNoInteractions(currentUserAsStudent);
+    }
+
+    @Test
+    void createFrom_currentUserThrowsRuntimeException_propagatesAfterCourseFound() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final EnrollCourse correspondingCourse = new EnrollCourse(new CreateCourseCommand(courseId));
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
+        when(currentUserAsStudent.userAsStudent()).thenThrow(new RuntimeException("security context unavailable"));
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        final RuntimeException exception = assertThrows(RuntimeException.class, createAction);
+        assertThat(exception.getMessage()).isEqualTo("security context unavailable");
+        verify(courseRepository).findByUuid(courseId);
+    }
+
+    @Test
     void createFrom_validCommand_courseRepositoryQueriedBeforeStudentResolution() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

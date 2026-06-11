@@ -551,4 +551,29 @@ public class RegisterStudentToCourseCommandHandlerTest {
                 .hasMessage("event publish failed");
         verify(courseEnrollmentRepository).save(expectedEnrollment);
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void handle_saveThrowsInsideCallback_exceptionPropagatesAndEventNotPublished() {
+        // given — save fails inside the transaction callback (e.g., unique constraint violation)
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment expectedEnrollment = new CourseEnrollment(1, 1);
+
+        when(courseEnrollmentFactory.createFrom(command)).thenReturn(expectedEnrollment);
+        doThrow(new RuntimeException("unique constraint violation"))
+                .when(courseEnrollmentRepository).save(any());
+        when(transactionTemplate.execute(any(TransactionCallback.class))).thenAnswer(invocation -> {
+            TransactionCallback<CourseEnrollment> callback = invocation.getArgument(0);
+            return callback.doInTransaction(mock(TransactionStatus.class));
+        });
+
+        // when / then — save exception propagates, event is never published
+        assertThatThrownBy(() -> sut.handle(command))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("unique constraint violation");
+        verify(courseEnrollmentFactory).createFrom(command);
+        verify(courseEnrollmentRepository).save(expectedEnrollment);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
 }
