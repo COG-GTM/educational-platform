@@ -44,4 +44,20 @@ public class CourseEnrollmentRequestTest {
 		// when / then
 		assertThat(new CourseEnrollmentRequest("alice")).isNotEqualTo(new CourseEnrollmentRequest("bob"));
 	}
+
+	@Test
+	void hashCode_sameStudent_sameHashCode() {
+		// when / then
+		assertThat(new CourseEnrollmentRequest("user").hashCode())
+				.isEqualTo(new CourseEnrollmentRequest("user").hashCode());
+	}
+
+	@Test
+	void constructor_whitespaceStudent_storesWhitespace() {
+		// when
+		final CourseEnrollmentRequest request = new CourseEnrollmentRequest("  ");
+
+		// then
+		assertThat(request.student()).isEqualTo("  ");
+	}
 }

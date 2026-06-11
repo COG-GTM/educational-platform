@@ -153,4 +153,43 @@ public class CourseEnrollmentControllerTest {
         org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
                 () -> sut.courseEnrollments());
     }
+
+    @Test
+    void enroll_handlerReturnsNull_returnsNull() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(registerHandler.handle(any(RegisterStudentToCourseCommand.class))).thenReturn(null);
+
+        // when
+        final UUID result = sut.enroll(courseUuid, new CourseEnrollmentRequest("student"));
+
+        // then
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void enroll_nullRequestBody_doesNotThrow() {
+        // given — request body is unused in the controller logic
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID enrollmentUuid = UUID.randomUUID();
+        when(registerHandler.handle(any(RegisterStudentToCourseCommand.class))).thenReturn(enrollmentUuid);
+
+        // when
+        final UUID result = sut.enroll(courseUuid, null);
+
+        // then
+        assertThat(result).isEqualTo(enrollmentUuid);
+    }
+
+    @Test
+    void courseEnrollments_handlerReturnsNull_returnsNull() {
+        // given
+        when(listHandler.handle(any(ListCourseEnrollmentsQuery.class))).thenReturn(null);
+
+        // when
+        final List<CourseEnrollmentDTO> result = sut.courseEnrollments();
+
+        // then
+        assertThat(result).isNull();
+    }
 }

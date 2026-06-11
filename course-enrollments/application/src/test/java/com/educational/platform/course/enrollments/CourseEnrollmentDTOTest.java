@@ -100,4 +100,63 @@ public class CourseEnrollmentDTOTest {
 		// then
 		assertThat(dto1).isNotEqualTo(dto2);
 	}
+
+	@Test
+	void hashCode_sameFields_sameHashCode() {
+		// given
+		final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+
+		// when
+		final CourseEnrollmentDTO dto1 = new CourseEnrollmentDTO(enrollmentUuid, courseUuid, "student", CompletionStatusDTO.IN_PROGRESS);
+		final CourseEnrollmentDTO dto2 = new CourseEnrollmentDTO(enrollmentUuid, courseUuid, "student", CompletionStatusDTO.IN_PROGRESS);
+
+		// then
+		assertThat(dto1.hashCode()).isEqualTo(dto2.hashCode());
+	}
+
+	@Test
+	void toString_containsFieldValues() {
+		// given
+		final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+
+		// when
+		final CourseEnrollmentDTO dto = new CourseEnrollmentDTO(enrollmentUuid, courseUuid, "student", CompletionStatusDTO.IN_PROGRESS);
+
+		// then
+		assertThat(dto.toString()).contains(enrollmentUuid.toString());
+		assertThat(dto.toString()).contains(courseUuid.toString());
+		assertThat(dto.toString()).contains("student");
+		assertThat(dto.toString()).contains("IN_PROGRESS");
+	}
+
+	@Test
+	void equals_differentStudent_areNotEqual() {
+		// given
+		final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+
+		// when
+		final CourseEnrollmentDTO dto1 = new CourseEnrollmentDTO(enrollmentUuid, courseUuid, "student1", CompletionStatusDTO.IN_PROGRESS);
+		final CourseEnrollmentDTO dto2 = new CourseEnrollmentDTO(enrollmentUuid, courseUuid, "student2", CompletionStatusDTO.IN_PROGRESS);
+
+		// then
+		assertThat(dto1).isNotEqualTo(dto2);
+	}
+
+	@Test
+	void equals_differentCourseUuid_areNotEqual() {
+		// given
+		final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final UUID courseUuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+		final UUID courseUuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+
+		// when
+		final CourseEnrollmentDTO dto1 = new CourseEnrollmentDTO(enrollmentUuid, courseUuid1, "student", CompletionStatusDTO.IN_PROGRESS);
+		final CourseEnrollmentDTO dto2 = new CourseEnrollmentDTO(enrollmentUuid, courseUuid2, "student", CompletionStatusDTO.IN_PROGRESS);
+
+		// then
+		assertThat(dto1).isNotEqualTo(dto2);
+	}
 }

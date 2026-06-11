@@ -70,4 +70,30 @@ public class StudentEnrolledToCourseIntegrationEventTest {
 		// then
 		assertThat(event1).isNotEqualTo(event2);
 	}
+
+	@Test
+	void hashCode_sameFields_sameHashCode() {
+		// given
+		final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+		// when
+		final StudentEnrolledToCourseIntegrationEvent event1 = new StudentEnrolledToCourseIntegrationEvent(courseId, "student");
+		final StudentEnrolledToCourseIntegrationEvent event2 = new StudentEnrolledToCourseIntegrationEvent(courseId, "student");
+
+		// then
+		assertThat(event1.hashCode()).isEqualTo(event2.hashCode());
+	}
+
+	@Test
+	void toString_containsFieldValues() {
+		// given
+		final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+		// when
+		final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(courseId, "student");
+
+		// then
+		assertThat(event.toString()).contains(courseId.toString());
+		assertThat(event.toString()).contains("student");
+	}
 }

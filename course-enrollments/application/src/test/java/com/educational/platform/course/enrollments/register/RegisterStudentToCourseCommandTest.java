@@ -55,4 +55,14 @@ public class RegisterStudentToCourseCommandTest {
 		// then
 		assertThat(cmd1).isNotEqualTo(cmd2);
 	}
+
+	@Test
+	void hashCode_sameUuid_sameHashCode() {
+		// given
+		final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+		// when / then
+		assertThat(new RegisterStudentToCourseCommand(courseId).hashCode())
+				.isEqualTo(new RegisterStudentToCourseCommand(courseId).hashCode());
+	}
 }

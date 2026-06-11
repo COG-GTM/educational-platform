@@ -3,6 +3,7 @@ package com.educational.platform.course.enrollments;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class CompletionStatusTest {
 
@@ -22,6 +23,25 @@ public class CompletionStatusTest {
 
 		// then
 		assertThat(result).isEqualTo(CompletionStatusDTO.COMPLETED);
+	}
+
+	@Test
+	void valueOf_invalidName_throwsIllegalArgumentException() {
+		// when / then
+		assertThatThrownBy(() -> CompletionStatus.valueOf("INVALID"))
+				.isInstanceOf(IllegalArgumentException.class);
+	}
+
+	@Test
+	void values_containsExpectedStatuses() {
+		// when
+		final CompletionStatus[] values = CompletionStatus.values();
+
+		// then
+		assertThat(values).containsExactlyInAnyOrder(
+				CompletionStatus.IN_PROGRESS,
+				CompletionStatus.COMPLETED
+		);
 	}
 
 	@Test

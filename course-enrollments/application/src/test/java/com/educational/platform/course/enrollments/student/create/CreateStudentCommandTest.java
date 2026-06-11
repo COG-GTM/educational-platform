@@ -44,4 +44,20 @@ public class CreateStudentCommandTest {
 		// when / then
 		assertThat(new CreateStudentCommand("alice")).isNotEqualTo(new CreateStudentCommand("bob"));
 	}
+
+	@Test
+	void hashCode_sameUsername_sameHashCode() {
+		// when / then
+		assertThat(new CreateStudentCommand("user").hashCode())
+				.isEqualTo(new CreateStudentCommand("user").hashCode());
+	}
+
+	@Test
+	void constructor_whitespaceUsername_storesWhitespace() {
+		// when
+		final CreateStudentCommand command = new CreateStudentCommand("  ");
+
+		// then
+		assertThat(command.username()).isEqualTo("  ");
+	}
 }

@@ -139,4 +139,28 @@ public class CourseEnrollmentTest {
 		assertThat(first).isEqualTo(second);
 	}
 
+	@Test
+	void complete_uuidRemainsStableAfterStateChange() {
+		// given
+		final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+		final UUID uuidBeforeComplete = enrollment.getUuid();
+
+		// when
+		enrollment.complete();
+
+		// then
+		assertThat(enrollment.getUuid()).isEqualTo(uuidBeforeComplete);
+	}
+
+	@Test
+	void constructor_differentCourseAndStudentIds_storesCorrectValues() {
+		// given / when
+		final CourseEnrollment enrollment = new CourseEnrollment(10, 20);
+
+		// then
+		assertThat(enrollment).hasFieldOrPropertyWithValue("course", 10);
+		assertThat(enrollment).hasFieldOrPropertyWithValue("student", 20);
+		assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
+	}
+
 }

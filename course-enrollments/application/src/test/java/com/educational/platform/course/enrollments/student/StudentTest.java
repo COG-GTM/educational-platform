@@ -75,4 +75,16 @@ public class StudentTest {
 		// then
 		assertThat(student1.toReference()).isNotEqualTo(student2.toReference());
 	}
+
+	@Test
+	void constructor_whitespaceUsername_storesWhitespace() {
+		// given
+		final CreateStudentCommand command = new CreateStudentCommand("  ");
+
+		// when
+		final Student student = new Student(command);
+
+		// then
+		assertThat(student.toReference()).isEqualTo("  ");
+	}
 }

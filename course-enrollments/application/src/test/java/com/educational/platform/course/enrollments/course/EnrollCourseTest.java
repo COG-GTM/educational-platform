@@ -73,4 +73,18 @@ public class EnrollCourseTest {
 		// then
 		assertThat(course1.toReference()).isNotEqualTo(course2.toReference());
 	}
+
+	@Test
+	void toReference_multipleCalls_returnsSameValue() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final EnrollCourse course = new EnrollCourse(new CreateCourseCommand(uuid));
+
+		// when
+		final UUID ref1 = course.toReference();
+		final UUID ref2 = course.toReference();
+
+		// then
+		assertThat(ref1).isEqualTo(ref2);
+	}
 }

@@ -20,4 +20,11 @@ public class ListCourseEnrollmentsQueryTest {
 		// when / then
 		assertThat(new ListCourseEnrollmentsQuery()).isEqualTo(new ListCourseEnrollmentsQuery());
 	}
+
+	@Test
+	void hashCode_twoInstances_sameHashCode() {
+		// when / then
+		assertThat(new ListCourseEnrollmentsQuery().hashCode())
+				.isEqualTo(new ListCourseEnrollmentsQuery().hashCode());
+	}
 }

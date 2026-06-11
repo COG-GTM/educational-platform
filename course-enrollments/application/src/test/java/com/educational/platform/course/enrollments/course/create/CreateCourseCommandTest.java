@@ -47,4 +47,14 @@ public class CreateCourseCommandTest {
 		// when / then
 		assertThat(new CreateCourseCommand(uuid1)).isNotEqualTo(new CreateCourseCommand(uuid2));
 	}
+
+	@Test
+	void hashCode_sameUuid_sameHashCode() {
+		// given
+		final UUID uuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+
+		// when / then
+		assertThat(new CreateCourseCommand(uuid).hashCode())
+				.isEqualTo(new CreateCourseCommand(uuid).hashCode());
+	}
 }

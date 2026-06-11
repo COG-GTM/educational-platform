@@ -3,6 +3,7 @@ package com.educational.platform.course.enrollments;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class CompletionStatusDTOTest {
 
@@ -25,6 +26,13 @@ public class CompletionStatusDTOTest {
 
 		// then
 		assertThat(status).isEqualTo(CompletionStatusDTO.IN_PROGRESS);
+	}
+
+	@Test
+	void valueOf_invalidName_throwsIllegalArgumentException() {
+		// when / then
+		assertThatThrownBy(() -> CompletionStatusDTO.valueOf("INVALID"))
+				.isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
