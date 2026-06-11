@@ -31,4 +31,30 @@ public class ReviewerTest {
         // then
         assertThat(reviewer.getId()).isNull();
     }
+
+    @Test
+    void constructor_nullUsername_usernameSetToNull() {
+        // given
+        final CreateReviewerCommand command = new CreateReviewerCommand(null);
+
+        // when
+        final Reviewer reviewer = new Reviewer(command);
+
+        // then
+        assertThat(reviewer)
+                .hasFieldOrPropertyWithValue("username", null);
+    }
+
+    @Test
+    void constructor_emptyUsername_usernameSetToEmpty() {
+        // given
+        final CreateReviewerCommand command = new CreateReviewerCommand("");
+
+        // when
+        final Reviewer reviewer = new Reviewer(command);
+
+        // then
+        assertThat(reviewer)
+                .hasFieldOrPropertyWithValue("username", "");
+    }
 }

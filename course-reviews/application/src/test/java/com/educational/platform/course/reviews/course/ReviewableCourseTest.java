@@ -35,4 +35,32 @@ public class ReviewableCourseTest {
         // then
         assertThat(reviewableCourse.getId()).isNull();
     }
+
+    @Test
+    void constructor_nullUuid_originalCourseIdSetToNull() {
+        // given
+        final CreateReviewableCourseCommand command = new CreateReviewableCourseCommand(null);
+
+        // when
+        final ReviewableCourse reviewableCourse = new ReviewableCourse(command);
+
+        // then
+        assertThat(reviewableCourse)
+                .hasFieldOrPropertyWithValue("originalCourseId", null);
+    }
+
+    @Test
+    void constructor_twoDifferentCommands_differentOriginalCourseIds() {
+        // given
+        final UUID courseId1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseId2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+
+        // when
+        final ReviewableCourse first = new ReviewableCourse(new CreateReviewableCourseCommand(courseId1));
+        final ReviewableCourse second = new ReviewableCourse(new CreateReviewableCourseCommand(courseId2));
+
+        // then
+        assertThat(first).hasFieldOrPropertyWithValue("originalCourseId", courseId1);
+        assertThat(second).hasFieldOrPropertyWithValue("originalCourseId", courseId2);
+    }
 }

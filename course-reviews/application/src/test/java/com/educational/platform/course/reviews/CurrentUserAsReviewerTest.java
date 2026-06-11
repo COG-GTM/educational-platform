@@ -67,4 +67,36 @@ public class CurrentUserAsReviewerTest {
                 .isNotNull()
                 .hasFieldOrPropertyWithValue("username", "another-user");
     }
+
+    @Test
+    void userAsReviewer_repositoryReturnsNull_nullReturned() {
+        // given
+        final var userDetails = new User("unknown-user", "password", Collections.emptyList());
+        final var authentication = new UsernamePasswordAuthenticationToken(userDetails, "password");
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        when(reviewerRepository.findByUsername("unknown-user")).thenReturn(null);
+
+        // when
+        final Reviewer result = sut.userAsReviewer();
+
+        // then
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void userAsReviewer_authenticatedUser_delegatesToRepositoryWithCorrectUsername() {
+        // given
+        final var userDetails = new User("verify-user", "password", Collections.emptyList());
+        final var authentication = new UsernamePasswordAuthenticationToken(userDetails, "password");
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        when(reviewerRepository.findByUsername("verify-user")).thenReturn(null);
+
+        // when
+        sut.userAsReviewer();
+
+        // then
+        verify(reviewerRepository).findByUsername("verify-user");
+    }
 }

@@ -188,6 +188,54 @@ public class UpdateCourseReviewCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("comment", new Comment(null));
     }
 
+    @Test
+    void handle_emptyComment_reviewSaved() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, "");
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("comment", new Comment(""));
+    }
+
+    @Test
+    void handle_maxRating_reviewSaved() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 5.0, "max");
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0));
+    }
+
+    @Test
+    void handle_zeroRating_reviewSaved() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 0.0, "zero");
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0.0));
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
