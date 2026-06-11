@@ -460,4 +460,41 @@ public class JwtTokenProviderTest {
         // then
         assertThat(authentication.isAuthenticated()).isTrue();
     }
+
+    @Test
+    void resolveToken_lowercaseBearer_null() {
+        // given — "bearer " (lowercase b) should not match case-sensitive "Bearer " prefix
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "bearer some-token");
+
+        // when
+        final String token = sut.resolveToken(request);
+
+        // then
+        assertThat(token).isNull();
+    }
+
+    @Test
+    void createToken_emptyUsername_tokenCreated() {
+        // given — edge case: empty string username
+        // when
+        final String token = sut.createToken("", Collections.singletonList(Role.ROLE_STUDENT));
+
+        // then
+        assertThat(token).isNotBlank();
+        assertThat(sut.getUsername(token)).isEmpty();
+    }
+
+    @Test
+    void resolveToken_bearerTokenMissingSpace_null() {
+        // given — "BearerTOKEN" (no space after Bearer) should not match
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "BearerTOKEN");
+
+        // when
+        final String token = sut.resolveToken(request);
+
+        // then
+        assertThat(token).isNull();
+    }
 }

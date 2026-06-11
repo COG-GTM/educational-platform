@@ -521,4 +521,67 @@ public class UserRegistrationCommandHandlerTest {
         // then
         verify(passwordEncoder, never()).encode(any());
     }
+
+    @Test
+    void handle_usernameAlreadyExists_tokenNotCreated() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("taken")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("taken")).thenReturn(true);
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (UnprocessableEntityException ignored) {
+        }
+
+        // then
+        verify(jwtTokenProvider, never()).createToken(any(), any());
+    }
+
+    @Test
+    void handle_usernameAlreadyExists_passwordNeverEncoded() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("taken")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("taken")).thenReturn(true);
+
+        // when
+        try {
+            sut.handle(userRegistrationCommand);
+        } catch (UnprocessableEntityException ignored) {
+        }
+
+        // then
+        verify(passwordEncoder, never()).encode(any());
+    }
+
+    @Test
+    void handle_validCommand_existsByUsernameCalledBeforeSave() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("order@gmail.com")
+                .username("orderuser")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("orderuser")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        final var inOrder = inOrder(repository);
+        inOrder.verify(repository).existsByUsername("orderuser");
+        inOrder.verify(repository).save(any(User.class));
+    }
 }

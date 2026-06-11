@@ -320,4 +320,41 @@ public class JwtTokenFilterTest {
         // then
         verify(jwtTokenProvider, never()).validateToken(any());
     }
+
+    @Test
+    void doFilterInternal_validateTokenReturnsFalse_noAuthenticationSetAndChainContinues() throws ServletException, IOException {
+        // given — validateToken returns false (rather than throwing) → no auth should be set
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        when(jwtTokenProvider.resolveToken(request)).thenReturn("some-token");
+        when(jwtTokenProvider.validateToken("some-token")).thenReturn(false);
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(jwtTokenProvider, never()).getAuthentication(any());
+        assertThat(filterChain.getRequest()).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+    }
+
+    @Test
+    void doFilterInternal_getAuthenticationThrows_exceptionPropagates() {
+        // given — validateToken succeeds but getAuthentication throws unexpected exception
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        final MockFilterChain filterChain = new MockFilterChain();
+
+        when(jwtTokenProvider.resolveToken(request)).thenReturn("valid-token");
+        when(jwtTokenProvider.validateToken("valid-token")).thenReturn(true);
+        when(jwtTokenProvider.getAuthentication("valid-token")).thenThrow(new RuntimeException("user details error"));
+
+        // when / then
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> sut.doFilterInternal(request, response, filterChain)
+        ).isInstanceOf(RuntimeException.class).hasMessageContaining("user details error");
+    }
 }

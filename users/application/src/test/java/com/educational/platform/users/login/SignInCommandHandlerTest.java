@@ -371,4 +371,49 @@ public class SignInCommandHandlerTest {
         // then
         verify(jwtTokenProvider, never()).createToken(any(), any());
     }
+
+    @Test
+    void handle_validCommand_authenticatesBeforeRepositoryQuery() {
+        // given
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("orderuser")
+                .password("orderpass")
+                .build();
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("order@gmail.com")
+                .username("orderuser")
+                .password("orderpass")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final User existingUser = new User(userRegistrationCommand, passwordEncoder);
+        when(repository.findByUsername("orderuser")).thenReturn(Optional.of(existingUser));
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+
+        // when
+        sut.handle(signInCommand);
+
+        // then — authenticate must be called before findByUsername
+        final var inOrder = inOrder(authenticationManager, repository);
+        inOrder.verify(authenticationManager).authenticate(any());
+        inOrder.verify(repository).findByUsername("orderuser");
+    }
+
+    @Test
+    void handle_authenticationExceptionSubclass_wrappedInUnprocessableEntityException() {
+        // given — AccountExpiredException is an AuthenticationException (not BadCredentialsException)
+        final SignInCommand signInCommand = SignInCommand.builder()
+                .username("expired")
+                .password("password")
+                .build();
+        doThrow(new org.springframework.security.authentication.AccountExpiredException("Account expired"))
+                .when(authenticationManager).authenticate(any());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(signInCommand);
+
+        // then — any AuthenticationException subclass should be caught
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(handle)
+                .withMessageContaining("Invalid username/password");
+    }
 }
