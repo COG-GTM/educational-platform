@@ -101,4 +101,74 @@ public class PasswordConstraintValidatorTest {
         // then
         assertThat(result).isTrue();
     }
+
+    @Test
+    void isValid_emptyPassword_invalid() {
+        // when
+        final boolean result = sut.isValid("", context);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isValid_passwordWithTab_invalid() {
+        // given
+        final String password = "pass\tword1";
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isValid_passwordWithLeadingSpace_invalid() {
+        // given
+        final String password = " password1";
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isValid_passwordWithTrailingSpace_invalid() {
+        // given
+        final String password = "password1 ";
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isValid_oneBelowMinLength_invalid() {
+        // given
+        final String password = "a".repeat(7);
+
+        // when
+        final boolean result = sut.isValid(password, context);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void isValid_invalidPassword_contextViolationSet() {
+        // given
+        final String password = "short";
+
+        // when
+        sut.isValid(password, context);
+
+        // then
+        verify(context).disableDefaultConstraintViolation();
+        verify(context).buildConstraintViolationWithTemplate(anyString());
+    }
 }

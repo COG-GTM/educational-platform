@@ -15,7 +15,9 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -151,5 +153,81 @@ public class JwtTokenProviderTest {
 
         // then
         assertThat(username).isEqualTo("teacher");
+    }
+
+    @Test
+    void createToken_emptyRoles_tokenCreated() {
+        // when
+        final String token = sut.createToken("username", Collections.emptyList());
+
+        // then
+        assertThat(token).isNotBlank();
+        assertThat(sut.getUsername(token)).isEqualTo("username");
+    }
+
+    @Test
+    void createToken_multipleRoles_tokenCreated() {
+        // given
+        final List<Role> roles = Arrays.asList(Role.ROLE_STUDENT, Role.ROLE_TEACHER);
+
+        // when
+        final String token = sut.createToken("multi", roles);
+
+        // then
+        assertThat(token).isNotBlank();
+        assertThat(sut.getUsername(token)).isEqualTo("multi");
+    }
+
+    @Test
+    void resolveToken_bearerPrefixOnly_emptyStringReturned() {
+        // given
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer ");
+
+        // when
+        final String token = sut.resolveToken(request);
+
+        // then
+        assertThat(token).isEmpty();
+    }
+
+    @Test
+    void validateToken_emptyString_jwtTokenValidationException() {
+        // when / then
+        assertThatExceptionOfType(JwtTokenValidationException.class)
+                .isThrownBy(() -> sut.validateToken(""));
+    }
+
+    @Test
+    void validateToken_validToken_exceptionMessageContainsDetail() {
+        // when / then
+        assertThatExceptionOfType(JwtTokenValidationException.class)
+                .isThrownBy(() -> sut.validateToken("invalid-token"))
+                .withMessageContaining("Expired or invalid JWT token");
+    }
+
+    @Test
+    void getAuthentication_validToken_authoritiesPreserved() {
+        // given
+        final String token = sut.createToken("username", Collections.singletonList(Role.ROLE_STUDENT));
+
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("username")
+                .email("email@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("username")).thenReturn(Optional.of(user));
+
+        // when
+        final Authentication authentication = sut.getAuthentication(token);
+
+        // then
+        assertThat(authentication.getAuthorities())
+                .hasSize(1)
+                .first()
+                .satisfies(authority -> assertThat(authority.getAuthority()).isEqualTo("ROLE_STUDENT"));
     }
 }

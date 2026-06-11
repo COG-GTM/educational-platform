@@ -69,4 +69,59 @@ public class MyUserDetailsTest {
         assertThatExceptionOfType(UsernameNotFoundException.class)
                 .isThrownBy(() -> sut.loadUserByUsername("unknown"));
     }
+
+    @Test
+    void loadUserByUsername_nonExistingUser_exceptionContainsUsername() {
+        // given
+        when(userRepository.findByUsername("missinguser")).thenReturn(Optional.empty());
+
+        // when / then
+        assertThatExceptionOfType(UsernameNotFoundException.class)
+                .isThrownBy(() -> sut.loadUserByUsername("missinguser"))
+                .withMessageContaining("missinguser");
+    }
+
+    @Test
+    void loadUserByUsername_existingTeacher_correctAuthority() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("teacher")
+                .email("teacher@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_TEACHER)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("teacher")).thenReturn(Optional.of(user));
+
+        // when
+        final UserDetails userDetails = sut.loadUserByUsername("teacher");
+
+        // then
+        assertThat(userDetails.getUsername()).isEqualTo("teacher");
+        assertThat(userDetails.getAuthorities())
+                .hasSize(1)
+                .first()
+                .satisfies(authority -> assertThat(authority.getAuthority()).isEqualTo("ROLE_TEACHER"));
+    }
+
+    @Test
+    void loadUserByUsername_existingUser_passwordIsEncoded() {
+        // given
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .username("username")
+                .email("email@gmail.com")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-password");
+        final User user = new User(command, passwordEncoder);
+        when(userRepository.findByUsername("username")).thenReturn(Optional.of(user));
+
+        // when
+        final UserDetails userDetails = sut.loadUserByUsername("username");
+
+        // then
+        assertThat(userDetails.getPassword()).isEqualTo("encoded-password");
+    }
 }
