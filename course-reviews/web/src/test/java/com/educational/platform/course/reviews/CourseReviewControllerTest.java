@@ -413,6 +413,54 @@ public class CourseReviewControllerTest {
     }
 
     @Test
+    void review_fractionalRating_delegatesWithFractionalRating() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseRequest request = new ReviewCourseRequest(2.5, "decent");
+        when(reviewCourseCommandHandler.handle(any(ReviewCourseCommand.class)))
+                .thenReturn(UUID.fromString("123e4567-e89b-12d3-a456-426655440002"));
+
+        // when
+        sut.review(courseUuid, request);
+
+        // then
+        final ArgumentCaptor<ReviewCourseCommand> captor = ArgumentCaptor.forClass(ReviewCourseCommand.class);
+        verify(reviewCourseCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().rating()).isEqualTo(2.5);
+    }
+
+    @Test
+    void updateReview_fractionalRating_delegatesWithFractionalRating() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UpdateCourseReviewRequest request = new UpdateCourseReviewRequest(2.5, "decent");
+
+        // when
+        sut.updateReview(courseUuid, reviewUuid, request);
+
+        // then
+        final ArgumentCaptor<UpdateCourseReviewCommand> captor = ArgumentCaptor.forClass(UpdateCourseReviewCommand.class);
+        verify(updateCourseReviewCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue().rating()).isEqualTo(2.5);
+    }
+
+    @Test
+    void review_responseContainsExactUuidFromHandler() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID expectedUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440099");
+        final ReviewCourseRequest request = new ReviewCourseRequest(4.0, "great");
+        when(reviewCourseCommandHandler.handle(any(ReviewCourseCommand.class))).thenReturn(expectedUuid);
+
+        // when
+        final CourseReviewCreatedResponse response = sut.review(courseUuid, request);
+
+        // then
+        assertThat(response.uuid()).isEqualTo(expectedUuid);
+    }
+
+    @Test
     void reviews_doesNotInteractWithReviewOrUpdateHandlers() {
         // given
         final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

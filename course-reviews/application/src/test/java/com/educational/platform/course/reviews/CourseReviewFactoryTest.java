@@ -321,4 +321,19 @@ public class CourseReviewFactoryTest {
         assertThrows(NullPointerException.class, createAction);
     }
 
+    @Test
+    void createFrom_courseNotFound_reviewerNotConsulted() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(RelatedResourceIsNotResolvedException.class, createAction);
+        org.mockito.Mockito.verifyNoInteractions(currentUserAsReviewer);
+    }
+
 }

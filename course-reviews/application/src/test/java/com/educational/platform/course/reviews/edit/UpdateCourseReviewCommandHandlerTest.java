@@ -289,6 +289,50 @@ public class UpdateCourseReviewCommandHandlerTest {
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
     }
 
+    @Test
+    void handle_validationFails_saveNotCalled() {
+        // given — review found but rating is null (constraint violation); save must not be called
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, null, "comment");
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verify(courseReviewRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any(CourseReview.class));
+    }
+
+    @Test
+    void handle_validUpdate_findByUuidCalledWithCorrectUuid() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, "comment");
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(courseReviewRepository).findByUuid(uuid);
+    }
+
+    @Test
+    void handle_validUpdate_ratingAndCommentBothUpdated() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 1.5, "half-star");
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(1.5))
+                .hasFieldOrPropertyWithValue("comment", new Comment("half-star"));
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
