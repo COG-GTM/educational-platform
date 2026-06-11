@@ -226,4 +226,55 @@ public class ApproveCourseCommandHandlerTest {
         // then
         verify(repository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any(Course.class));
     }
+
+    @Test
+    void handle_existingCourse_findByUuidCalledWithCorrectUuid() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseCommand command = new ApproveCourseCommand(uuid);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(repository).findByUuid(uuid);
+    }
+
+    @Test
+    void handle_existingCourse_approvalPreservesNameAndDescription() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseCommand command = new ApproveCourseCommand(uuid);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("Advanced Java")
+                .description("Deep dive into Java")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("name", "Advanced Java")
+                .hasFieldOrPropertyWithValue("description", "Deep dive into Java")
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+    }
 }

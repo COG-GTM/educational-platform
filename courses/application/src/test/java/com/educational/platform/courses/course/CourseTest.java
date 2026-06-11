@@ -943,4 +943,100 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(4.2));
     }
 
+    @Test
+    void sendToApprove_alreadyApproved_exceptionMessageContainsUuid() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.approve();
+        final java.util.UUID uuid = course.toIdentity();
+
+        // when
+        final ThrowableAssert.ThrowingCallable sendToApprove = course::sendToApprove;
+
+        // then
+        assertThatExceptionOfType(CourseAlreadyApprovedException.class)
+                .isThrownBy(sendToApprove)
+                .withMessageContaining(uuid.toString());
+    }
+
+    @Test
+    void publish_notApproved_exceptionMessageContainsUuid() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        final java.util.UUID uuid = course.toIdentity();
+
+        // when
+        final ThrowableAssert.ThrowingCallable publish = course::publish;
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class)
+                .isThrownBy(publish)
+                .withMessageContaining(uuid.toString());
+    }
+
+    @Test
+    void decline_fromInitialStatus_doesNotAffectPublishStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.decline();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.DECLINED)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT);
+    }
+
+    @Test
+    void approve_afterDeclineAndResend_approvedStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.sendToApprove();
+        course.decline();
+        course.sendToApprove();
+
+        // when
+        course.approve();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+    }
+
+    @Test
+    void increaseNumberOfStudents_doesNotAffectRating() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.updateRating(3.5);
+
+        // when
+        course.increaseNumberOfStudents();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(3.5))
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(1));
+    }
+
 }

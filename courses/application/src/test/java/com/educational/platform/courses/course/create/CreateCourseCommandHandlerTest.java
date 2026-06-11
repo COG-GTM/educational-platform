@@ -236,4 +236,41 @@ public class CreateCourseCommandHandlerTest {
         verify(repository).save(argument.capture());
         assertThat(argument.getValue().toIdentity()).isNotNull();
     }
+
+    @Test
+    void handle_validCourse_returnedUuidMatchesSavedCourseUuid() {
+        // given
+        stubTeacher();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final UUID result = sut.handle(command);
+
+        // then
+        ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        assertThat(result).isEqualTo(argument.getValue().toIdentity());
+    }
+
+    @Test
+    void handle_validCourse_savedCourseHasCorrectTeacher() {
+        // given
+        stubTeacher();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        sut.handle(command);
+
+        // then
+        ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("teacher", 15);
+    }
 }
