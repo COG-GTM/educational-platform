@@ -481,4 +481,27 @@ public class RegisterStudentToCourseCommandHandlerTest {
         assertThat(captor.getAllValues().get(0).username()).isEqualTo("alice");
         assertThat(captor.getAllValues().get(1).username()).isEqualTo("bob");
     }
+
+    @Test
+    void handle_multipleCommands_returnDistinctUuids() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment enrollment1 = new CourseEnrollment(1, 1);
+        final CourseEnrollment enrollment2 = new CourseEnrollment(1, 2);
+
+        when(transactionTemplate.execute(any())).thenReturn(enrollment1, enrollment2);
+
+        final Student student = new Student(new CreateStudentCommand("student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        final UUID uuid1 = sut.handle(command);
+        final UUID uuid2 = sut.handle(command);
+
+        // then — each invocation returns a distinct enrollment UUID
+        assertThat(uuid1).isNotNull();
+        assertThat(uuid2).isNotNull();
+        assertThat(uuid1).isNotEqualTo(uuid2);
+    }
 }

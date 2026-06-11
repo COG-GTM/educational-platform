@@ -132,4 +132,17 @@ public class CurrentUserAsStudentTest {
         assertThat(result).isNull();
         verify(studentRepository).findByUsername("another-user");
     }
+
+    @Test
+    void userAsStudent_authenticationWithNullPrincipal_throwsNullPointerException() {
+        // given — authentication exists but principal is null; cast to UserDetails succeeds (null),
+        // then principal.getUsername() throws NPE
+        SecurityContextHolder.clearContext();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(null, "password", Collections.emptyList()));
+
+        // when / then
+        assertThatThrownBy(() -> sut.userAsStudent())
+                .isInstanceOf(NullPointerException.class);
+    }
 }

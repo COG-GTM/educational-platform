@@ -249,4 +249,20 @@ public class CourseEnrollmentByUUIDQueryHandlerTest {
         assertThat(result1).isEqualTo(result2);
         verify(repository, org.mockito.Mockito.times(2)).query(enrollmentUuid, "student");
     }
+
+    @Test
+    void handle_multipleCalls_delegatesEachTime() {
+        // given
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(enrollmentUuid);
+        when(repository.query(enrollmentUuid, "student")).thenReturn(Optional.empty());
+
+        // when
+        sut.handle(query);
+        sut.handle(query);
+        sut.handle(query);
+
+        // then — no caching; repository is queried each time
+        verify(repository, org.mockito.Mockito.times(3)).query(enrollmentUuid, "student");
+    }
 }

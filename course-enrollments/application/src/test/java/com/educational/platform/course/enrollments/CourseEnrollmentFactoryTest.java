@@ -359,4 +359,23 @@ public class CourseEnrollmentFactoryTest {
         assertThrows(Exception.class, () -> sut.createFrom(null));
     }
 
+    @Test
+    void createFrom_validCommand_currentUserCalledExactlyOnce() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final EnrollCourse correspondingCourse = new EnrollCourse(new CreateCourseCommand(courseId));
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
+
+        final Student correspondingStudent = new Student(new CreateStudentCommand("username"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(correspondingStudent);
+
+        // when
+        sut.createFrom(command);
+
+        // then — currentUserAsStudent is called exactly once per createFrom invocation
+        verify(currentUserAsStudent, org.mockito.Mockito.times(1)).userAsStudent();
+        verifyNoMoreInteractions(currentUserAsStudent);
+    }
+
 }

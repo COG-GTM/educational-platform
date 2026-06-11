@@ -196,4 +196,16 @@ public class CourseEnrollmentTest {
 		assertThat(enrollment).hasFieldOrPropertyWithValue("student", 99);
 	}
 
+	@Test
+	void constructor_zeroCourseAndStudentIds_storesZeros() {
+		// given / when
+		final CourseEnrollment enrollment = new CourseEnrollment(0, 0);
+
+		// then — zero is a valid Integer value for course and student refs
+		assertThat(enrollment).hasFieldOrPropertyWithValue("course", 0);
+		assertThat(enrollment).hasFieldOrPropertyWithValue("student", 0);
+		assertThat(enrollment.getUuid()).isNotNull();
+		assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
+	}
+
 }

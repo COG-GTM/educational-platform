@@ -54,4 +54,15 @@ public class CompletionStatusTest {
 			assertThat(result).isNotNull();
 		}
 	}
+
+	@Test
+	void toDTO_allValuesHaveMatchingDTOName() {
+		for (CompletionStatus status : CompletionStatus.values()) {
+			// when
+			final CompletionStatusDTO result = status.toDTO();
+
+			// then — domain enum name matches DTO enum name
+			assertThat(result.name()).isEqualTo(status.name());
+		}
+	}
 }

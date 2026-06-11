@@ -114,4 +114,18 @@ public class StudentTest {
 		// then
 		assertThat(student.toReference()).isEqualTo("user@example.com");
 	}
+
+	@Test
+	void constructor_longUsername_storesFullValue() {
+		// given
+		final String longUsername = "a".repeat(500);
+		final CreateStudentCommand command = new CreateStudentCommand(longUsername);
+
+		// when
+		final Student student = new Student(command);
+
+		// then — long string is stored without truncation at the domain level
+		assertThat(student.toReference()).isEqualTo(longUsername);
+		assertThat(student.toReference()).hasSize(500);
+	}
 }

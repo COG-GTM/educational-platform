@@ -230,4 +230,14 @@ public class CourseEnrollmentDTOTest {
 		// then
 		assertThat(dto1).isNotEqualTo(dto2);
 	}
+
+	@Test
+	void equals_differentType_areNotEqual() {
+		// given
+		final CourseEnrollmentDTO dto = new CourseEnrollmentDTO(UUID.randomUUID(), UUID.randomUUID(), "student", CompletionStatusDTO.IN_PROGRESS);
+
+		// then — record is not equal to an unrelated type
+		assertThat(dto).isNotEqualTo("not a DTO");
+		assertThat(dto).isNotEqualTo(42);
+	}
 }
