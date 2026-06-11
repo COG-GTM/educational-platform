@@ -724,4 +724,92 @@ public class CourseTest {
                 .hasSize(2);
     }
 
+    @Test
+    void create_emptyCurriculumItemsList_emptyList() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .curriculumItems(java.util.List.of())
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course)
+                .extracting("curriculumItems")
+                .asList()
+                .isEmpty();
+    }
+
+    @Test
+    void create_withCurriculumItems_containsLectureAndQuiz() {
+        // given
+        final var lecture = com.educational.platform.courses.course.create.CreateLectureCommand.builder()
+                .title("Lecture")
+                .description("Lecture desc")
+                .serialNumber(1)
+                .text("text")
+                .build();
+        final var question = new com.educational.platform.courses.course.create.CreateQuestionCommand("Q1");
+        final var quiz = com.educational.platform.courses.course.create.CreateQuizCommand.builder()
+                .title("Quiz")
+                .description("Quiz desc")
+                .serialNumber(2)
+                .text("quiz text")
+                .questions(java.util.List.of(question))
+                .build();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .curriculumItems(java.util.List.of(lecture, quiz))
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course)
+                .extracting("curriculumItems")
+                .asList()
+                .hasAtLeastOneElementOfType(Lecture.class)
+                .hasAtLeastOneElementOfType(Quiz.class);
+    }
+
+    @Test
+    void archive_draftCourse_archivedFromDraft() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.archive();
+
+        // then — can archive from any publish status, including DRAFT
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.ARCHIVED)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.NOT_SENT_FOR_APPROVAL);
+    }
+
+    @Test
+    void updateRating_maxDouble_ratingUpdated() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.updateRating(5.0);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0));
+    }
+
 }

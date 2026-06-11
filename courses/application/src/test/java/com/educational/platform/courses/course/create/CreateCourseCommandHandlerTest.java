@@ -13,10 +13,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
+import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,7 +41,9 @@ public class CreateCourseCommandHandlerTest {
         final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
         final CourseFactory courseFactory = new CourseFactory(validator, currentUserAsTeacher);
         sut = new CreateCourseCommandHandler(repository, courseFactory);
+    }
 
+    private void stubTeacher() {
         var teacher = mock(Teacher.class);
         when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
         when(teacher.getId()).thenReturn(15);
@@ -46,6 +52,7 @@ public class CreateCourseCommandHandlerTest {
     @Test
     void handle_validCourse_saveExecuted() {
         // given
+        stubTeacher();
         final CreateCourseCommand command = CreateCourseCommand.builder()
                 .name("name")
                 .description("description")
@@ -61,5 +68,72 @@ public class CreateCourseCommandHandlerTest {
         assertThat(course)
                 .hasFieldOrPropertyWithValue("name", "name")
                 .hasFieldOrPropertyWithValue("description", "description");
+    }
+
+    @Test
+    void handle_validCourse_returnsNonNullUuid() {
+        // given
+        stubTeacher();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final UUID result = sut.handle(command);
+
+        // then
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    void handle_invalidCommand_constraintViolationException() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name(null)
+                .description(null)
+                .build();
+
+        // when / then
+        assertThatExceptionOfType(ConstraintViolationException.class)
+                .isThrownBy(() -> sut.handle(command));
+    }
+
+    @Test
+    void handle_validCourseWithCurriculumItems_saveExecuted() {
+        // given
+        stubTeacher();
+        final CreateLectureCommand lecture = CreateLectureCommand.builder()
+                .title("Intro")
+                .description("Introduction lecture")
+                .serialNumber(1)
+                .text("Content text")
+                .build();
+        final CreateQuestionCommand question = new CreateQuestionCommand("Q1");
+        final CreateQuizCommand quiz = CreateQuizCommand.builder()
+                .title("Quiz 1")
+                .description("First quiz")
+                .serialNumber(2)
+                .text("Quiz text")
+                .questions(List.of(question))
+                .build();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .curriculumItems(List.of(lecture, quiz))
+                .build();
+
+        // when
+        final UUID result = sut.handle(command);
+
+        // then
+        assertThat(result).isNotNull();
+        ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        final Course course = argument.getValue();
+        assertThat(course)
+                .extracting("curriculumItems")
+                .asList()
+                .hasSize(2);
     }
 }

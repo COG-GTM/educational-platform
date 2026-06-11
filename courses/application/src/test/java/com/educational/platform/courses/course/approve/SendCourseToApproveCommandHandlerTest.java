@@ -89,4 +89,28 @@ public class SendCourseToApproveCommandHandlerTest {
         // then
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
     }
+
+    @Test
+    void handle_alreadyApprovedCourse_courseAlreadyApprovedException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveCommand command = new SendCourseToApproveCommand(uuid);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        correspondingCourse.approve();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(CourseAlreadyApprovedException.class).isThrownBy(handle);
+    }
 }
