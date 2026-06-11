@@ -769,4 +769,70 @@ public class CourseByUUIDQueryHandlerTest {
         assertThat(result.get().curriculumItems()).isSameAs(items);
     }
 
+    @Test
+    void handle_repositoryThrowsStackOverflowError_errorPropagated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440041");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        when(repository.findDTOByUuid(uuid)).thenThrow(new StackOverflowError("test stack overflow"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(StackOverflowError.class)
+                .hasMessage("test stack overflow");
+    }
+
+    @Test
+    void handle_repositoryThrowsRuntimeExceptionWithNullMessage_exceptionPropagated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440042");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        when(repository.findDTOByUuid(uuid)).thenThrow(new RuntimeException((String) null));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage(null);
+    }
+
+    @Test
+    void handle_twoQueriesWithEqualButDistinctUuidObjects_bothDelegated() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440043");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440043");
+        assertThat(uuid1).isNotSameAs(uuid2);
+        final CourseDTO dto = new CourseDTO(uuid1, "course", "desc", 1, List.of());
+        when(repository.findDTOByUuid(uuid1)).thenReturn(Optional.of(dto));
+
+        // when
+        final Optional<CourseDTO> result1 = sut.handle(new CourseByUUIDQuery(uuid1));
+        final Optional<CourseDTO> result2 = sut.handle(new CourseByUUIDQuery(uuid2));
+
+        // then
+        assertThat(result1).isPresent();
+        assertThat(result2).isPresent();
+        verify(repository, times(2)).findDTOByUuid(uuid1);
+    }
+
+    @Test
+    void handle_courseWithNullStudentsFieldAndNullItems_returnedAsIs() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440044");
+        final CourseByUUIDQuery query = new CourseByUUIDQuery(uuid);
+        final CourseDTO courseDTO = new CourseDTO(null, null, null, 0, null);
+        when(repository.findDTOByUuid(uuid)).thenReturn(Optional.of(courseDTO));
+
+        // when
+        final Optional<CourseDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isPresent();
+        final CourseDTO returned = result.get();
+        assertThat(returned.uuid()).isNull();
+        assertThat(returned.name()).isNull();
+        assertThat(returned.description()).isNull();
+        assertThat(returned.numberOfStudents()).isZero();
+        assertThat(returned.curriculumItems()).isNull();
+    }
+
 }

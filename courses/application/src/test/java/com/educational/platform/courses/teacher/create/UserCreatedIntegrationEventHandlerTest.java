@@ -653,4 +653,57 @@ public class UserCreatedIntegrationEventHandlerTest {
         assertThat(argument.getValue().getClass()).isEqualTo(CreateTeacherCommand.class);
     }
 
+    @Test
+    void handleUserCreatedEvent_bothEmptyUsernameAndEmptyEmail_emptyUsernamePassedToCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("", "");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEmpty();
+    }
+
+    @Test
+    void handleUserCreatedEvent_commandHandlerThrowsStackOverflowError_errorPropagated() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher", "teacher@example.com");
+        doThrow(new StackOverflowError("test stack overflow")).when(createTeacherCommandHandler).handle(any(CreateTeacherCommand.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(StackOverflowError.class)
+                .hasMessage("test stack overflow");
+    }
+
+    @Test
+    void handleUserCreatedEvent_controlCharactersInUsername_preservedInCommand() {
+        // given
+        final String controlCharsUsername = "\u0001\u0002\u0003\u001F";
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(controlCharsUsername, "ctrl@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue().username()).isEqualTo(controlCharsUsername);
+    }
+
+    @Test
+    void handleUserCreatedEvent_commandHandlerThrowsRuntimeExceptionWithNullMessage_exceptionPropagated() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher", "teacher@example.com");
+        doThrow(new RuntimeException((String) null)).when(createTeacherCommandHandler).handle(any(CreateTeacherCommand.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage(null);
+    }
+
 }

@@ -692,4 +692,66 @@ public class ListCourseQueryHandlerTest {
         verify(repository, org.mockito.Mockito.times(3)).list();
     }
 
+    @Test
+    void handle_repositoryThrowsStackOverflowError_errorPropagated() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        when(repository.list()).thenThrow(new StackOverflowError("test stack overflow"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(StackOverflowError.class)
+                .hasMessage("test stack overflow");
+    }
+
+    @Test
+    void handle_repositoryReturnsLinkedList_returnedDirectly() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final java.util.LinkedList<CourseLightDTO> linkedList = new java.util.LinkedList<>();
+        linkedList.add(new CourseLightDTO(UUID.randomUUID(), "course1", "desc1", 1));
+        linkedList.add(new CourseLightDTO(UUID.randomUUID(), "course2", "desc2", 2));
+        when(repository.list()).thenReturn(linkedList);
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).isSameAs(linkedList);
+        assertThat(result).hasSize(2);
+    }
+
+    @Test
+    void handle_repositoryReturnsListWithAllNullFieldDtos_returnedAsIs() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        final CourseLightDTO nullDto1 = new CourseLightDTO(null, null, null, 0);
+        final CourseLightDTO nullDto2 = new CourseLightDTO(null, null, null, 0);
+        when(repository.list()).thenReturn(List.of(nullDto1, nullDto2));
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(query);
+
+        // then
+        assertThat(result).hasSize(2);
+        assertThat(result).allSatisfy(dto -> {
+            assertThat(dto.uuid()).isNull();
+            assertThat(dto.name()).isNull();
+            assertThat(dto.description()).isNull();
+            assertThat(dto.numberOfStudents()).isZero();
+        });
+    }
+
+    @Test
+    void handle_repositoryThrowsRuntimeExceptionWithNullMessage_exceptionPropagated() {
+        // given
+        final ListCourseQuery query = new ListCourseQuery();
+        when(repository.list()).thenThrow(new RuntimeException((String) null));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage(null);
+    }
+
 }
