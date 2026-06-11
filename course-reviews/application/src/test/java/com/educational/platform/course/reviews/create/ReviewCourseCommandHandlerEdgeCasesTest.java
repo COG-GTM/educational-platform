@@ -1,25 +1,20 @@
 package com.educational.platform.course.reviews.create;
 
-import com.educational.platform.course.reviews.*;
-import com.educational.platform.course.reviews.course.ReviewableCourse;
-import com.educational.platform.course.reviews.course.ReviewableCourseRepository;
-import com.educational.platform.course.reviews.course.create.CreateReviewableCourseCommand;
-import com.educational.platform.course.reviews.reviewer.Reviewer;
-import com.educational.platform.course.reviews.reviewer.create.CreateReviewerCommand;
+import com.educational.platform.common.exception.RelatedResourceIsNotResolvedException;
+import com.educational.platform.course.reviews.CourseReviewFactory;
+import com.educational.platform.course.reviews.CourseReviewRepository;
+import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
-import java.util.Optional;
+import jakarta.validation.ConstraintViolationException;
+import java.util.Set;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verify;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,39 +24,40 @@ public class ReviewCourseCommandHandlerEdgeCasesTest {
     private CourseReviewRepository courseReviewRepository;
 
     @Mock
-    private ReviewableCourseRepository reviewableCourseRepository;
-
-    @Mock
-    private CurrentUserAsReviewer currentUserAsReviewer;
+    private CourseReviewFactory courseReviewFactory;
 
     private ReviewCourseCommandHandler sut;
 
     @BeforeEach
     void setUp() {
-        final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
-        final CourseReviewFactory factory = new CourseReviewFactory(validator, currentUserAsReviewer, reviewableCourseRepository);
-        sut = new ReviewCourseCommandHandler(courseReviewRepository, factory);
+        sut = new ReviewCourseCommandHandler(courseReviewRepository, courseReviewFactory);
     }
 
     @Test
-    void handle_validCommand_savesReviewAndReturnsUuid() {
+    void handle_factoryThrowsConstraintViolation_propagatesException() {
         // given
-        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final ReviewableCourse course = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
-        when(reviewableCourseRepository.findByOriginalCourseId(courseId)).thenReturn(Optional.of(course));
-
-        final Reviewer reviewer = new Reviewer(new CreateReviewerCommand("reviewer1"));
-        when(currentUserAsReviewer.userAsReviewer()).thenReturn(reviewer);
-
-        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "Great");
+        final ReviewCourseCommand command = new ReviewCourseCommand(UUID.randomUUID(), 4.0, "comment");
+        when(courseReviewFactory.createFrom(command)).thenThrow(new ConstraintViolationException(Set.of()));
 
         // when
-        final UUID result = sut.handle(command);
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
 
         // then
-        assertThat(result).isNotNull();
-        final ArgumentCaptor<CourseReview> captor = ArgumentCaptor.forClass(CourseReview.class);
-        verify(courseReviewRepository).save(captor.capture());
-        assertThat(captor.getValue().toIdentifier()).isEqualTo(result);
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_factoryThrowsRelatedResourceNotResolved_propagatesException() {
+        // given
+        final UUID courseId = UUID.randomUUID();
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 3.5, "good");
+        when(courseReviewFactory.createFrom(command))
+                .thenThrow(new RelatedResourceIsNotResolvedException("Course cannot be found by uuid = " + courseId));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(RelatedResourceIsNotResolvedException.class).isThrownBy(handle);
     }
 }

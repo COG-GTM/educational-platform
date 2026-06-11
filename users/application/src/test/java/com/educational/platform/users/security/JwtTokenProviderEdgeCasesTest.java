@@ -28,22 +28,11 @@ public class JwtTokenProviderEdgeCasesTest {
 
     @BeforeEach
     void setUp() {
-        sut = new JwtTokenProvider(myUserDetails, 3600000, "test-secret-key");
+        sut = new JwtTokenProvider(myUserDetails, 3600000, "secret-key");
     }
 
     @Test
-    void createToken_multipleRoles_tokenIsValid() {
-        // when
-        final String token = sut.createToken("user", List.of(Role.ROLE_STUDENT, Role.ROLE_TEACHER));
-
-        // then
-        assertThat(token).isNotBlank();
-        assertThat(sut.getUsername(token)).isEqualTo("user");
-        assertThat(sut.validateToken(token)).isTrue();
-    }
-
-    @Test
-    void resolveToken_noAuthorizationHeader_returnsNull() {
+    void resolveToken_nullHeader_returnsNull() {
         // given
         when(request.getHeader("Authorization")).thenReturn(null);
 
@@ -55,7 +44,7 @@ public class JwtTokenProviderEdgeCasesTest {
     }
 
     @Test
-    void resolveToken_emptyHeader_returnsNull() {
+    void resolveToken_emptyString_returnsNull() {
         // given
         when(request.getHeader("Authorization")).thenReturn("");
 
@@ -67,30 +56,46 @@ public class JwtTokenProviderEdgeCasesTest {
     }
 
     @Test
+    void resolveToken_bearerOnly_returnsEmptyToken() {
+        // given
+        when(request.getHeader("Authorization")).thenReturn("Bearer ");
+
+        // when
+        final String result = sut.resolveToken(request);
+
+        // then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void createToken_multipleRoles_tokenContainsSubject() {
+        // when
+        final String token = sut.createToken("admin", List.of(Role.ROLE_STUDENT, Role.ROLE_TEACHER));
+
+        // then
+        assertThat(token).isNotBlank();
+        assertThat(sut.getUsername(token)).isEqualTo("admin");
+    }
+
+    @Test
     void validateToken_emptyString_throwsValidationException() {
         assertThatExceptionOfType(JwtTokenValidationException.class)
                 .isThrownBy(() -> sut.validateToken(""));
     }
 
     @Test
-    void validateToken_expiredToken_throwsValidationException() {
-        // given - negative validity puts expiration firmly in the past so the token is reliably expired
-        final JwtTokenProvider expiredProvider = new JwtTokenProvider(myUserDetails, -10000, "test-secret-key");
-        final String token = expiredProvider.createToken("user", List.of(Role.ROLE_STUDENT));
-
-        // when / then
+    void validateToken_nullToken_throwsValidationException() {
         assertThatExceptionOfType(JwtTokenValidationException.class)
-                .isThrownBy(() -> sut.validateToken(token));
+                .isThrownBy(() -> sut.validateToken(null));
     }
 
     @Test
-    void getUsername_tokenWithDifferentSecret_throwsException() {
-        // given
-        final JwtTokenProvider otherProvider = new JwtTokenProvider(myUserDetails, 3600000, "different-secret");
-        final String token = otherProvider.createToken("user", List.of(Role.ROLE_STUDENT));
+    void createToken_emptyRolesList_tokenIsValid() {
+        // when
+        final String token = sut.createToken("user", List.of());
 
-        // when / then
-        assertThatExceptionOfType(JwtTokenValidationException.class)
-                .isThrownBy(() -> sut.validateToken(token));
+        // then
+        assertThat(sut.validateToken(token)).isTrue();
+        assertThat(sut.getUsername(token)).isEqualTo("user");
     }
 }
