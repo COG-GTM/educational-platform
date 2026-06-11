@@ -153,4 +153,256 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
     }
 
+    @Test
+    void archive_archivedStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.archive();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.ARCHIVED);
+    }
+
+    @Test
+    void updateRating_ratingUpdated() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.updateRating(4.5);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(4.5));
+    }
+
+    @Test
+    void updateRating_zero_ratingUpdated() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.updateRating(3.0);
+
+        // when
+        course.updateRating(0.0);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0.0));
+    }
+
+    @Test
+    void increaseNumberOfStudents_numberOfStudentsIncremented() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.increaseNumberOfStudents();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(1));
+    }
+
+    @Test
+    void increaseNumberOfStudents_calledTwice_numberOfStudentsIncrementedTwice() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.increaseNumberOfStudents();
+        course.increaseNumberOfStudents();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(2));
+    }
+
+    @Test
+    void toIdentity_returnsUuid() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        final java.util.UUID identity = course.toIdentity();
+
+        // then
+        assertThat(identity).isNotNull();
+    }
+
+    @Test
+    void toIdentity_calledTwice_returnsSameUuid() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        final java.util.UUID first = course.toIdentity();
+        final java.util.UUID second = course.toIdentity();
+
+        // then
+        assertThat(first).isEqualTo(second);
+    }
+
+    @Test
+    void create_initialRatingIsZero() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0));
+    }
+
+    @Test
+    void create_initialNumberOfStudentsIsZero() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(0));
+    }
+
+    @Test
+    void create_uuidGenerated() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course.toIdentity()).isNotNull();
+    }
+
+    @Test
+    void create_teacherIdStored() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("teacher", TEACHER_ID);
+    }
+
+    @Test
+    void create_twoCourses_differentUuids() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course1 = new Course(command, TEACHER_ID);
+        final Course course2 = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course1.toIdentity()).isNotEqualTo(course2.toIdentity());
+    }
+
+    @Test
+    void sendToApprove_declinedCourse_waitingForApprovalStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.decline();
+
+        // when
+        course.sendToApprove();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void archive_publishedCourse_archivedStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.approve();
+        course.publish();
+
+        // when
+        course.archive();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.ARCHIVED);
+    }
+
+    @Test
+    void create_nullCurriculumItems_noCurriculumItemsSet() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then — curriculumItems is null when command has no items
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("curriculumItems", null);
+    }
+
 }
