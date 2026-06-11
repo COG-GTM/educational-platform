@@ -643,6 +643,33 @@ public class ReviewCourseCommandHandlerTest {
     }
 
     @Test
+    void handle_nullRating_repositoryNotConsulted() {
+        // given — null rating triggers constraint violation; repo save must not happen
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, null, "comment");
+
+        // when
+        final org.assertj.core.api.ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        org.mockito.Mockito.verifyNoInteractions(courseReviewRepository);
+    }
+
+    @Test
+    void handle_invalidCommand_reviewerNotConsulted() {
+        // given — null courseId triggers constraint violation; reviewer lookup must not happen
+        final ReviewCourseCommand command = new ReviewCourseCommand(null, 4.0, "comment");
+
+        // when
+        final org.assertj.core.api.ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        org.mockito.Mockito.verifyNoInteractions(currentUserAsReviewer);
+    }
+
+    @Test
     void handle_longComment_courseReviewSaved() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

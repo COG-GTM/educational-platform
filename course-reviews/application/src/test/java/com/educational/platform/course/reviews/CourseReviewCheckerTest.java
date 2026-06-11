@@ -172,4 +172,34 @@ public class CourseReviewCheckerTest {
         // then
         org.mockito.Mockito.verify(courseReviewRepository, org.mockito.Mockito.times(2)).isReviewer(reviewId, "user");
     }
+
+    @Test
+    void hasAccess_emptyStringUsername_delegatesToRepositoryWithEmptyString() {
+        // given
+        final UUID reviewId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(authentication.getName()).thenReturn("");
+        when(courseReviewRepository.isReviewer(reviewId, "")).thenReturn(false);
+
+        // when
+        final boolean result = sut.hasAccess(authentication, reviewId);
+
+        // then
+        assertThat(result).isFalse();
+        verify(courseReviewRepository).isReviewer(reviewId, "");
+    }
+
+    @Test
+    void hasAccess_specialCharacterUsername_delegatesToRepositoryWithExactUsername() {
+        // given
+        final UUID reviewId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(authentication.getName()).thenReturn("user@domain.com");
+        when(courseReviewRepository.isReviewer(reviewId, "user@domain.com")).thenReturn(true);
+
+        // when
+        final boolean result = sut.hasAccess(authentication, reviewId);
+
+        // then
+        assertThat(result).isTrue();
+        verify(courseReviewRepository).isReviewer(reviewId, "user@domain.com");
+    }
 }

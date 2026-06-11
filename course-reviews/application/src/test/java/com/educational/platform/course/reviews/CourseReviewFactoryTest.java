@@ -553,6 +553,77 @@ public class CourseReviewFactoryTest {
     }
 
     @Test
+    void createFrom_whitespaceComment_courseReviewCreated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "   ");
+
+        final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(uuid));
+        ReflectionTestUtils.setField(reviewableCourse, "id", 11);
+        ReflectionTestUtils.setField(reviewableCourse, "originalCourseId", uuid);
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.of(reviewableCourse));
+
+        final Reviewer reviewer = new Reviewer(new CreateReviewerCommand("username"));
+        ReflectionTestUtils.setField(reviewer, "id", 22);
+        when(currentUserAsReviewer.userAsReviewer()).thenReturn(reviewer);
+
+        // when
+        final CourseReview courseReview = sut.createFrom(command);
+
+        // then — whitespace-only comments are passed through without trimming
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("comment", new Comment("   "));
+    }
+
+    @Test
+    void createFrom_longComment_courseReviewCreated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final String longComment = "x".repeat(5000);
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, longComment);
+
+        final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(uuid));
+        ReflectionTestUtils.setField(reviewableCourse, "id", 11);
+        ReflectionTestUtils.setField(reviewableCourse, "originalCourseId", uuid);
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.of(reviewableCourse));
+
+        final Reviewer reviewer = new Reviewer(new CreateReviewerCommand("username"));
+        ReflectionTestUtils.setField(reviewer, "id", 22);
+        when(currentUserAsReviewer.userAsReviewer()).thenReturn(reviewer);
+
+        // when
+        final CourseReview courseReview = sut.createFrom(command);
+
+        // then — long comments are passed through without truncation
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("comment", new Comment(longComment));
+    }
+
+    @Test
+    void createFrom_invalidRating_neitherRepositoryNorReviewerConsulted() {
+        // given — invalid rating (> 5) should short-circuit before any lookups
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 5.1, "comment");
+
+        // when/then
+        assertThrows(ConstraintViolationException.class, () -> sut.createFrom(command));
+        org.mockito.Mockito.verifyNoInteractions(reviewableCourseRepository);
+        org.mockito.Mockito.verifyNoInteractions(currentUserAsReviewer);
+    }
+
+    @Test
+    void createFrom_nullRating_neitherRepositoryNorReviewerConsulted() {
+        // given — null rating should short-circuit before any lookups
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, null, "comment");
+
+        // when/then
+        assertThrows(ConstraintViolationException.class, () -> sut.createFrom(command));
+        org.mockito.Mockito.verifyNoInteractions(reviewableCourseRepository);
+        org.mockito.Mockito.verifyNoInteractions(currentUserAsReviewer);
+    }
+
+    @Test
     void createFrom_validationFails_neitherRepositoryNorReviewerConsulted() {
         // given — invalid command (null courseId); factory should short-circuit before any lookup
         final ReviewCourseCommand command = new ReviewCourseCommand(null, 4.0, "comment");

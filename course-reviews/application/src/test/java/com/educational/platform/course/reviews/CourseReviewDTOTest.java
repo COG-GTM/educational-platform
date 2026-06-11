@@ -100,4 +100,30 @@ public class CourseReviewDTOTest {
         // then
         assertThat(first).isNotEqualTo(second);
     }
+
+    @Test
+    void constructor_emptyStringComment_fieldStored() {
+        // given
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+
+        // when
+        final CourseReviewDTO dto = new CourseReviewDTO(reviewUuid, courseUuid, "username", "", 3.0);
+
+        // then
+        assertThat(dto.comment()).isEmpty();
+    }
+
+    @Test
+    void constructor_zeroRating_fieldStored() {
+        // given
+        final UUID reviewUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+
+        // when
+        final CourseReviewDTO dto = new CourseReviewDTO(reviewUuid, courseUuid, "username", "comment", 0.0);
+
+        // then
+        assertThat(dto.rating()).isEqualTo(0.0);
+    }
 }

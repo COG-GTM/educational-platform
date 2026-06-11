@@ -545,6 +545,36 @@ public class UpdateCourseReviewCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("comment", new Comment(longComment));
     }
 
+    @Test
+    void handle_validUpdate_uuidPreservedInSavedEntity() {
+        // given
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 2.0, "changed");
+
+        // when
+        sut.handle(command);
+
+        // then — the saved entity's uuid must match the original
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(argument.capture());
+        assertThat(argument.getValue().toIdentifier()).isEqualTo(uuid);
+    }
+
+    @Test
+    void handle_notFoundWithValidRating_resourceNotFoundExceptionBeforeValidation() {
+        // given — UUID not found; validation should not even be reached
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440099");
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 4.0, "valid");
+        when(courseReviewRepository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle)
+                .withMessage("Course Review with uuid: " + uuid + " not found");
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));

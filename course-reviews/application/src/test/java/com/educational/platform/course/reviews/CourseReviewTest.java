@@ -432,6 +432,68 @@ public class CourseReviewTest {
     }
 
     @Test
+    void constructor_longComment_courseReviewCreated() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final String longComment = "x".repeat(5000);
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, longComment);
+
+        // when
+        final CourseReview courseReview = new CourseReview(command, 11, 22);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("comment", new Comment(longComment));
+    }
+
+    @Test
+    void constructor_whitespaceComment_courseReviewCreated() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 4.0, "   ");
+
+        // when
+        final CourseReview courseReview = new CourseReview(command, 11, 22);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("comment", new Comment("   "));
+    }
+
+    @Test
+    void constructor_fractionalRating_courseReviewCreated() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(courseId, 2.5, "decent");
+
+        // when
+        final CourseReview courseReview = new CourseReview(command, 11, 22);
+
+        // then
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(2.5));
+    }
+
+    @Test
+    void update_courseAndReviewerUnchangedAfterUpdate() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand createCommand = new ReviewCourseCommand(courseId, 4.0, "comment");
+        final CourseReview courseReview = new CourseReview(createCommand, 11, 22);
+        final UUID uuid = courseReview.toIdentifier();
+
+        final UpdateCourseReviewCommand updateCommand = new UpdateCourseReviewCommand(uuid, 2.0, "changed");
+
+        // when
+        courseReview.update(updateCommand);
+
+        // then — course and reviewer references must not change on update
+        assertThat(courseReview)
+                .hasFieldOrPropertyWithValue("course", 11)
+                .hasFieldOrPropertyWithValue("reviewer", 22);
+    }
+
+    @Test
     void constructor_validCommand_uuidIsNotDerivedFromCourseId() {
         // given — the review UUID must be independently generated, not reusing the courseId
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
