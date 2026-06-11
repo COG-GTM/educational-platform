@@ -630,4 +630,67 @@ class CourseProposalControllerTest {
         // then
         verifyNoInteractions(listCourseProposalsQueryHandler);
     }
+
+    @Test
+    void approve_handlerThrowsAlreadyDeclinedException_returnsConflict() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyDeclinedException(uuid))
+                .when(approveCourseProposalCommandHandler).handle(any(ApproveCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString(uuid.toString())));
+    }
+
+    @Test
+    void decline_handlerThrowsAlreadyApprovedException_returnsConflict() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        doThrow(new CourseProposalAlreadyApprovedException(uuid))
+                .when(declineCourseProposalCommandHandler).handle(any(DeclineCourseProposalCommand.class));
+
+        // when / then
+        mockMvc.perform(delete("/administration/course-proposals/{uuid}/approval-status", uuid)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString(uuid.toString())));
+    }
+
+    @Test
+    void courseProposals_handlerThrowsRuntimeException_internalServerError() throws Exception {
+        // given
+        doThrow(new RuntimeException("unexpected query error"))
+                .when(listCourseProposalsQueryHandler).handle(any(ListCourseProposalsQuery.class));
+
+        // when / then
+        mockMvc.perform(get("/administration/course-proposals"))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    void courseProposals_singleDeclinedProposal_correctJsonStructure() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposalDTO dto = new CourseProposalDTO(uuid, CourseProposalStatusDTO.DECLINED);
+        when(listCourseProposalsQueryHandler.handle(any(ListCourseProposalsQuery.class))).thenReturn(List.of(dto));
+
+        // when / then
+        mockMvc.perform(get("/administration/course-proposals"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].uuid").value(uuid.toString()))
+                .andExpect(jsonPath("$[0].status").value("DECLINED"));
+    }
+
+    @Test
+    void onConflictException_methodReturnType_isResponseEntity() throws NoSuchMethodException {
+        // when
+        final var method = CourseProposalController.class.getMethod("onConflictException", Exception.class);
+
+        // then
+        assertThat(method.getReturnType()).isEqualTo(org.springframework.http.ResponseEntity.class);
+    }
 }

@@ -386,4 +386,25 @@ class ApproveCourseProposalCommandHandlerTest {
         verify(repository).save(any(CourseProposal.class));
         verifyNoMoreInteractions(repository);
     }
+
+    @Test
+    void handle_repositoryThrowsOnSave_exceptionPropagatesAndEventNotPublished() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "uuid", uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+        doThrow(new RuntimeException("DB save error")).when(repository).save(any(CourseProposal.class));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(handle)
+                .withMessageContaining("DB save error");
+        verifyNoInteractions(eventPublisher);
+    }
 }

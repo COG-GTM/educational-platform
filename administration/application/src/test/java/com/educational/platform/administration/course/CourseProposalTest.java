@@ -480,4 +480,68 @@ public class CourseProposalTest {
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.APPROVED);
     }
 
+    @Test
+    void approve_nullUuid_thenApproveAgain_throwsAlreadyApprovedWithNullInMessage() {
+        // given
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(null);
+        final CourseProposal proposal = new CourseProposal(command);
+        proposal.approve();
+
+        // when
+        final ThrowableAssert.ThrowingCallable secondApprove = proposal::approve;
+
+        // then
+        assertThatExceptionOfType(CourseProposalAlreadyApprovedException.class)
+                .isThrownBy(secondApprove)
+                .withMessageContaining("null");
+    }
+
+    @Test
+    void decline_nullUuid_thenDeclineAgain_throwsAlreadyDeclinedWithNullInMessage() {
+        // given
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(null);
+        final CourseProposal proposal = new CourseProposal(command);
+        proposal.decline();
+
+        // when
+        final ThrowableAssert.ThrowingCallable secondDecline = proposal::decline;
+
+        // then
+        assertThatExceptionOfType(CourseProposalAlreadyDeclinedException.class)
+                .isThrownBy(secondDecline)
+                .withMessageContaining("null");
+    }
+
+    @Test
+    void create_newProposal_idFieldIsNull() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+
+        // when
+        final CourseProposal proposal = new CourseProposal(command);
+
+        // then
+        assertThat(proposal).hasFieldOrPropertyWithValue("id", null);
+    }
+
+    @Test
+    void toDTO_afterApproveFromDeclined_thenDeclineAgain_reflectsDeclined() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(command);
+        ReflectionTestUtils.setField(proposal, "status", CourseProposalStatus.DECLINED);
+        proposal.approve();
+        proposal.decline();
+
+        // when
+        final CourseProposalDTO dto = proposal.toDTO();
+
+        // then
+        assertThat(dto)
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.DECLINED);
+    }
+
 }
