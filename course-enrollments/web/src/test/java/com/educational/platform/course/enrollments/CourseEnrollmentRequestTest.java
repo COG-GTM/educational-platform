@@ -101,4 +101,13 @@ public class CourseEnrollmentRequestTest {
 		// then
 		assertThat(request.toString()).contains("student-user");
 	}
+
+	@Test
+	void equals_null_isNotEqual() {
+		// given
+		final CourseEnrollmentRequest request = new CourseEnrollmentRequest("user");
+
+		// then
+		assertThat(request).isNotEqualTo(null);
+	}
 }

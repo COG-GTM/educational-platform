@@ -504,4 +504,51 @@ public class RegisterStudentToCourseCommandHandlerTest {
         assertThat(uuid2).isNotNull();
         assertThat(uuid1).isNotEqualTo(uuid2);
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void handle_factoryThrowsInsideCallback_saveNotCalled() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+
+        when(courseEnrollmentFactory.createFrom(command)).thenThrow(new RuntimeException("factory error"));
+        when(transactionTemplate.execute(any(TransactionCallback.class))).thenAnswer(invocation -> {
+            TransactionCallback<CourseEnrollment> callback = invocation.getArgument(0);
+            return callback.doInTransaction(mock(TransactionStatus.class));
+        });
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(command))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("factory error");
+        verify(courseEnrollmentRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void handle_eventPublisherThrows_enrollmentAlreadySaved() {
+        // given — event publishing fails AFTER the transaction callback succeeds
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CourseEnrollment expectedEnrollment = new CourseEnrollment(1, 1);
+
+        when(courseEnrollmentFactory.createFrom(command)).thenReturn(expectedEnrollment);
+        when(transactionTemplate.execute(any(TransactionCallback.class))).thenAnswer(invocation -> {
+            TransactionCallback<CourseEnrollment> callback = invocation.getArgument(0);
+            return callback.doInTransaction(mock(TransactionStatus.class));
+        });
+
+        final Student student = new Student(new CreateStudentCommand("student"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+        doThrow(new RuntimeException("event publish failed"))
+                .when(eventPublisher).publishEvent(any(StudentEnrolledToCourseIntegrationEvent.class));
+
+        // when / then — exception propagates but save was already called inside the transaction
+        assertThatThrownBy(() -> sut.handle(command))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("event publish failed");
+        verify(courseEnrollmentRepository).save(expectedEnrollment);
+    }
 }

@@ -243,4 +243,18 @@ public class ListCourseEnrollmentsQueryHandlerTest {
         // then — no caching; repository is queried each time
         verify(repository, org.mockito.Mockito.times(3)).query("student");
     }
+
+    @Test
+    void handle_nullPrincipal_throwsNullPointerException() {
+        // given — authentication exists but principal is null; cast to UserDetails succeeds (null),
+        // then principal.getUsername() throws NPE
+        SecurityContextHolder.clearContext();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(null, "password", Collections.emptyList()));
+        final ListCourseEnrollmentsQuery query = new ListCourseEnrollmentsQuery();
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(NullPointerException.class);
+    }
 }

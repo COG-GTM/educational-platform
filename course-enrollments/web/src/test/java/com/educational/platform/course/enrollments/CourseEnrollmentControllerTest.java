@@ -11,11 +11,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.verify;
@@ -325,5 +327,28 @@ public class CourseEnrollmentControllerTest {
         // then — UUID returned by handler is passed through without modification
         assertThat(result).isEqualTo(enrollmentUuid);
         assertThat(result.version()).isEqualTo(4);
+    }
+
+    @Test
+    void enroll_handlerThrowsAccessDeniedException_propagates() {
+        // given
+        final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        when(registerHandler.handle(any(RegisterStudentToCourseCommand.class)))
+                .thenThrow(new AccessDeniedException("Access is denied"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.enroll(courseUuid, new CourseEnrollmentRequest("student")))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void courseEnrollments_handlerThrowsAccessDeniedException_propagates() {
+        // given
+        when(listHandler.handle(any(ListCourseEnrollmentsQuery.class)))
+                .thenThrow(new AccessDeniedException("Access is denied"));
+
+        // when / then
+        assertThatThrownBy(() -> sut.courseEnrollments())
+                .isInstanceOf(AccessDeniedException.class);
     }
 }

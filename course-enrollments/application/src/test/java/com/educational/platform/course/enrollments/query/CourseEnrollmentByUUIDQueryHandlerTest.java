@@ -265,4 +265,19 @@ public class CourseEnrollmentByUUIDQueryHandlerTest {
         // then — no caching; repository is queried each time
         verify(repository, org.mockito.Mockito.times(3)).query(enrollmentUuid, "student");
     }
+
+    @Test
+    void handle_nullPrincipal_throwsNullPointerException() {
+        // given — authentication exists but principal is null; cast to UserDetails succeeds (null),
+        // then principal.getUsername() throws NPE
+        SecurityContextHolder.clearContext();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(null, "password", Collections.emptyList()));
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseEnrollmentByUUIDQuery query = new CourseEnrollmentByUUIDQuery(enrollmentUuid);
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(query))
+                .isInstanceOf(NullPointerException.class);
+    }
 }
