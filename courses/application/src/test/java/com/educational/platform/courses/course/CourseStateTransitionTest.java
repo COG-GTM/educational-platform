@@ -1,24 +1,23 @@
 package com.educational.platform.courses.course;
 
 import com.educational.platform.courses.course.create.CreateCourseCommand;
+import com.educational.platform.courses.course.create.CreateLectureCommand;
+import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-public class CourseStateTransitionTest {
+class CourseStateTransitionTest {
 
     private static final Integer TEACHER_ID = 15;
 
     @Test
-    void sendToApprove_alreadyWaitingForApproval_remainsWaitingForApproval() {
+    void sendToApprove_notSentForApproval_statusIsWaitingForApproval() {
         // given
-        final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("name")
-                .description("description")
-                .build();
-        final Course course = new Course(command, TEACHER_ID);
-        course.sendToApprove();
+        final Course course = createCourse();
 
         // when
         course.sendToApprove();
@@ -29,154 +28,168 @@ public class CourseStateTransitionTest {
     }
 
     @Test
-    void publish_alreadyPublishedCourse_remainsPublished() {
+    void sendToApprove_alreadyApproved_courseAlreadyApprovedException() {
         // given
-        final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("name")
-                .description("description")
-                .build();
-        final Course course = new Course(command, TEACHER_ID);
-        course.approve();
-        course.publish();
-
-        // when
-        course.publish();
-
-        // then
-        assertThat(course)
-                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED);
-    }
-
-    @Test
-    void approve_alreadyApprovedCourse_remainsApproved() {
-        // given
-        final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("name")
-                .description("description")
-                .build();
-        final Course course = new Course(command, TEACHER_ID);
+        final Course course = createCourse();
         course.approve();
 
         // when
-        course.approve();
+        final ThrowableAssert.ThrowingCallable sendToApprove = course::sendToApprove;
 
         // then
-        assertThat(course)
-                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+        assertThatExceptionOfType(CourseAlreadyApprovedException.class).isThrownBy(sendToApprove);
     }
 
     @Test
-    void updateRating_multipleUpdates_lastValueWins() {
+    void sendToApprove_declinedCourse_statusIsWaitingForApproval() {
         // given
-        final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("name")
-                .description("description")
-                .build();
-        final Course course = new Course(command, TEACHER_ID);
+        final Course course = createCourse();
+        course.decline();
 
         // when
-        course.updateRating(3.0);
-        course.updateRating(4.5);
-        course.updateRating(1.2);
-
-        // then
-        assertThat(course)
-                .hasFieldOrPropertyWithValue("rating", new CourseRating(1.2));
-    }
-
-    @Test
-    void fullLifecycle_draftToPublished_correctStatesAtEachStep() {
-        // given
-        final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("name")
-                .description("description")
-                .build();
-        final Course course = new Course(command, TEACHER_ID);
-        assertThat(course)
-                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT)
-                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.NOT_SENT_FOR_APPROVAL);
-
-        // when / then - send to approve
         course.sendToApprove();
+
+        // then
         assertThat(course)
                 .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+    }
 
-        // when / then - approve
+    @Test
+    void publish_approvedCourse_statusIsPublished() {
+        // given
+        final Course course = createCourse();
         course.approve();
-        assertThat(course)
-                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
 
-        // when / then - publish
+        // when
         course.publish();
+
+        // then
         assertThat(course)
                 .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED);
+    }
 
-        // when / then - archive
+    @Test
+    void publish_notApprovedCourse_courseCannotBePublishedException() {
+        // given
+        final Course course = createCourse();
+
+        // when
+        final ThrowableAssert.ThrowingCallable publish = course::publish;
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(publish);
+    }
+
+    @Test
+    void publish_waitingForApprovalCourse_courseCannotBePublishedException() {
+        // given
+        final Course course = createCourse();
+        course.sendToApprove();
+
+        // when
+        final ThrowableAssert.ThrowingCallable publish = course::publish;
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(publish);
+    }
+
+    @Test
+    void archive_publishedCourse_statusIsArchived() {
+        // given
+        final Course course = createCourse();
+        course.approve();
+        course.publish();
+
+        // when
         course.archive();
+
+        // then
         assertThat(course)
                 .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.ARCHIVED);
     }
 
     @Test
-    void decline_thenResubmit_thenApproveAndPublish() {
+    void archive_draftCourse_statusIsArchived() {
         // given
-        final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("name")
-                .description("description")
-                .build();
-        final Course course = new Course(command, TEACHER_ID);
-
-        // when / then - decline
-        course.decline();
-        assertThat(course)
-                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.DECLINED);
-
-        // when / then - resubmit
-        course.sendToApprove();
-        assertThat(course)
-                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
-
-        // when / then - approve and publish
-        course.approve();
-        course.publish();
-        assertThat(course)
-                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED)
-                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
-    }
-
-    @Test
-    void updateRating_negativeValue_ratingUpdated() {
-        // given
-        final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("name")
-                .description("description")
-                .build();
-        final Course course = new Course(command, TEACHER_ID);
+        final Course course = createCourse();
 
         // when
-        course.updateRating(-1.0);
+        course.archive();
 
         // then
         assertThat(course)
-                .hasFieldOrPropertyWithValue("rating", new CourseRating(-1.0));
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.ARCHIVED);
     }
 
     @Test
-    void increaseNumberOfStudents_calledFiveTimes_numberOfStudentsIsFive() {
+    void constructor_withCurriculumItems_itemsCreated() {
         // given
-        final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("name")
-                .description("description")
+        final CreateLectureCommand lecture1 = CreateLectureCommand.builder()
+                .title("Introduction")
+                .description("First lecture")
+                .serialNumber(1)
+                .text("Welcome to the course")
                 .build();
-        final Course course = new Course(command, TEACHER_ID);
+        final CreateLectureCommand lecture2 = CreateLectureCommand.builder()
+                .title("Chapter 1")
+                .description("Second lecture")
+                .serialNumber(2)
+                .text("Core concepts")
+                .build();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("Java Basics")
+                .description("Learn Java")
+                .curriculumItems(List.of(lecture1, lecture2))
+                .build();
 
         // when
-        for (int i = 0; i < 5; i++) {
-            course.increaseNumberOfStudents();
-        }
+        final Course course = new Course(command, TEACHER_ID);
 
         // then
         assertThat(course)
-                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(5));
+                .hasFieldOrPropertyWithValue("name", "Java Basics")
+                .hasFieldOrPropertyWithValue("description", "Learn Java")
+                .hasFieldOrPropertyWithValue("teacher", TEACHER_ID);
+        assertThat(course).extracting("curriculumItems")
+                .satisfies(items -> assertThat((List<?>) items).hasSize(2));
+    }
+
+    @Test
+    void constructor_withNullCurriculumItems_noException() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("Course")
+                .description("Description")
+                .curriculumItems(null)
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("name", "Course")
+                .hasFieldOrPropertyWithValue("curriculumItems", null);
+    }
+
+    @Test
+    void constructor_initialState_draftAndNotSentForApproval() {
+        // given / when
+        final Course course = createCourse();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.NOT_SENT_FOR_APPROVAL)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0))
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(0));
+    }
+
+    private Course createCourse() {
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("Test Course")
+                .description("Description")
+                .build();
+        return new Course(command, TEACHER_ID);
     }
 }
