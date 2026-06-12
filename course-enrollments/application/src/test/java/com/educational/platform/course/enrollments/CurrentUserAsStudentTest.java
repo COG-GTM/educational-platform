@@ -4,6 +4,7 @@ import com.educational.platform.course.enrollments.student.Student;
 import com.educational.platform.course.enrollments.student.StudentRepository;
 import com.educational.platform.course.enrollments.student.create.CreateStudentCommand;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -28,6 +29,11 @@ public class CurrentUserAsStudentTest {
     @InjectMocks
     private CurrentUserAsStudent sut;
 
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
     @Test
     void userAsStudent_authenticatedUser_returnsStudent() {
         // given
@@ -44,7 +50,5 @@ public class CurrentUserAsStudentTest {
         // then
         assertThat(result).isEqualTo(student);
         assertThat(result.toReference()).isEqualTo("student");
-
-        SecurityContextHolder.clearContext();
     }
 }
