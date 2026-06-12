@@ -7,9 +7,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -96,5 +101,89 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().errors()).containsExactly("Unexpected error");
+    }
+
+    @Test
+    void onMethodArgumentNotValidException_returnsBadRequest() {
+        // given
+        final BindingResult bindingResult = mock(BindingResult.class);
+        final FieldError fieldError = new FieldError("object", "name", "must not be blank");
+        when(bindingResult.getFieldErrors()).thenReturn(List.of(fieldError));
+        final MethodArgumentNotValidException exception = new MethodArgumentNotValidException(null, bindingResult);
+
+        // when
+        final ResponseEntity<ErrorResponse> response = sut.onMethodArgumentNotValidException(exception);
+
+        // then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().errors()).containsExactly("must not be blank");
+    }
+
+    @Test
+    void onMethodArgumentNotValidException_multipleErrors_allReturned() {
+        // given
+        final BindingResult bindingResult = mock(BindingResult.class);
+        final FieldError fieldError1 = new FieldError("object", "name", "must not be blank");
+        final FieldError fieldError2 = new FieldError("object", "description", "must not be blank");
+        when(bindingResult.getFieldErrors()).thenReturn(List.of(fieldError1, fieldError2));
+        final MethodArgumentNotValidException exception = new MethodArgumentNotValidException(null, bindingResult);
+
+        // when
+        final ResponseEntity<ErrorResponse> response = sut.onMethodArgumentNotValidException(exception);
+
+        // then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().errors()).containsExactlyInAnyOrder("must not be blank", "must not be blank");
+    }
+
+    @Test
+    void onMethodArgumentNotValidException_noFieldErrors_emptyErrorsList() {
+        // given
+        final BindingResult bindingResult = mock(BindingResult.class);
+        when(bindingResult.getFieldErrors()).thenReturn(Collections.emptyList());
+        final MethodArgumentNotValidException exception = new MethodArgumentNotValidException(null, bindingResult);
+
+        // when
+        final ResponseEntity<ErrorResponse> response = sut.onMethodArgumentNotValidException(exception);
+
+        // then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().errors()).isEmpty();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void onConstraintViolationException_multipleViolations_allReturned() {
+        // given
+        final ConstraintViolation<Object> violation1 = mock(ConstraintViolation.class);
+        when(violation1.getMessage()).thenReturn("must not be null");
+        final ConstraintViolation<Object> violation2 = mock(ConstraintViolation.class);
+        when(violation2.getMessage()).thenReturn("must be positive");
+        final ConstraintViolationException exception = new ConstraintViolationException(Set.of(violation1, violation2));
+
+        // when
+        final ResponseEntity<ErrorResponse> response = sut.onConstraintViolationException(exception);
+
+        // then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().errors()).containsExactlyInAnyOrder("must not be null", "must be positive");
+    }
+
+    @Test
+    void onException_nullMessage_emptyErrorsList() {
+        // given
+        final Exception exception = new RuntimeException((String) null);
+
+        // when
+        final ResponseEntity<ErrorResponse> response = sut.onException(exception);
+
+        // then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().errors()).isEmpty();
     }
 }
