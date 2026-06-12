@@ -22,7 +22,9 @@ import jakarta.validation.Validator;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.educational.platform.common.exception.RelatedResourceIsNotResolvedException;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
@@ -110,6 +112,20 @@ public class CourseReviewFactoryTest {
 
         // then
         assertThrows(ConstraintViolationException.class, createAction);
+    }
+
+    @Test
+    void createFrom_courseNotFound_relatedResourceIsNotResolvedException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(RelatedResourceIsNotResolvedException.class, createAction);
     }
 
 }

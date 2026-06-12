@@ -1,0 +1,6 @@
+delete from course;
+delete from teacher;
+
+INSERT INTO teacher (username) VALUES ('username');
+INSERT INTO course (uuid, name, description, approval_status, publish_status, number, rating) VALUES ('123E4567E89B12D3A456426655440002', 'course name', 'description', 'NOT_SENT_FOR_APPROVAL', 'DRAFT', 0, 0);
+UPDATE course SET teacher = (SELECT teacher.id FROM teacher WHERE teacher.username = 'username' GROUP BY teacher.id);
