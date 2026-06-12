@@ -1,5 +1,6 @@
 package com.educational.platform.courses.course.approve;
 
+import com.educational.platform.common.exception.ResourceNotFoundException;
 import com.educational.platform.courses.course.*;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
 import com.educational.platform.courses.teacher.Teacher;
@@ -68,5 +69,19 @@ class SendCourseToApproveCommandHandlerEdgeCaseTest {
 
         // then
         assertThatExceptionOfType(CourseAlreadyApprovedException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_courseNotFound_resourceNotFoundException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveCommand command = new SendCourseToApproveCommand(uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
     }
 }

@@ -7,6 +7,7 @@ import com.educational.platform.course.reviews.course.create.CreateReviewableCou
 import com.educational.platform.course.reviews.create.ReviewCourseCommand;
 import com.educational.platform.course.reviews.reviewer.Reviewer;
 import com.educational.platform.course.reviews.reviewer.create.CreateReviewerCommand;
+import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.util.Optional;
@@ -90,10 +92,36 @@ class UpdateCourseReviewCommandHandlerEdgeCaseTest {
         when(courseReviewRepository.findByUuid(null)).thenReturn(Optional.empty());
 
         // when
-        final org.assertj.core.api.ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
 
         // then
         assertThatExceptionOfType(com.educational.platform.common.exception.ResourceNotFoundException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_ratingAboveMax_constraintViolationException() {
+        // given
+        final UUID uuid = configureCourseReview(4.0, "comment");
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 6.0, "comment");
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_negativeRating_constraintViolationException() {
+        // given
+        final UUID uuid = configureCourseReview(4.0, "comment");
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, -1.0, "comment");
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
     }
 
     private UUID configureCourseReview(double rating, String comment) {

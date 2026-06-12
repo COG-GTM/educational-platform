@@ -1,9 +1,11 @@
 package com.educational.platform.courses.course.rating.update;
 
+import com.educational.platform.common.exception.ResourceNotFoundException;
 import com.educational.platform.courses.course.*;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
 import com.educational.platform.courses.teacher.Teacher;
 
+import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +20,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -121,5 +124,19 @@ class UpdateCourseRatingCommandHandlerEdgeCaseTest {
         final Course course = argument.getValue();
         assertThat(course)
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(4.5));
+    }
+
+    @Test
+    void handle_courseNotFound_resourceNotFoundException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 4.0);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
     }
 }

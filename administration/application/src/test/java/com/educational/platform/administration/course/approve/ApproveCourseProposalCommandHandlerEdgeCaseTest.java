@@ -5,6 +5,7 @@ import com.educational.platform.administration.course.CourseProposalAlreadyAppro
 import com.educational.platform.administration.course.CourseProposalRepository;
 import com.educational.platform.administration.course.CourseProposalStatus;
 import com.educational.platform.administration.course.create.CreateCourseProposalCommand;
+import com.educational.platform.common.exception.ResourceNotFoundException;
 import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,5 +60,19 @@ class ApproveCourseProposalCommandHandlerEdgeCaseTest {
 
         // then
         assertThatExceptionOfType(CourseProposalAlreadyApprovedException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_proposalNotFound_resourceNotFoundException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
     }
 }
