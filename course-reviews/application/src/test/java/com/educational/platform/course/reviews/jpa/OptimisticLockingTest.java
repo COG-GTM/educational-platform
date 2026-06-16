@@ -215,6 +215,47 @@ public class OptimisticLockingTest {
 		assertThat(versionAfterSecond).isEqualTo(2);
 	}
 
+	@Test
+	void reviewer_updated_versionPersistedToDatabase() {
+		// given - an update is flushed
+		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
+		entityManager.clear();
+		final Reviewer reviewer = reviewerRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(reviewer, "username", "opt-lock-reviewer-renamed");
+		reviewerRepository.saveAndFlush(reviewer);
+
+		// when - the persistence context is cleared and the row reloaded from the database
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+
+		// then - the incremented version was actually written to the version column
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
+	}
+
+	@Test
+	void reviewer_staleDelete_throwsOptimisticLockingFailure() {
+		// given - two instances reading the same row at version 0
+		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
+		entityManager.clear();
+
+		final Reviewer stale = reviewerRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+		final Reviewer fresh = reviewerRepository.findById(id).orElseThrow();
+
+		// and - the first update wins, bumping the persisted version to 1
+		ReflectionTestUtils.setField(fresh, "username", "first-wins");
+		reviewerRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// when - the stale instance (still version 0) tries to delete the row
+		// then - the version guard rejects the delete instead of removing the newer row
+		assertThatExceptionOfType(OptimisticLockingFailureException.class)
+				.isThrownBy(() -> {
+					reviewerRepository.delete(stale);
+					reviewerRepository.flush();
+				});
+	}
+
 	// --- ReviewableCourse ---------------------------------------------------
 
 	@Test
@@ -287,5 +328,48 @@ public class OptimisticLockingTest {
 		// then - the version is bumped once per update
 		assertThat(versionAfterFirst).isEqualTo(1);
 		assertThat(versionAfterSecond).isEqualTo(2);
+	}
+
+	@Test
+	void reviewableCourse_updated_versionPersistedToDatabase() {
+		// given - an update is flushed
+		final Integer id = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		entityManager.clear();
+		final ReviewableCourse course = reviewableCourseRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(course, "originalCourseId", UUID.randomUUID());
+		reviewableCourseRepository.saveAndFlush(course);
+
+		// when - the persistence context is cleared and the row reloaded from the database
+		entityManager.clear();
+		final ReviewableCourse reloaded = reviewableCourseRepository.findById(id).orElseThrow();
+
+		// then - the incremented version was actually written to the version column
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
+	}
+
+	@Test
+	void reviewableCourse_staleDelete_throwsOptimisticLockingFailure() {
+		// given - two instances reading the same row at version 0
+		final Integer id = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		entityManager.clear();
+
+		final ReviewableCourse stale = reviewableCourseRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+		final ReviewableCourse fresh = reviewableCourseRepository.findById(id).orElseThrow();
+
+		// and - the first update wins, bumping the persisted version to 1
+		ReflectionTestUtils.setField(fresh, "originalCourseId", UUID.randomUUID());
+		reviewableCourseRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// when - the stale instance (still version 0) tries to delete the row
+		// then - the version guard rejects the delete instead of removing the newer row
+		assertThatExceptionOfType(OptimisticLockingFailureException.class)
+				.isThrownBy(() -> {
+					reviewableCourseRepository.delete(stale);
+					reviewableCourseRepository.flush();
+				});
 	}
 }
