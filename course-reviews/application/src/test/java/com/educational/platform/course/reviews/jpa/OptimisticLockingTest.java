@@ -1527,6 +1527,18 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void anotherSeededReviewer_versionInitializedToZero() {
+		// given/when - the second reviewer the course_review.sql fixture inserts ("another-reviewer"),
+		// whose version this PR's fixture edit also seeds to 0
+		final Reviewer seeded = reviewerRepository.findByUsername("another-reviewer");
+
+		// then - it starts at version 0 like the other seeded rows. seededFixtureRows_versionInitializedToZero
+		// asserts this for the first reviewer but never the second seeded reviewer the fixture edit also touched;
+		// a missing version on that seed line would reintroduce the null-version NPE if the row were ever updated.
+		assertThat(ReflectionTestUtils.getField(seeded, "version")).isEqualTo(0);
+	}
+
+	@Test
 	void reviewer_seededRowUpdated_versionIncrementsFromSeededZero() {
 		// given - the reviewer row inserted by the fixture (version seeded to 0, not by a JPA insert).
 		// The existing reviewer update test persists a fresh reviewer; this exercises the seeded row that

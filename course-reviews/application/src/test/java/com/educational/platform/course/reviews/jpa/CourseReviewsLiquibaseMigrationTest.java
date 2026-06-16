@@ -250,6 +250,28 @@ class CourseReviewsLiquibaseMigrationTest {
 		}
 	}
 
+	@Test
+	void migration_versionColumnAddedToReviewableCourseWithMultipleExistingRows_backfillsEveryRowToZero() throws Exception {
+		// given - several reviewable_course rows already present before the version column exists. The
+		// backfill-every-row case was proven for reviewer and course_review but never for reviewable_course:
+		// the mixed-table backfill test seeds only a single reviewable_course row, so the production upgrade of
+		// an already-populated reviewable_course table was left unverified for more than one row.
+		try (PartialMigration migration = applyBaseSchemaOnly()) {
+			final JdbcTemplate jdbc = migration.jdbcTemplate();
+			jdbc.update("INSERT INTO reviewable_course (uuid) VALUES (?)", UUID.randomUUID());
+			jdbc.update("INSERT INTO reviewable_course (uuid) VALUES (?)", UUID.randomUUID());
+			jdbc.update("INSERT INTO reviewable_course (uuid) VALUES (?)", UUID.randomUUID());
+
+			// when - the version column is added to the populated table
+			migration.liquibase().update(new Contexts(), new LabelExpression());
+
+			// then - every pre-existing row is backfilled to 0 (not just one), so the default applies to all
+			// historical reviewable_course data rather than to a single arbitrary row
+			assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM reviewable_course WHERE version = 0", Long.class)).isEqualTo(3L);
+			assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM reviewable_course WHERE version IS NULL", Long.class)).isZero();
+		}
+	}
+
 	@ParameterizedTest
 	@ValueSource(strings = {"COURSE_REVIEW", "REVIEWABLE_COURSE"})
 	void migration_appliedTwice_versionColumnNotDuplicated(String table) throws Exception {

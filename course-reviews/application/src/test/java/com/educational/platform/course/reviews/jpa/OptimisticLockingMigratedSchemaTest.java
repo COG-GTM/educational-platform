@@ -422,6 +422,27 @@ public class OptimisticLockingMigratedSchemaTest {
 	}
 
 	@Test
+	void reviewer_updatedWithSameUsernameAgainstBigintColumn_versionNotIncremented() {
+		// given - a reviewer persisted at version 0 on the migrated schema
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("migrated-reviewer"))).getId();
+		entityManager.clear();
+
+		// when - its username is re-assigned to the value it already has and flushed
+		final Reviewer reviewer = reviewerRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(reviewer, "username", "migrated-reviewer");
+		reviewerRepository.saveAndFlush(reviewer);
+
+		// then - Hibernate's dirty check finds the value unchanged and issues no UPDATE, so the BIGINT version
+		// stays 0. This is the value-equal no-op (distinct from re-saving an untouched instance): courseReview
+		// has it on the migrated schema and reviewer has it on the Hibernate schema, but reviewer was the only
+		// one missing it against the production-shaped BIGINT column.
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
+	}
+
+	@Test
 	void reviewer_updatingOneRowAgainstBigintColumn_otherRowsVersionUnchanged() {
 		// given - two independently persisted reviewers on the migrated schema, both starting at version 0
 		final Integer firstId = reviewerRepository
