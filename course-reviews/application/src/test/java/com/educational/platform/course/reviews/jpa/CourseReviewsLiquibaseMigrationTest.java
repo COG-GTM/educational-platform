@@ -90,4 +90,21 @@ class CourseReviewsLiquibaseMigrationTest {
 		final Long version = jdbcTemplate.queryForObject("SELECT MAX(version) FROM reviewable_course", Long.class);
 		assertThat(version).isZero();
 	}
+
+	@Test
+	void migration_courseReviewInsertedWithoutVersion_versionDefaultsToZero() {
+		// given - the foreign-key parents required by the course_review NOT NULL/FK constraints
+		jdbcTemplate.update("INSERT INTO reviewer (username) VALUES ('migration-default-cr-reviewer')");
+		jdbcTemplate.update("INSERT INTO reviewable_course (uuid) VALUES (?)", UUID.randomUUID());
+
+		// when - a course_review row is inserted without specifying the new column
+		jdbcTemplate.update("INSERT INTO course_review (uuid, reviewer, course, rating, comment) VALUES (?, "
+				+ "(SELECT id FROM reviewer WHERE username = 'migration-default-cr-reviewer'), "
+				+ "(SELECT MAX(id) FROM reviewable_course), 4.0, 'comment')", UUID.randomUUID());
+
+		// then - the changeSet default backfills version to 0 (the value real rows get in production,
+		// mirrored by the test seed SQL so updating a row does not increment a null version)
+		final Long version = jdbcTemplate.queryForObject("SELECT version FROM course_review", Long.class);
+		assertThat(version).isZero();
+	}
 }

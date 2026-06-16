@@ -274,6 +274,32 @@ public class OptimisticLockingTest {
 		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
 	}
 
+	@Test
+	void courseReview_updatingOneReview_otherReviewsVersionUnchanged() throws Exception {
+		// given - the seeded review plus a second independently persisted review, both at version 0.
+		// The domain constructor is package-private, so it is reached reflectively from this test package.
+		final Constructor<CourseReview> constructor = CourseReview.class
+				.getDeclaredConstructor(ReviewCourseCommand.class, Integer.class, Integer.class);
+		constructor.setAccessible(true);
+		final CourseReview second = constructor
+				.newInstance(new ReviewCourseCommand(UUID.randomUUID(), 3.0, "second review"), 1, 1);
+		final UUID secondUuid = second.toIdentifier();
+		courseReviewRepository.saveAndFlush(second);
+		entityManager.clear();
+
+		// when - only the second review is updated
+		final CourseReview toUpdate = courseReviewRepository.findByUuid(secondUuid).orElseThrow();
+		toUpdate.update(new UpdateCourseReviewCommand(secondUuid, 5.0, "second review updated"));
+		courseReviewRepository.saveAndFlush(toUpdate);
+		entityManager.clear();
+
+		// then - the version bump is isolated to the updated row; the seeded review stays at version 0
+		final CourseReview reloadedSeeded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		final CourseReview reloadedSecond = courseReviewRepository.findByUuid(secondUuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloadedSecond, "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(reloadedSeeded, "version")).isEqualTo(0);
+	}
+
 	// --- Reviewer -----------------------------------------------------------
 
 	@Test
@@ -463,6 +489,29 @@ public class OptimisticLockingTest {
 		entityManager.clear();
 		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
 		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void reviewer_concurrentUpdateAfterRefresh_succeedsAndVersionIncrements() {
+		// given - the first writer wins, bumping the persisted version to 1
+		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
+		entityManager.clear();
+		final Reviewer first = reviewerRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(first, "username", "first-wins");
+		reviewerRepository.saveAndFlush(first);
+		entityManager.clear();
+
+		// when - a second writer re-reads the current state (version 1) before updating, so it is not
+		// stale and its update is accepted - the success counterpart to the stale-update rejection
+		final Reviewer second = reviewerRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(second, "username", "second-also-wins");
+		reviewerRepository.saveAndFlush(second);
+
+		// then - the version advanced to 2 and the second writer's value is the one persisted
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
+		assertThat(ReflectionTestUtils.getField(reloaded, "username")).isEqualTo("second-also-wins");
 	}
 
 	// --- ReviewableCourse ---------------------------------------------------
@@ -665,5 +714,30 @@ public class OptimisticLockingTest {
 		final ReviewableCourse reloadedSecond = reviewableCourseRepository.findById(secondId).orElseThrow();
 		assertThat(ReflectionTestUtils.getField(reloadedFirst, "version")).isEqualTo(1);
 		assertThat(ReflectionTestUtils.getField(reloadedSecond, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void reviewableCourse_concurrentUpdateAfterRefresh_succeedsAndVersionIncrements() {
+		// given - the first writer wins, bumping the persisted version to 1
+		final Integer id = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		entityManager.clear();
+		final ReviewableCourse first = reviewableCourseRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(first, "originalCourseId", UUID.randomUUID());
+		reviewableCourseRepository.saveAndFlush(first);
+		entityManager.clear();
+
+		// when - a second writer re-reads the current state (version 1) before updating, so it is not
+		// stale and its update is accepted - the success counterpart to the stale-update rejection
+		final UUID secondCourseId = UUID.randomUUID();
+		final ReviewableCourse second = reviewableCourseRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(second, "originalCourseId", secondCourseId);
+		reviewableCourseRepository.saveAndFlush(second);
+
+		// then - the version advanced to 2 and the second writer's value is the one persisted
+		entityManager.clear();
+		final ReviewableCourse reloaded = reviewableCourseRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
+		assertThat(ReflectionTestUtils.getField(reloaded, "originalCourseId")).isEqualTo(secondCourseId);
 	}
 }
