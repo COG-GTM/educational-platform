@@ -192,6 +192,21 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void courseReview_currentDelete_succeeds() {
+		// given - the seeded review read at its current persisted version
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+
+		// when - it is deleted at its current version and flushed
+		courseReviewRepository.delete(review);
+		courseReviewRepository.flush();
+
+		// then - the version guard permits the delete (the success counterpart to the stale-delete
+		// rejection): @Version does not block removing a row read at its current version
+		entityManager.clear();
+		assertThat(courseReviewRepository.findByUuid(COURSE_REVIEW_UUID)).isEmpty();
+	}
+
+	@Test
 	void courseReview_updated_newRatingAndCommentPersistedToDatabase() {
 		// given - the seeded review is updated with a new rating and comment
 		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
@@ -432,6 +447,25 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void reviewer_multipleSequentialUpdates_finalVersionPersistedToDatabase() {
+		// given - a persisted reviewer renamed twice in the same transaction
+		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
+		entityManager.clear();
+		final Reviewer reviewer = reviewerRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(reviewer, "username", "renamed-once");
+		reviewerRepository.saveAndFlush(reviewer);
+		ReflectionTestUtils.setField(reviewer, "username", "renamed-twice");
+		reviewerRepository.saveAndFlush(reviewer);
+
+		// when - the persistence context is cleared and the row reloaded from the database
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+
+		// then - both increments were actually written: the persisted version is 2, not only the first bump
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
+	}
+
+	@Test
 	void reviewer_updated_versionPersistedToDatabase() {
 		// given - an update is flushed
 		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
@@ -488,6 +522,23 @@ public class OptimisticLockingTest {
 					reviewerRepository.delete(stale);
 					reviewerRepository.flush();
 				});
+	}
+
+	@Test
+	void reviewer_currentDelete_succeeds() {
+		// given - a persisted reviewer read at its current persisted version
+		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
+		entityManager.clear();
+		final Reviewer reviewer = reviewerRepository.findById(id).orElseThrow();
+
+		// when - it is deleted at its current version and flushed
+		reviewerRepository.delete(reviewer);
+		reviewerRepository.flush();
+
+		// then - the version guard permits the delete (the success counterpart to the stale-delete
+		// rejection): @Version does not block removing a row read at its current version
+		entityManager.clear();
+		assertThat(reviewerRepository.findById(id)).isEmpty();
 	}
 
 	@Test
@@ -670,6 +721,26 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void reviewableCourse_multipleSequentialUpdates_finalVersionPersistedToDatabase() {
+		// given - a persisted reviewable course updated twice in the same transaction
+		final Integer id = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		entityManager.clear();
+		final ReviewableCourse course = reviewableCourseRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(course, "originalCourseId", UUID.randomUUID());
+		reviewableCourseRepository.saveAndFlush(course);
+		ReflectionTestUtils.setField(course, "originalCourseId", UUID.randomUUID());
+		reviewableCourseRepository.saveAndFlush(course);
+
+		// when - the persistence context is cleared and the row reloaded from the database
+		entityManager.clear();
+		final ReviewableCourse reloaded = reviewableCourseRepository.findById(id).orElseThrow();
+
+		// then - both increments were actually written: the persisted version is 2, not only the first bump
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
+	}
+
+	@Test
 	void reviewableCourse_updated_versionPersistedToDatabase() {
 		// given - an update is flushed
 		final Integer id = reviewableCourseRepository
@@ -730,6 +801,24 @@ public class OptimisticLockingTest {
 					reviewableCourseRepository.delete(stale);
 					reviewableCourseRepository.flush();
 				});
+	}
+
+	@Test
+	void reviewableCourse_currentDelete_succeeds() {
+		// given - a persisted reviewable course read at its current persisted version
+		final Integer id = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		entityManager.clear();
+		final ReviewableCourse course = reviewableCourseRepository.findById(id).orElseThrow();
+
+		// when - it is deleted at its current version and flushed
+		reviewableCourseRepository.delete(course);
+		reviewableCourseRepository.flush();
+
+		// then - the version guard permits the delete (the success counterpart to the stale-delete
+		// rejection): @Version does not block removing a row read at its current version
+		entityManager.clear();
+		assertThat(reviewableCourseRepository.findById(id)).isEmpty();
 	}
 
 	@Test
