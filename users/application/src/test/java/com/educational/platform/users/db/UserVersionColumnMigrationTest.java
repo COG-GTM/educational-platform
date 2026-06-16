@@ -206,6 +206,44 @@ class UserVersionColumnMigrationTest {
         assertThat(changeSetExecutionCount("add-version-column-to-custom_user", "devin")).isEqualTo(1);
     }
 
+    @Test
+    void migration_rollback_removesVersionColumnButPreservesTableAndData() throws Exception {
+        givenLegacyCustomUserTable();
+        insertUserWithoutVersion("legacy");
+        runUsersChangelog();
+
+        // when the version changeSet is rolled back (downgrade path - addColumn is auto-rollbackable)
+        rollbackUsersChangelog(1);
+
+        // then only the additive column is reverted: the column and its changelog record disappear
+        assertThat(versionColumnExists()).as("version column is dropped on rollback").isFalse();
+        assertThat(changeSetExecutionCount("add-version-column-to-custom_user", "devin")).isZero();
+        // while the pre-existing table and its row data are left untouched
+        assertThat(stringColumnOf("legacy", "email")).isEqualTo("legacy@gmail.com");
+        assertThat(stringColumnOf("legacy", "role")).isEqualTo("ROLE_STUDENT");
+    }
+
+    @Test
+    void migration_rollbackThenReRun_reAddsVersionColumnAndBackfillsToZero() throws Exception {
+        givenLegacyCustomUserTable();
+        insertUserWithoutVersion("legacy");
+        runUsersChangelog();
+        rollbackUsersChangelog(1);
+
+        // when the changelog is re-applied after a rollback (a downgrade followed by a re-upgrade)
+        runUsersChangelog();
+
+        // then the migration is cleanly repeatable: the column is restored, recorded once, and backfilled
+        try (Connection connection = openConnection();
+             ResultSet columns = connection.getMetaData().getColumns(null, null, "CUSTOM_USER", "VERSION")) {
+            assertThat(columns.next()).as("version column is re-added after rollback").isTrue();
+            assertThat(columns.getInt("DATA_TYPE")).isEqualTo(Types.BIGINT);
+            assertThat(columns.getString("IS_NULLABLE")).isEqualTo("NO");
+        }
+        assertThat(changeSetExecutionCount("add-version-column-to-custom_user", "devin")).isEqualTo(1);
+        assertThat(versionOf("legacy")).isZero();
+    }
+
     private int changeSetExecutionCount(final String id, final String author) throws SQLException {
         try (Connection connection = openConnection();
              PreparedStatement statement = connection.prepareStatement(
@@ -226,6 +264,23 @@ class UserVersionColumnMigrationTest {
             try (Liquibase liquibase = new Liquibase(CHANGELOG, new ClassLoaderResourceAccessor(), database)) {
                 liquibase.update(new Contexts(), new LabelExpression());
             }
+        }
+    }
+
+    private void rollbackUsersChangelog(final int changeSetsToRollback) throws Exception {
+        try (Connection connection = openConnection()) {
+            final Database database = DatabaseFactory.getInstance()
+                    .findCorrectDatabaseImplementation(new JdbcConnection(connection));
+            try (Liquibase liquibase = new Liquibase(CHANGELOG, new ClassLoaderResourceAccessor(), database)) {
+                liquibase.rollback(changeSetsToRollback, new Contexts(), new LabelExpression());
+            }
+        }
+    }
+
+    private boolean versionColumnExists() throws SQLException {
+        try (Connection connection = openConnection();
+             ResultSet columns = connection.getMetaData().getColumns(null, null, "CUSTOM_USER", "VERSION")) {
+            return columns.next();
         }
     }
 
