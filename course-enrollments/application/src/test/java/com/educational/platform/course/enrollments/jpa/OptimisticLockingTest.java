@@ -108,6 +108,29 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void saveAndFlush_concurrentlyEditedCourseEnrollment_secondWriterFailsFast() {
+		// given two independent detached snapshots of the same persisted enrollment
+		final Integer id = entityManager
+				.getId(entityManager.persistFlushFind(new CourseEnrollment(COURSE_ID, STUDENT_ID)), Integer.class);
+		entityManager.clear();
+		final CourseEnrollment firstWriter = courseEnrollmentRepository.findById(id).orElseThrow();
+		entityManager.detach(firstWriter);
+		entityManager.clear();
+		final CourseEnrollment secondWriter = courseEnrollmentRepository.findById(id).orElseThrow();
+		entityManager.detach(secondWriter);
+
+		// when the first writer commits its change through the repository (version 0 -> 1)
+		firstWriter.complete();
+		courseEnrollmentRepository.saveAndFlush(firstWriter);
+		entityManager.clear();
+
+		// then the second writer, still holding version 0, cannot silently overwrite it
+		secondWriter.complete();
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> courseEnrollmentRepository.saveAndFlush(secondWriter));
+	}
+
+	@Test
 	void update_courseEnrollmentMultipleTimes_versionIncrementsMonotonically() {
 		// given
 		final CourseEnrollment enrollment = entityManager
@@ -235,6 +258,29 @@ public class OptimisticLockingTest {
 		// then persisting the stale snapshot fails fast
 		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
 				.isThrownBy(() -> studentRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void saveAndFlush_concurrentlyEditedStudent_secondWriterFailsFast() {
+		// given two independent detached snapshots of the same persisted student
+		final Integer id = entityManager
+				.getId(entityManager.persistFlushFind(new Student(new CreateStudentCommand("username"))), Integer.class);
+		entityManager.clear();
+		final Student firstWriter = studentRepository.findById(id).orElseThrow();
+		entityManager.detach(firstWriter);
+		entityManager.clear();
+		final Student secondWriter = studentRepository.findById(id).orElseThrow();
+		entityManager.detach(secondWriter);
+
+		// when the first writer commits its change through the repository (version 0 -> 1)
+		ReflectionTestUtils.setField(firstWriter, "username", "renamed-by-first");
+		studentRepository.saveAndFlush(firstWriter);
+		entityManager.clear();
+
+		// then the second writer, still holding version 0, cannot silently overwrite it
+		ReflectionTestUtils.setField(secondWriter, "username", "renamed-by-second");
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> studentRepository.saveAndFlush(secondWriter));
 	}
 
 	@Test
@@ -366,6 +412,30 @@ public class OptimisticLockingTest {
 		// then persisting the stale snapshot fails fast
 		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
 				.isThrownBy(() -> enrollCourseRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void saveAndFlush_concurrentlyEditedEnrollCourse_secondWriterFailsFast() {
+		// given two independent detached snapshots of the same persisted course
+		final Integer id = entityManager
+				.getId(entityManager.persistFlushFind(new EnrollCourse(new CreateCourseCommand(UUID.randomUUID()))),
+						Integer.class);
+		entityManager.clear();
+		final EnrollCourse firstWriter = enrollCourseRepository.findById(id).orElseThrow();
+		entityManager.detach(firstWriter);
+		entityManager.clear();
+		final EnrollCourse secondWriter = enrollCourseRepository.findById(id).orElseThrow();
+		entityManager.detach(secondWriter);
+
+		// when the first writer commits its change through the repository (version 0 -> 1)
+		ReflectionTestUtils.setField(firstWriter, "uuid", UUID.randomUUID());
+		enrollCourseRepository.saveAndFlush(firstWriter);
+		entityManager.clear();
+
+		// then the second writer, still holding version 0, cannot silently overwrite it
+		ReflectionTestUtils.setField(secondWriter, "uuid", UUID.randomUUID());
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> enrollCourseRepository.saveAndFlush(secondWriter));
 	}
 
 	@Test
