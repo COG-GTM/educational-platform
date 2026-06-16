@@ -787,6 +787,29 @@ public class OptimisticLockingMigratedSchemaTest {
 	}
 
 	@Test
+	void reviewer_versionAtIntegerMaxValueAgainstBigintColumn_readsBackAtBoundary() {
+		// given - a reviewer whose BIGINT version column is forced to exactly Integer.MAX_VALUE, the largest
+		// value the Integer @Version field can represent. Set directly via SQL because ordinary increments can
+		// never reach it. This is the on-point of the boundary that the two existing tests bracket but never
+		// land on: reviewer_largeVersionWithinIntRangeAgainstBigintColumn (2_000_000_000) stops just below it and
+		// reviewer_versionExceedingIntegerRangeAgainstBigintColumn_failsFastOnRead (MAX + 1) steps just past it.
+		final long maxIntVersion = Integer.MAX_VALUE; // 2_147_483_647: the largest value the Integer field holds
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("max-version-reviewer"))).getId();
+		entityManager.getEntityManager()
+				.createNativeQuery("UPDATE reviewer SET version = ? WHERE id = ?")
+				.setParameter(1, maxIntVersion)
+				.setParameter(2, id)
+				.executeUpdate();
+		entityManager.clear();
+
+		// then - the boundary value still round-trips out of the BIGINT column into the Integer @Version field
+		// intact, so the read fails fast only once the column outgrows Integer range (MAX + 1), not at the edge.
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(Integer.MAX_VALUE);
+	}
+
+	@Test
 	void courseReview_versionExceedingIntegerRangeAgainstBigintColumn_failsFastOnRead() throws Exception {
 		// given - a course review whose BIGINT version column is forced one past Integer.MAX_VALUE, set directly
 		// via SQL. Same boundary as the reviewer case but for the headline aggregate against its real
@@ -813,6 +836,29 @@ public class OptimisticLockingMigratedSchemaTest {
 		// version into the Integer @Version field, the headline-aggregate counterpart of the reviewer boundary
 		assertThatExceptionOfType(DataIntegrityViolationException.class)
 				.isThrownBy(() -> courseReviewRepository.findByUuid(uuid));
+	}
+
+	@Test
+	void courseReview_versionAtIntegerMaxValueAgainstBigintColumn_readsBackAtBoundary() throws Exception {
+		// given - a course review whose BIGINT version column is forced to exactly Integer.MAX_VALUE, set directly
+		// via SQL. Same on-point boundary as the reviewer case but for the headline aggregate against its real
+		// FK-constrained table: courseReview_largeVersionWithinIntRangeAgainstBigintColumn stops just below it and
+		// courseReview_versionExceedingIntegerRangeAgainstBigintColumn_failsFastOnRead steps just past it.
+		final long maxIntVersion = Integer.MAX_VALUE; // 2_147_483_647: the largest value the Integer field holds
+		final CourseReview review = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = review.toIdentifier();
+		final Object id = ReflectionTestUtils.getField(courseReviewRepository.saveAndFlush(review), "id");
+		entityManager.getEntityManager()
+				.createNativeQuery("UPDATE course_review SET version = ? WHERE id = ?")
+				.setParameter(1, maxIntVersion)
+				.setParameter(2, id)
+				.executeUpdate();
+		entityManager.clear();
+
+		// then - the boundary value round-trips out of the BIGINT column into the Integer @Version field intact
+		// for the headline aggregate, so the read only fails fast once the column outgrows Integer range (MAX + 1).
+		final CourseReview reloaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(Integer.MAX_VALUE);
 	}
 
 	@Test
