@@ -1054,6 +1054,48 @@ public class OptimisticLockingMigratedSchemaTest {
 	}
 
 	@Test
+	void reviewer_updatedAgainstBigintColumn_linkedCourseReviewVersionUnchanged() throws Exception {
+		// given - a course review wired to a freshly created reviewer FK parent on the migrated (BIGINT) schema,
+		// both at version 0. The reviewer is created inline (rather than via newCourseReviewForMigratedSchema) so its
+		// id is captured and can be updated on its own, and the reviewable_course parent is inserted with native SQL
+		// for the same reason newCourseReviewForMigratedSchema documents (its entity maps original_course_id while
+		// the migrated table exposes uuid).
+		final Integer reviewerId = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("isolation-reviewer-" + UUID.randomUUID()))).getId();
+		entityManager.getEntityManager()
+				.createNativeQuery("INSERT INTO reviewable_course (uuid) VALUES (?)")
+				.setParameter(1, UUID.randomUUID())
+				.executeUpdate();
+		final Number reviewableCourseId = (Number) entityManager.getEntityManager()
+				.createNativeQuery("SELECT MAX(id) FROM reviewable_course")
+				.getSingleResult();
+		final Constructor<CourseReview> constructor = CourseReview.class
+				.getDeclaredConstructor(ReviewCourseCommand.class, Integer.class, Integer.class);
+		constructor.setAccessible(true);
+		final CourseReview review = constructor.newInstance(
+				new ReviewCourseCommand(UUID.randomUUID(), 4.0, "comment"), reviewableCourseId.intValue(), reviewerId);
+		final UUID reviewUuid = review.toIdentifier();
+		courseReviewRepository.saveAndFlush(review);
+		entityManager.clear();
+
+		// when - only the reviewer (the parent aggregate) is updated, bumping its BIGINT version to 1
+		final Reviewer reloadedReviewer = reviewerRepository.findById(reviewerId).orElseThrow();
+		ReflectionTestUtils.setField(reloadedReviewer, "username", "isolation-reviewer-renamed-" + UUID.randomUUID());
+		reviewerRepository.saveAndFlush(reloadedReviewer);
+		entityManager.clear();
+
+		// then - the parent's version bump is isolated to the reviewer aggregate; the linked course_review is a
+		// separate aggregate joined only by FK id, so its BIGINT version stays 0. This is the parent -> child
+		// counterpart of courseReview_updatedAgainstBigintColumn_linkedParentVersionsUnchanged (child -> parents):
+		// the Hibernate-schema slice asserts cross-aggregate isolation in both directions, but the migrated slice
+		// only asserted child -> parents, leaving the reviewer -> course_review direction unverified on BIGINT.
+		final Reviewer afterReload = reviewerRepository.findById(reviewerId).orElseThrow();
+		final CourseReview linkedReview = courseReviewRepository.findByUuid(reviewUuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(afterReload, "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(linkedReview, "version")).isEqualTo(0);
+	}
+
+	@Test
 	void courseReview_concurrentUpdateAfterWinnerAdvancedMultipleVersionsAgainstBigintColumn_throwsOptimisticLockingFailure() throws Exception {
 		// given - a stale instance captured at version 0 on the migrated schema
 		final CourseReview seed = newCourseReviewForMigratedSchema(4.0, "comment");

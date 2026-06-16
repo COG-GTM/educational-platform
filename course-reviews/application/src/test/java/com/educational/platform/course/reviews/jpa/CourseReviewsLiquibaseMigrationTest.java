@@ -149,6 +149,46 @@ class CourseReviewsLiquibaseMigrationTest {
 	}
 
 	@Test
+	void migration_reviewerVersionUpdatedToNull_isRejected() {
+		// given - a reviewer row that the changeSet default seeded with version 0
+		jdbcTemplate.update("INSERT INTO reviewer (username) VALUES ('update-null-reviewer')");
+
+		// when/then - blanking the version through an UPDATE is rejected too. The explicit-null INSERT tests only
+		// prove the NOT NULL constraint guards inserts; this proves it also guards updates, so a row that already
+		// persisted with a version can never later be left without the comparable value Hibernate's @Version guard
+		// relies on (a versionless row would silently disable the optimistic-lock check on every subsequent write).
+		assertThatExceptionOfType(DataIntegrityViolationException.class).isThrownBy(() ->
+				jdbcTemplate.update("UPDATE reviewer SET version = NULL"));
+	}
+
+	@Test
+	void migration_reviewableCourseVersionUpdatedToNull_isRejected() {
+		// given - a reviewable_course row seeded with version 0 by the changeSet default
+		jdbcTemplate.update("INSERT INTO reviewable_course (uuid) VALUES (?)", UUID.randomUUID());
+
+		// when/then - the NOT NULL constraint guards UPDATEs on the reviewable_course version column too, not just
+		// the INSERT path the explicit-null test covers
+		assertThatExceptionOfType(DataIntegrityViolationException.class).isThrownBy(() ->
+				jdbcTemplate.update("UPDATE reviewable_course SET version = NULL"));
+	}
+
+	@Test
+	void migration_courseReviewVersionUpdatedToNull_isRejected() {
+		// given - a persisted course_review row (with the FK parents it requires) whose version the changeSet
+		// default seeded to 0
+		jdbcTemplate.update("INSERT INTO reviewer (username) VALUES ('update-null-cr-reviewer')");
+		jdbcTemplate.update("INSERT INTO reviewable_course (uuid) VALUES (?)", UUID.randomUUID());
+		jdbcTemplate.update("INSERT INTO course_review (uuid, reviewer, course, rating, comment) VALUES (?, "
+				+ "(SELECT id FROM reviewer WHERE username = 'update-null-cr-reviewer'), "
+				+ "(SELECT MAX(id) FROM reviewable_course), 4.0, 'comment')", UUID.randomUUID());
+
+		// when/then - blanking the version on the headline aggregate through an UPDATE is rejected, so a review can
+		// never be left in a versionless state on the production-shaped schema once it has been persisted
+		assertThatExceptionOfType(DataIntegrityViolationException.class).isThrownBy(() ->
+				jdbcTemplate.update("UPDATE course_review SET version = NULL"));
+	}
+
+	@Test
 	void migration_appliedTwice_isIdempotent() throws Exception {
 		// given - the changelog already applied once by @BeforeEach
 		// when - the same changelog is applied a second time against the same datasource
