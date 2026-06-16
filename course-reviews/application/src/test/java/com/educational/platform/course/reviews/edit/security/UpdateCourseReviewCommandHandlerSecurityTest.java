@@ -1,5 +1,7 @@
 package com.educational.platform.course.reviews.edit.security;
 
+import com.educational.platform.course.reviews.Comment;
+import com.educational.platform.course.reviews.CourseRating;
 import com.educational.platform.course.reviews.CourseReview;
 import com.educational.platform.course.reviews.CourseReviewRepository;
 import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommand;
@@ -16,6 +18,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import jakarta.validation.ConstraintViolationException;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -64,6 +67,48 @@ public class UpdateCourseReviewCommandHandlerSecurityTest {
         // @DataJpaTest slice, so this is the only assertion that the bump happens on the assembled application.
         final CourseReview saved = repository.findByUuid(uuid).orElseThrow();
         assertThat(ReflectionTestUtils.getField(saved, "version")).isEqualTo(1);
+    }
+
+    @Test
+    @WithMockUser(username = "reviewer", roles = "STUDENT")
+    void handle_userIsReviewerUpdatesTwice_versionProgressesToTwo() {
+        // given - the seeded review starts at version 0 (course_review.sql)
+        // when - the authorized reviewer updates it twice in a row through the fully assembled application;
+        // this test class is not @Transactional, so each handle call is its own committed transaction
+        sut.handle(new UpdateCourseReviewCommand(uuid, 3.0, "first update"));
+        sut.handle(new UpdateCourseReviewCommand(uuid, 5.0, "second update"));
+
+        // then - each successful update advances the @Version, so it reaches 2 end-to-end, and the latest values
+        // are the ones persisted. handle_userIsReviewer_versionIncrementedFromSeededZero only proves the first
+        // 0 -> 1 bump on the assembled application; that repeated updates keep incrementing (1 -> 2) through the
+        // real Spring context, security and JPA was only ever covered by @DataJpaTest slices until now.
+        final CourseReview saved = repository.findByUuid(uuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(saved, "version")).isEqualTo(2);
+        assertThat(saved)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0))
+                .hasFieldOrPropertyWithValue("comment", new Comment("second update"));
+    }
+
+    @Test
+    @WithMockUser(username = "reviewer", roles = "STUDENT")
+    void handle_userIsReviewerInvalidRating_versionNotIncremented() {
+        // given - the seeded review at version 0 (rating 4, comment "comment") and an authorized reviewer whose
+        // command has a null rating, violating @NotNull
+        var command = new UpdateCourseReviewCommand(uuid, null, "updated comment");
+
+        // when - authorization passes but validation rejects the command
+        final ThrowingCallable updateAction = () -> sut.handle(command);
+        assertThatThrownBy(updateAction).isInstanceOf(ConstraintViolationException.class);
+
+        // then - validation runs before the version-bumping save, so the rejected update neither persists its
+        // change nor advances the optimistic-lock version: the seeded version stays 0 and the fields are unchanged.
+        // handle_anotherReviewer_versionNotIncremented proves version-stays-0 for the authorization path; this proves
+        // it for the validation path on the assembled application.
+        final CourseReview saved = repository.findByUuid(uuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(saved, "version")).isEqualTo(0);
+        assertThat(saved)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(4.0))
+                .hasFieldOrPropertyWithValue("comment", new Comment("comment"));
     }
 
     @Test

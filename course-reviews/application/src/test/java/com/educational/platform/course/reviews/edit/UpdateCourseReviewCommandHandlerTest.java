@@ -28,6 +28,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -141,6 +142,41 @@ public class UpdateCourseReviewCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_invalidId_noVersionBumpingSavePerformed() {
+        // given - no review exists for the command's uuid
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, "updated comment");
+        when(courseReviewRepository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when - the missing review is updated
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - the use case fails fast and never reaches save. save() is the only call that flushes a dirty
+        // entity, so it is the only call that can advance the @Version added by this PR; verifying it never runs
+        // pins that a not-found update can never spuriously persist a row or bump a version.
+        // handle_invalidId_resourceNotFoundException only asserts the exception, leaving a handler that still
+        // called save before failing undetected.
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verify(courseReviewRepository, never()).save(any(CourseReview.class));
+    }
+
+    @Test
+    void handle_invalidRating_noVersionBumpingSavePerformed() {
+        // given - an existing review and a command whose rating violates @NotNull
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, null, "updated comment");
+
+        // when - the invalid update is handled
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - validation rejects the command before it reaches save, so an invalid update never reaches the
+        // version-bumping persist: the rejected write performs no save at all.
+        // handle_ratingEmpty_resourceNotFoundException only asserts the exception type, not that the save is skipped.
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verify(courseReviewRepository, never()).save(any(CourseReview.class));
     }
 
     private UUID configureCourseReview() {
