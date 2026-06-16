@@ -91,6 +91,32 @@ public class CourseProposalRepositoryTest {
 	}
 
 	@Test
+	void save_staleProposalSameOperation_optimisticLockingFailureException() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final Integer id = persistFlushClear(uuid);
+
+		// two independent (detached) reads of the still-WAITING proposal simulate concurrent admins
+		final CourseProposal firstRead = sut.findById(id).orElseThrow();
+		entityManager.detach(firstRead);
+		final CourseProposal secondRead = sut.findById(id).orElseThrow();
+		entityManager.detach(secondRead);
+
+		// the first admin approves and the write wins
+		firstRead.approve();
+		sut.saveAndFlush(firstRead);
+		entityManager.clear();
+
+		// when - the second admin performs the SAME operation on a now stale snapshot; the domain
+		// AlreadyApproved guard does not fire because the stale snapshot is still WAITING_FOR_APPROVAL
+		secondRead.approve();
+
+		// then - the conflict is caught purely by the @Version check, not by the domain status guard
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> sut.saveAndFlush(secondRead));
+	}
+
+	@Test
 	void findById_persistedProposal_initialVersionLoadedFromDatabase() {
 		// given
 		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

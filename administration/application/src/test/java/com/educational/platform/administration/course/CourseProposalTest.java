@@ -56,6 +56,19 @@ public class CourseProposalTest {
     }
 
     @Test
+    void approve_validCommand_versionNotManagedByDomain() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+
+        // when - a domain mutation occurs
+        proposal.approve();
+
+        // then - the @Version field is owned by the persistence provider and is never touched by domain logic
+        assertThat(proposal).hasFieldOrPropertyWithValue("version", null);
+    }
+
+    @Test
     void approve_courseProposalAlreadyApproved_courseProposalAlreadyApprovedException() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -84,6 +97,19 @@ public class CourseProposalTest {
         // then
         assertThat(proposal)
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED);
+    }
+
+    @Test
+    void decline_validCommand_versionNotManagedByDomain() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+
+        // when - a domain mutation occurs
+        proposal.decline();
+
+        // then - the @Version field is owned by the persistence provider and is never touched by domain logic
+        assertThat(proposal).hasFieldOrPropertyWithValue("version", null);
     }
 
     @Test
