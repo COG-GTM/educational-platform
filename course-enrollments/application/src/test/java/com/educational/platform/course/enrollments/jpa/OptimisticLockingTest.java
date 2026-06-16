@@ -144,6 +144,26 @@ public class OptimisticLockingTest {
 		assertThat(reloaded).hasFieldOrPropertyWithValue("version", 1);
 	}
 
+	@Test
+	void delete_staleCourseEnrollment_concurrentlyUpdated_optimisticLockingFailure() {
+		// given a persisted enrollment and a stale snapshot of it
+		final Integer id = entityManager
+				.getId(entityManager.persistFlushFind(new CourseEnrollment(COURSE_ID, STUDENT_ID)), Integer.class);
+		entityManager.clear();
+		final CourseEnrollment stale = courseEnrollmentRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+
+		// when another transaction updates the same row (version 0 -> 1)
+		incrementVersion("course_enrollment", id);
+
+		// then deleting the stale snapshot fails fast instead of dropping fresh data
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> {
+					courseEnrollmentRepository.delete(stale);
+					courseEnrollmentRepository.flush();
+				});
+	}
+
 	// --- Student ------------------------------------------------------------
 
 	@Test
@@ -188,6 +208,55 @@ public class OptimisticLockingTest {
 		// then persisting the stale snapshot fails fast
 		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
 				.isThrownBy(() -> studentRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void update_studentMultipleTimes_versionIncrementsMonotonically() {
+		// given
+		final Student student = entityManager.persistFlushFind(new Student(new CreateStudentCommand("username")));
+		assertThat(student).hasFieldOrPropertyWithValue("version", 0);
+
+		// when the aggregate is updated twice in separate flushes
+		ReflectionTestUtils.setField(student, "username", "renamed");
+		entityManager.flush();
+		ReflectionTestUtils.setField(student, "username", "renamed-again");
+		entityManager.flush();
+
+		// then the version is bumped once per update, never skipping or resetting
+		assertThat(student).hasFieldOrPropertyWithValue("version", 2);
+	}
+
+	@Test
+	void save_currentStudent_notConcurrentlyUpdated_succeedsAndIncrementsVersion() {
+		// given a persisted student reloaded as a detached, up-to-date snapshot
+		final Integer id = entityManager
+				.getId(entityManager.persistFlushFind(new Student(new CreateStudentCommand("username"))), Integer.class);
+		entityManager.clear();
+		final Student current = studentRepository.findById(id).orElseThrow();
+		entityManager.detach(current);
+
+		// when it is updated without any competing change to the row
+		ReflectionTestUtils.setField(current, "username", "renamed");
+		final Student saved = studentRepository.saveAndFlush(current);
+
+		// then the optimistic lock does not fire and the version advances
+		assertThat(saved).hasFieldOrPropertyWithValue("version", 1);
+	}
+
+	@Test
+	void find_updatedStudent_versionRoundTripsThroughBigintColumn() {
+		// given a persisted student whose version has been bumped to 1
+		final Student student = entityManager.persistFlushFind(new Student(new CreateStudentCommand("username")));
+		final Integer id = entityManager.getId(student, Integer.class);
+		ReflectionTestUtils.setField(student, "username", "renamed");
+		entityManager.flush();
+
+		// when the row is read back from the BIGINT version column
+		entityManager.clear();
+		final Student reloaded = studentRepository.findById(id).orElseThrow();
+
+		// then the non-zero version is mapped back onto the Integer field
+		assertThat(reloaded).hasFieldOrPropertyWithValue("version", 1);
 	}
 
 	// --- EnrollCourse -------------------------------------------------------
@@ -236,6 +305,58 @@ public class OptimisticLockingTest {
 		// then persisting the stale snapshot fails fast
 		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
 				.isThrownBy(() -> enrollCourseRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void update_enrollCourseMultipleTimes_versionIncrementsMonotonically() {
+		// given
+		final EnrollCourse course = entityManager
+				.persistFlushFind(new EnrollCourse(new CreateCourseCommand(UUID.randomUUID())));
+		assertThat(course).hasFieldOrPropertyWithValue("version", 0);
+
+		// when the aggregate is updated twice in separate flushes
+		ReflectionTestUtils.setField(course, "uuid", UUID.randomUUID());
+		entityManager.flush();
+		ReflectionTestUtils.setField(course, "uuid", UUID.randomUUID());
+		entityManager.flush();
+
+		// then the version is bumped once per update, never skipping or resetting
+		assertThat(course).hasFieldOrPropertyWithValue("version", 2);
+	}
+
+	@Test
+	void save_currentEnrollCourse_notConcurrentlyUpdated_succeedsAndIncrementsVersion() {
+		// given a persisted course reloaded as a detached, up-to-date snapshot
+		final Integer id = entityManager
+				.getId(entityManager.persistFlushFind(new EnrollCourse(new CreateCourseCommand(UUID.randomUUID()))),
+						Integer.class);
+		entityManager.clear();
+		final EnrollCourse current = enrollCourseRepository.findById(id).orElseThrow();
+		entityManager.detach(current);
+
+		// when it is updated without any competing change to the row
+		ReflectionTestUtils.setField(current, "uuid", UUID.randomUUID());
+		final EnrollCourse saved = enrollCourseRepository.saveAndFlush(current);
+
+		// then the optimistic lock does not fire and the version advances
+		assertThat(saved).hasFieldOrPropertyWithValue("version", 1);
+	}
+
+	@Test
+	void find_updatedEnrollCourse_versionRoundTripsThroughBigintColumn() {
+		// given a persisted course whose version has been bumped to 1
+		final EnrollCourse course = entityManager
+				.persistFlushFind(new EnrollCourse(new CreateCourseCommand(UUID.randomUUID())));
+		final Integer id = entityManager.getId(course, Integer.class);
+		ReflectionTestUtils.setField(course, "uuid", UUID.randomUUID());
+		entityManager.flush();
+
+		// when the row is read back from the BIGINT version column
+		entityManager.clear();
+		final EnrollCourse reloaded = enrollCourseRepository.findById(id).orElseThrow();
+
+		// then the non-zero version is mapped back onto the Integer field
+		assertThat(reloaded).hasFieldOrPropertyWithValue("version", 1);
 	}
 
 	/**
