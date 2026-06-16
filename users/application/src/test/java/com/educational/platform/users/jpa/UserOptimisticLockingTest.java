@@ -72,6 +72,23 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void incrementedVersion_isVisibleAfterReload() {
+        // given a persisted user whose version has been bumped to 1
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User loaded = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+
+        // when the persistence context is cleared and the entity read back
+        entityManager.clear();
+        final User reloaded = repository.findByUsername(USERNAME).orElseThrow();
+
+        // then a freshly loaded entity exposes the persisted, incremented version
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 1);
+    }
+
+    @Test
     void read_withoutModification_doesNotChangeVersion() {
         // given
         repository.saveAndFlush(newUser());

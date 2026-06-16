@@ -68,6 +68,20 @@ class UserVersionColumnMigrationTest {
     }
 
     @Test
+    void migration_freshInstall_createsTableWithVersionColumn() throws Exception {
+        // given no pre-existing custom_user table: the createTable precondition
+        // (not tableExists) is satisfied, so the full changelog runs end to end.
+        runUsersChangelog();
+
+        try (Connection connection = openConnection();
+             ResultSet columns = connection.getMetaData().getColumns(null, null, "CUSTOM_USER", "VERSION")) {
+            assertThat(columns.next()).as("version column is present on a freshly created custom_user").isTrue();
+            assertThat(columns.getInt("DATA_TYPE")).isEqualTo(Types.BIGINT);
+            assertThat(columns.getString("IS_NULLABLE")).isEqualTo("NO");
+        }
+    }
+
+    @Test
     void migration_backfillsExistingRowsToZero() throws Exception {
         givenLegacyCustomUserTable();
         insertUserWithoutVersion("legacy");
@@ -75,6 +89,39 @@ class UserVersionColumnMigrationTest {
         runUsersChangelog();
 
         assertThat(versionOf("legacy")).isZero();
+    }
+
+    @Test
+    void migration_backfillsMultipleExistingRowsToZero() throws Exception {
+        givenLegacyCustomUserTable();
+        insertUserWithoutVersion("legacy-1");
+        insertUserWithoutVersion("legacy-2");
+        insertUserWithoutVersion("legacy-3");
+
+        runUsersChangelog();
+
+        assertThat(versionOf("legacy-1")).isZero();
+        assertThat(versionOf("legacy-2")).isZero();
+        assertThat(versionOf("legacy-3")).isZero();
+    }
+
+    @Test
+    void migration_runningTwice_isIdempotent() throws Exception {
+        givenLegacyCustomUserTable();
+        insertUserWithoutVersion("legacy");
+
+        // running the changelog twice must not fail or re-apply the changeSet
+        runUsersChangelog();
+        runUsersChangelog();
+
+        assertThat(versionOf("legacy")).isZero();
+        try (Connection connection = openConnection();
+             ResultSet columns = connection.getMetaData().getColumns(null, null, "CUSTOM_USER", "VERSION")) {
+            assertThat(columns.next()).as("version column is present").isTrue();
+            assertThat(columns.getInt("DATA_TYPE")).isEqualTo(Types.BIGINT);
+            assertThat(columns.getString("IS_NULLABLE")).isEqualTo("NO");
+            assertThat(columns.next()).as("exactly one version column exists after a second run").isFalse();
+        }
     }
 
     @Test
