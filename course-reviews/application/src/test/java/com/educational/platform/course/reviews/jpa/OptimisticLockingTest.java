@@ -644,4 +644,26 @@ public class OptimisticLockingTest {
 		final ReviewableCourse reloaded = reviewableCourseRepository.findById(id).orElseThrow();
 		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
 	}
+
+	@Test
+	void reviewableCourse_updatingOneRow_otherRowsVersionUnchanged() {
+		// given - two independently persisted reviewable courses, both starting at version 0
+		final Integer firstId = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		final Integer secondId = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		entityManager.clear();
+
+		// when - only the first course is updated
+		final ReviewableCourse first = reviewableCourseRepository.findById(firstId).orElseThrow();
+		ReflectionTestUtils.setField(first, "originalCourseId", UUID.randomUUID());
+		reviewableCourseRepository.saveAndFlush(first);
+		entityManager.clear();
+
+		// then - the version bump is isolated to the updated row; the untouched row stays at version 0
+		final ReviewableCourse reloadedFirst = reviewableCourseRepository.findById(firstId).orElseThrow();
+		final ReviewableCourse reloadedSecond = reviewableCourseRepository.findById(secondId).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloadedFirst, "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(reloadedSecond, "version")).isEqualTo(0);
+	}
 }
