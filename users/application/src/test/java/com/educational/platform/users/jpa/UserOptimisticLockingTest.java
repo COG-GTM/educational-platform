@@ -72,6 +72,20 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void write_oneUser_leavesOtherUsersVersionUnchanged() {
+        // given two independently persisted users, each starting at version 0
+        repository.saveAndFlush(newUser());
+        repository.saveAndFlush(newUser("other", "other@gmail.com"));
+
+        // when only the first user is written
+        forceIncrementVersion();
+
+        // then optimistic locking is scoped per row: the untouched user keeps version 0
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(1L);
+        assertThat(((Number) versionOf("other")).longValue()).isZero();
+    }
+
+    @Test
     void write_managedUser_multipleTimes_incrementsVersionEachTime() {
         // given a freshly persisted user at version 0
         repository.saveAndFlush(newUser());
@@ -209,9 +223,13 @@ public class UserOptimisticLockingTest {
     }
 
     private User newUser() {
+        return newUser(USERNAME, "email@gmail.com");
+    }
+
+    private User newUser(final String username, final String email) {
         final UserRegistrationCommand command = UserRegistrationCommand.builder()
-                .username(USERNAME)
-                .email("email@gmail.com")
+                .username(username)
+                .email(email)
                 .password("password")
                 .role(RoleDTO.ROLE_STUDENT)
                 .build();
