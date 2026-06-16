@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.educational.platform.course.enrollments.CourseEnrollment;
 import com.educational.platform.course.enrollments.CourseEnrollmentRepository;
@@ -108,6 +109,20 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void update_modifiedStudent_versionIncremented() {
+		// given
+		final Student student = entityManager.persistFlushFind(new Student(new CreateStudentCommand("username")));
+		assertThat(student).hasFieldOrPropertyWithValue("version", 0);
+
+		// when (no domain setter exists, so dirty the managed field directly)
+		ReflectionTestUtils.setField(student, "username", "renamed");
+		entityManager.flush();
+
+		// then
+		assertThat(student).hasFieldOrPropertyWithValue("version", 1);
+	}
+
+	@Test
 	void save_staleStudent_concurrentlyUpdated_optimisticLockingFailure() {
 		// given a persisted student and a stale snapshot of it
 		final Integer id = entityManager
@@ -137,6 +152,21 @@ public class OptimisticLockingTest {
 
 		// then
 		assertThat(saved).hasFieldOrPropertyWithValue("version", 0);
+	}
+
+	@Test
+	void update_modifiedEnrollCourse_versionIncremented() {
+		// given
+		final EnrollCourse course = entityManager
+				.persistFlushFind(new EnrollCourse(new CreateCourseCommand(UUID.randomUUID())));
+		assertThat(course).hasFieldOrPropertyWithValue("version", 0);
+
+		// when (no domain setter exists, so dirty the managed field directly)
+		ReflectionTestUtils.setField(course, "uuid", UUID.randomUUID());
+		entityManager.flush();
+
+		// then
+		assertThat(course).hasFieldOrPropertyWithValue("version", 1);
 	}
 
 	@Test
