@@ -213,6 +213,26 @@ class UserVersionColumnMigrationTest {
     }
 
     @Test
+    void migration_updatingVersionToNull_violatesNotNullConstraint() throws Exception {
+        givenLegacyCustomUserTable();
+        insertUserWithoutVersion("legacy");
+        runUsersChangelog();
+
+        // the NOT NULL constraint must hold on every write path, not only INSERT
+        // (migration_insertingNullVersion_violatesNotNullConstraint covers INSERT): a JPA-managed @Version is
+        // always present, so the optimistic-lock column must never be nullable out from under an UPDATE either.
+        assertThatExceptionOfType(SQLException.class).isThrownBy(() -> {
+            try (Connection connection = openConnection();
+                 PreparedStatement statement = connection.prepareStatement(
+                         "UPDATE custom_user SET version = ? WHERE username = ?")) {
+                statement.setNull(1, Types.BIGINT);
+                statement.setString(2, "legacy");
+                statement.executeUpdate();
+            }
+        });
+    }
+
+    @Test
     void migration_recordsVersionChangeSetExactlyOnce() throws Exception {
         givenLegacyCustomUserTable();
 
@@ -274,6 +294,20 @@ class UserVersionColumnMigrationTest {
         setVersion("legacy", beyondIntegerRange);
 
         assertThat(versionOf("legacy")).isEqualTo(beyondIntegerRange);
+    }
+
+    @Test
+    void migration_versionColumn_storesLongMaxValue() throws Exception {
+        givenLegacyCustomUserTable();
+        insertUserWithoutVersion("legacy");
+        runUsersChangelog();
+
+        // storesValuesBeyondIntegerRange pins one step past Integer.MAX_VALUE; this pins the true upper bound of
+        // the BIGINT backing column - Long.MAX_VALUE round-trips intact, proving the full 64-bit range the
+        // version column is intentionally sized for (the @Version field being Integer is a deliberate decoupling).
+        setVersion("legacy", Long.MAX_VALUE);
+
+        assertThat(versionOf("legacy")).isEqualTo(Long.MAX_VALUE);
     }
 
     @Test

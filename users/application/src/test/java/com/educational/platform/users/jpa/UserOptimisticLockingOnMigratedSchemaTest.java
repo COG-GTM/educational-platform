@@ -629,6 +629,24 @@ class UserOptimisticLockingOnMigratedSchemaTest {
         assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(1L);
     }
 
+    @Test
+    void writes_advanceEachUsersVersionIndependently_onMigratedSchema() {
+        // given two independently persisted users on the migrated BIGINT column, each starting at version 0
+        repository.saveAndFlush(newUser());
+        repository.saveAndFlush(newUser("other", "other@gmail.com"));
+
+        // when the first user is written twice and the second once, in separate write cycles
+        forceIncrementVersionOf(USERNAME);
+        forceIncrementVersionOf(USERNAME);
+        forceIncrementVersionOf("other");
+
+        // then each row carries its own independent counter (2 and 1) on the production schema, proving @Version is
+        // per-row rather than a shared/global sequence even against the migration-owned BIGINT column. The
+        // production-schema counterpart to UserOptimisticLockingTest.writes_advanceEachUsersVersionIndependently.
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(2L);
+        assertThat(((Number) versionOf("other")).longValue()).isEqualTo(1L);
+    }
+
     private int idOf(final String username) {
         return ((Number) entityManager
                 .createNativeQuery("SELECT id FROM custom_user WHERE username = :username")
@@ -637,8 +655,12 @@ class UserOptimisticLockingOnMigratedSchemaTest {
     }
 
     private void forceIncrementVersion() {
+        forceIncrementVersionOf(USERNAME);
+    }
+
+    private void forceIncrementVersionOf(final String username) {
         entityManager.clear();
-        final User loaded = repository.findByUsername(USERNAME).orElseThrow();
+        final User loaded = repository.findByUsername(username).orElseThrow();
         entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
         repository.flush();
     }

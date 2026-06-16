@@ -659,6 +659,24 @@ public class UserOptimisticLockingTest {
         assertThat(reloaded).hasFieldOrPropertyWithValue("version", Integer.MAX_VALUE);
     }
 
+    @Test
+    void writes_advanceEachUsersVersionIndependently() {
+        // given two independently persisted users, each starting at version 0
+        repository.saveAndFlush(newUser());
+        repository.saveAndFlush(newUser("other", "other@gmail.com"));
+
+        // when the first user is written twice and the second once, in separate write cycles
+        forceIncrementVersionOf(USERNAME);
+        forceIncrementVersionOf(USERNAME);
+        forceIncrementVersionOf("other");
+
+        // then each row carries its own independent counter (2 and 1), proving @Version is per-row rather than a
+        // shared/global sequence. write_oneUser_leavesOtherUsersVersionUnchanged only ever advances a single row
+        // (the other staying at 0); this pins two rows held at *different* non-zero versions simultaneously.
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(2L);
+        assertThat(((Number) versionOf("other")).longValue()).isEqualTo(1L);
+    }
+
     private int idOf(final String username) {
         return ((Number) entityManager
                 .createNativeQuery("SELECT id FROM custom_user WHERE username = :username")
@@ -667,8 +685,12 @@ public class UserOptimisticLockingTest {
     }
 
     private void forceIncrementVersion() {
+        forceIncrementVersionOf(USERNAME);
+    }
+
+    private void forceIncrementVersionOf(final String username) {
         entityManager.clear();
-        final User loaded = repository.findByUsername(USERNAME).orElseThrow();
+        final User loaded = repository.findByUsername(username).orElseThrow();
         entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
         repository.flush();
     }
