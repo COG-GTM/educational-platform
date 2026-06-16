@@ -52,4 +52,58 @@ public class CourseProposalApiTest {
                 .statusCode(HttpStatus.NO_CONTENT.value());
     }
 
+    @Test
+    void approve_courseProposalApprovedTwice_secondRequestConflict() {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // the seeded row carries no version, so the first approve relies on the @Column DB default
+        // to load version 0, mutate, and persist version 1 against the Hibernate-managed schema
+        given()
+                .contentType(ContentType.JSON)
+
+                .when()
+                .put("/administration/course-proposals/{uuid}/approval-status", uuid.toString())
+
+                .then()
+                .statusCode(HttpStatus.NO_CONTENT.value());
+
+        // re-approving reloads the now-versioned (and APPROVED) aggregate and the domain guard maps to 409,
+        // proving the new @Version column does not break the existing conflict contract end to end
+        given()
+                .contentType(ContentType.JSON)
+
+                .when()
+                .put("/administration/course-proposals/{uuid}/approval-status", uuid.toString())
+
+                .then()
+                .statusCode(HttpStatus.CONFLICT.value());
+    }
+
+    @Test
+    void decline_courseProposalDeclinedTwice_secondRequestConflict() {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // the seeded row carries no version, so the first decline relies on the @Column DB default
+        // to load version 0, mutate, and persist version 1 against the Hibernate-managed schema
+        given()
+                .contentType(ContentType.JSON)
+
+                .when()
+                .delete("/administration/course-proposals/{uuid}/approval-status", uuid.toString())
+
+                .then()
+                .statusCode(HttpStatus.NO_CONTENT.value());
+
+        // re-declining reloads the now-versioned (and DECLINED) aggregate and the domain guard maps to 409,
+        // proving the new @Version column does not break the existing conflict contract end to end
+        given()
+                .contentType(ContentType.JSON)
+
+                .when()
+                .delete("/administration/course-proposals/{uuid}/approval-status", uuid.toString())
+
+                .then()
+                .statusCode(HttpStatus.CONFLICT.value());
+    }
+
 }
