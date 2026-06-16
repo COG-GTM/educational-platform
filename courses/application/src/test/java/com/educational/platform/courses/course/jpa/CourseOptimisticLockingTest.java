@@ -2,6 +2,7 @@ package com.educational.platform.courses.course.jpa;
 
 import com.educational.platform.courses.course.Course;
 import com.educational.platform.courses.course.CourseRepository;
+import com.educational.platform.courses.course.CurriculumItem;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
 import com.educational.platform.courses.teacher.Teacher;
 import com.educational.platform.courses.teacher.TeacherRepository;
@@ -102,6 +103,33 @@ class CourseOptimisticLockingTest {
         // then
         assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
                 .isThrownBy(() -> courseRepository.saveAndFlush(stale));
+    }
+
+    @Test
+    void update_persistedTeacher_versionIncremented() {
+        // given
+        final Teacher teacher = teacherRepository.saveAndFlush(new Teacher(new CreateTeacherCommand(TEACHER)));
+        final Integer id = teacher.getId();
+        entityManager.clear();
+
+        // when - a dirty update is flushed
+        final Teacher loaded = teacherRepository.findById(id).orElseThrow();
+        ReflectionTestUtils.setField(loaded, "username", "renamed");
+        teacherRepository.saveAndFlush(loaded);
+
+        // then
+        assertThat(ReflectionTestUtils.getField(loaded, "version")).isEqualTo(1);
+    }
+
+    @Test
+    void curriculumItem_isMappedWithOptimisticLockVersion() {
+        // asserts the persistence provider recognises an optimistic-lock version attribute on the entity
+        final boolean hasVersion = entityManager.getEntityManager()
+                .getMetamodel()
+                .entity(CurriculumItem.class)
+                .hasVersionAttribute();
+
+        assertThat(hasVersion).isTrue();
     }
 
     private Teacher persistTeacher() {
