@@ -338,6 +338,33 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void save_staleUserThroughRepository_failureIdentifiesConflictingUserAndId() {
+        // given a user detached at version 0, with its primary key captured up front for the assertion below
+        repository.saveAndFlush(newUser());
+        final int id = idOf(USERNAME);
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.detach(stale);
+
+        // simulate a concurrent transaction that updated the row and bumped its version
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back through the Spring Data merge path
+        // then the translated failure does not merely signal that *a* conflict happened: it names the conflicting
+        // aggregate and its identifier - the information a caller needs to report which User lost the race.
+        // save_staleUserThroughRepository_throwsObjectOptimisticLockingFailureException pins only the exception
+        // type; this pins the identity payload Spring carries over from Hibernate's StaleObjectStateException.
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> repository.saveAndFlush(stale))
+                .satisfies(thrown -> {
+                    assertThat(thrown.getPersistentClassName()).isEqualTo(User.class.getName());
+                    assertThat(thrown.getIdentifier()).isEqualTo(id);
+                });
+    }
+
+    @Test
     void save_staleUserAfterRealJpaWrite_throwsObjectOptimisticLockingFailureException() {
         // given a user detached at version 0 (a request's view captured before a concurrent write)
         repository.saveAndFlush(newUser());
