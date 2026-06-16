@@ -964,6 +964,50 @@ public class OptimisticLockingMigratedSchemaTest {
 	}
 
 	@Test
+	void courseReview_updatedAgainstBigintColumn_linkedParentVersionsUnchanged() throws Exception {
+		// given - a course review wired to freshly created reviewer/reviewable_course FK parents on the migrated
+		// (BIGINT) schema, all at version 0. The parents are built inline (mirroring newCourseReviewForMigratedSchema)
+		// so their ids can be captured and re-read after the update.
+		final Integer reviewerId = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("cross-aggregate-reviewer-" + UUID.randomUUID()))).getId();
+		entityManager.getEntityManager()
+				.createNativeQuery("INSERT INTO reviewable_course (uuid) VALUES (?)")
+				.setParameter(1, UUID.randomUUID())
+				.executeUpdate();
+		final Number reviewableCourseId = (Number) entityManager.getEntityManager()
+				.createNativeQuery("SELECT MAX(id) FROM reviewable_course")
+				.getSingleResult();
+		final Constructor<CourseReview> constructor = CourseReview.class
+				.getDeclaredConstructor(ReviewCourseCommand.class, Integer.class, Integer.class);
+		constructor.setAccessible(true);
+		final CourseReview review = constructor.newInstance(
+				new ReviewCourseCommand(UUID.randomUUID(), 4.0, "comment"), reviewableCourseId.intValue(), reviewerId);
+		final UUID uuid = review.toIdentifier();
+		courseReviewRepository.saveAndFlush(review);
+		entityManager.clear();
+
+		// when - only the course review is updated
+		final CourseReview reloaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		reloaded.update(new UpdateCourseReviewCommand(uuid, 5.0, "updated comment"));
+		courseReviewRepository.saveAndFlush(reloaded);
+		entityManager.clear();
+
+		// then - the BIGINT version bump is isolated to the course_review aggregate; the referenced reviewer and
+		// reviewable_course rows are separate aggregates linked only by FK id, so their versions stay 0 on the
+		// production-shaped schema. (reviewable_course is read via native SQL because its entity maps
+		// original_course_id while the migrated table exposes uuid, as documented on newCourseReviewForMigratedSchema.)
+		final CourseReview afterReload = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		final Reviewer reloadedReviewer = reviewerRepository.findById(reviewerId).orElseThrow();
+		final Number reviewableCourseVersion = (Number) entityManager.getEntityManager()
+				.createNativeQuery("SELECT version FROM reviewable_course WHERE id = ?")
+				.setParameter(1, reviewableCourseId.intValue())
+				.getSingleResult();
+		assertThat(ReflectionTestUtils.getField(afterReload, "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(reloadedReviewer, "version")).isEqualTo(0);
+		assertThat(reviewableCourseVersion.longValue()).isZero();
+	}
+
+	@Test
 	void courseReview_concurrentUpdateAfterWinnerAdvancedMultipleVersionsAgainstBigintColumn_throwsOptimisticLockingFailure() throws Exception {
 		// given - a stale instance captured at version 0 on the migrated schema
 		final CourseReview seed = newCourseReviewForMigratedSchema(4.0, "comment");

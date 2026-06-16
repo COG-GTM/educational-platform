@@ -497,6 +497,32 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void courseReview_updated_linkedReviewerAndReviewableCourseVersionsUnchanged() {
+		// given - the seeded review at version 0 together with the reviewer and reviewable_course rows it
+		// references by FK id (not by a JPA association), all seeded at version 0
+		final Integer reviewerId = reviewerRepository.findByUsername("reviewer").getId();
+		final Integer reviewableCourseId = reviewableCourseRepository.findByOriginalCourseId(COURSE_UUID).orElseThrow().getId();
+		entityManager.clear();
+
+		// when - only the course review is updated
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "updated comment"));
+		courseReviewRepository.saveAndFlush(review);
+		entityManager.clear();
+
+		// then - the version bump is isolated to the course_review aggregate. The reviewer and reviewable_course
+		// are separate aggregates linked only by FK id (there is no JPA cascade), so updating the review must not
+		// touch their rows or bump their independent versions. The existing isolation test only covers sibling
+		// course_review rows, leaving cross-aggregate independence between the three new @Version columns unproven.
+		final CourseReview reloadedReview = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		final Reviewer reloadedReviewer = reviewerRepository.findById(reviewerId).orElseThrow();
+		final ReviewableCourse reloadedCourse = reviewableCourseRepository.findById(reviewableCourseId).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloadedReview, "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(reloadedReviewer, "version")).isEqualTo(0);
+		assertThat(ReflectionTestUtils.getField(reloadedCourse, "version")).isEqualTo(0);
+	}
+
+	@Test
 	void courseReview_staleUpdateAfterConcurrentDelete_throwsOptimisticLockingFailure() {
 		// given - two instances reading the same row at version 0
 		final CourseReview stale = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
@@ -915,6 +941,26 @@ public class OptimisticLockingTest {
 		final Reviewer reloadedSecond = reviewerRepository.findById(secondId).orElseThrow();
 		assertThat(ReflectionTestUtils.getField(reloadedFirst, "version")).isEqualTo(1);
 		assertThat(ReflectionTestUtils.getField(reloadedSecond, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void reviewer_updated_linkedCourseReviewVersionUnchanged() {
+		// given - the seeded reviewer at version 0 and the course_review that references it by FK id
+		final Integer reviewerId = reviewerRepository.findByUsername("reviewer").getId();
+		entityManager.clear();
+
+		// when - only the reviewer is updated
+		final Reviewer reviewer = reviewerRepository.findById(reviewerId).orElseThrow();
+		ReflectionTestUtils.setField(reviewer, "username", "reviewer-renamed");
+		reviewerRepository.saveAndFlush(reviewer);
+		entityManager.clear();
+
+		// then - the reviewer's version bumps but the review that references it (a separate aggregate) stays at
+		// version 0, confirming the parent update does not cascade a version bump onto the referencing course_review
+		final Reviewer reloadedReviewer = reviewerRepository.findById(reviewerId).orElseThrow();
+		final CourseReview reloadedReview = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloadedReviewer, "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(reloadedReview, "version")).isEqualTo(0);
 	}
 
 	@Test
@@ -1405,6 +1451,26 @@ public class OptimisticLockingTest {
 		final ReviewableCourse reloadedSecond = reviewableCourseRepository.findById(secondId).orElseThrow();
 		assertThat(ReflectionTestUtils.getField(reloadedFirst, "version")).isEqualTo(1);
 		assertThat(ReflectionTestUtils.getField(reloadedSecond, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void reviewableCourse_updated_linkedCourseReviewVersionUnchanged() {
+		// given - the seeded reviewable_course at version 0 and the course_review that references it by FK id
+		final Integer reviewableCourseId = reviewableCourseRepository.findByOriginalCourseId(COURSE_UUID).orElseThrow().getId();
+		entityManager.clear();
+
+		// when - only the reviewable_course is updated
+		final ReviewableCourse course = reviewableCourseRepository.findById(reviewableCourseId).orElseThrow();
+		ReflectionTestUtils.setField(course, "originalCourseId", UUID.randomUUID());
+		reviewableCourseRepository.saveAndFlush(course);
+		entityManager.clear();
+
+		// then - the reviewable_course version bumps but the review that references it (a separate aggregate)
+		// stays at version 0, confirming the parent update does not cascade a version bump onto the course_review
+		final ReviewableCourse reloadedCourse = reviewableCourseRepository.findById(reviewableCourseId).orElseThrow();
+		final CourseReview reloadedReview = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloadedCourse, "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(reloadedReview, "version")).isEqualTo(0);
 	}
 
 	@Test
