@@ -135,6 +135,35 @@ class UserVersionColumnMigrationTest {
     }
 
     @Test
+    void migration_preservesExistingRowDataWhileBackfillingVersion() throws Exception {
+        givenLegacyCustomUserTable();
+        insertUserWithoutVersion("legacy");
+
+        runUsersChangelog();
+
+        // the additive migration backfills the version without disturbing the other columns of an existing row
+        assertThat(versionOf("legacy")).isZero();
+        assertThat(stringColumnOf("legacy", "email")).isEqualTo("legacy@gmail.com");
+        assertThat(stringColumnOf("legacy", "password")).isEqualTo("password");
+        assertThat(stringColumnOf("legacy", "role")).isEqualTo("ROLE_STUDENT");
+    }
+
+    @Test
+    void migration_reRun_doesNotResetAdvancedVersionValues() throws Exception {
+        givenLegacyCustomUserTable();
+        insertUserWithoutVersion("legacy");
+        runUsersChangelog();
+
+        // a live row whose version has since advanced past the default
+        setVersion("legacy", 5L);
+
+        // re-running the changelog must not re-apply the changeSet and clobber the live version
+        runUsersChangelog();
+
+        assertThat(versionOf("legacy")).isEqualTo(5L);
+    }
+
+    @Test
     void migration_insertingNullVersion_violatesNotNullConstraint() throws Exception {
         givenLegacyCustomUserTable();
         runUsersChangelog();
@@ -184,6 +213,28 @@ class UserVersionColumnMigrationTest {
             statement.setString(3, "password");
             statement.setString(4, "ROLE_STUDENT");
             statement.executeUpdate();
+        }
+    }
+
+    private void setVersion(final String username, final long value) throws SQLException {
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "UPDATE custom_user SET version = ? WHERE username = ?")) {
+            statement.setLong(1, value);
+            statement.setString(2, username);
+            statement.executeUpdate();
+        }
+    }
+
+    private String stringColumnOf(final String username, final String column) throws SQLException {
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT " + column + " FROM custom_user WHERE username = ?")) {
+            statement.setString(1, username);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).as("a row exists for %s", username).isTrue();
+                return resultSet.getString(column);
+            }
         }
     }
 
