@@ -92,6 +92,31 @@ public class UpdateCourseReviewCommandHandlerTest {
     }
 
     @Test
+    void handle_concurrentModificationOnSave_versionSpecificFailureSubtypePropagatedUnchanged() {
+        // given - the same lost optimistic-lock race as handle_concurrentModificationOnSave_optimisticLockingFailurePropagated.
+        // That test only asserts the generic OptimisticLockingFailureException supertype, so a handler that caught the
+        // conflict and rethrew a plain data-access failure would still pass it. This pins that the version-specific
+        // ObjectOptimisticLockingFailureException reaches the caller unchanged, still naming the conflicting entity and
+        // row, so a version conflict can be told apart from other failures (e.g. mapped to HTTP 409).
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, "updated comment");
+        when(courseReviewRepository.save(any(CourseReview.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(CourseReview.class, uuid));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - the exact version-specific subtype propagates, still identifying the conflicting CourseReview row
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(handle)
+                .satisfies(ex -> {
+                    assertThat(ex.getPersistentClassName()).isEqualTo(CourseReview.class.getName());
+                    assertThat(ex.getIdentifier()).isEqualTo(uuid);
+                });
+        verify(courseReviewRepository).save(any(CourseReview.class));
+    }
+
+    @Test
     void handle_invalidId_resourceNotFoundException() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
