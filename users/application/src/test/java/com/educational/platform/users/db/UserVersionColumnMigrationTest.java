@@ -18,6 +18,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -295,6 +297,58 @@ class UserVersionColumnMigrationTest {
         // default kicks in when the column is absent, this pins it stays out of the way when the column is given,
         // which is exactly what an INSERT carrying a JPA-managed @Version relies on.
         assertThat(versionOf("explicit")).isEqualTo(7L);
+    }
+
+    @Test
+    void migration_freshInstall_recordsBothChangeSetsExactlyOnce() throws Exception {
+        // given no pre-existing table: both the original createTable changeSet and the new addColumn
+        // changeSet run end to end (recordsVersionChangeSetExactlyOnce only exercises the legacy/upgrade path,
+        // where createTable is MARK_RAN rather than executed)
+        runUsersChangelog();
+        // a second run must not re-record either changeSet
+        runUsersChangelog();
+
+        // then the changelog is fully recorded and idempotent: each changeSet identity appears exactly once
+        assertThat(changeSetExecutionCount("2021_06_25-1", "antonliauchuk")).isEqualTo(1);
+        assertThat(changeSetExecutionCount("add-version-column-to-custom_user", "devin")).isEqualTo(1);
+    }
+
+    @Test
+    void migration_rollback_leavesOriginalCreateTableChangeSetRecorded() throws Exception {
+        givenLegacyCustomUserTable();
+        runUsersChangelog();
+
+        // when a single changeSet is rolled back
+        rollbackUsersChangelog(1);
+
+        // then the rollback is scoped to exactly the version changeSet: its record is removed while the
+        // pre-existing createTable changeSet record (MARK_RAN on the legacy path) is left in place, proving
+        // rollback(1) does not cascade into earlier migrations
+        assertThat(changeSetExecutionCount("add-version-column-to-custom_user", "devin")).isZero();
+        assertThat(changeSetExecutionCount("2021_06_25-1", "antonliauchuk")).isEqualTo(1);
+    }
+
+    @Test
+    void migration_freshInstall_producesExactlyTheExpectedColumns() throws Exception {
+        // given no pre-existing table: createTable + addColumn run together, defining the full schema
+        runUsersChangelog();
+
+        // then the changeSet is purely additive at the schema level: custom_user carries exactly the original
+        // four business columns plus the primary key and the single new version column - nothing was dropped,
+        // renamed, or added beyond version (the behavioural complement to isPurelyAdditive_leavesPreExistingColumnsNotNull)
+        assertThat(customUserColumnNames())
+                .containsExactlyInAnyOrder("ID", "USERNAME", "EMAIL", "PASSWORD", "ROLE", "VERSION");
+    }
+
+    private List<String> customUserColumnNames() throws SQLException {
+        final List<String> names = new ArrayList<>();
+        try (Connection connection = openConnection();
+             ResultSet columns = connection.getMetaData().getColumns(null, null, "CUSTOM_USER", null)) {
+            while (columns.next()) {
+                names.add(columns.getString("COLUMN_NAME"));
+            }
+        }
+        return names;
     }
 
     private boolean columnIsNotNullable(final String column) throws SQLException {

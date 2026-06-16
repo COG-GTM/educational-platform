@@ -60,6 +60,18 @@ class UserVersionMappingTest {
     }
 
     @Test
+    void entityUser_versionField_isPrivate() throws NoSuchFieldException {
+        // the no-accessor/mutator check below rules out methods, but a non-private field would still leak the
+        // optimistic-locking version onto callers via direct field access. Pin that the version is fully
+        // encapsulated - owned by JPA, reachable by no one through the public API.
+        final Field version = User.class.getDeclaredField("version");
+
+        assertThat(Modifier.isPrivate(version.getModifiers()))
+                .as("@Version field must be private")
+                .isTrue();
+    }
+
+    @Test
     void entityUser_doesNotExposeVersionAccessorOrMutator() {
         // the PR's design rests on User having no field mutators - the version is owned by JPA and the
         // only domain write path is the constructor. Enforce that the optimistic-locking version can be

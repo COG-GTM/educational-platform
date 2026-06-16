@@ -519,6 +519,30 @@ public class UserOptimisticLockingTest {
                 });
     }
 
+    @Test
+    void save_staleUserLoadedById_throughRepository_throwsObjectOptimisticLockingFailureException() {
+        // given a user loaded by primary key and detached at version 0 - the exact read/write shape of a
+        // request flow (load the aggregate via the JpaRepository by id, then write back through repository.save).
+        // The merge-path stale tests above all load via findByUsername, and the only findById stale test drives
+        // the raw EntityManager; this pins the findById + Spring Data merge combination.
+        repository.saveAndFlush(newUser());
+        final int id = idOf(USERNAME);
+        entityManager.clear();
+        final User stale = repository.findById(id).orElseThrow();
+        entityManager.detach(stale);
+
+        // simulate a concurrent transaction that updated the row and bumped its version
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back through the Spring Data merge path
+        // then optimistic locking is bound to the row, not the finder: the conflict surfaces as Spring's
+        // translated exception just as for a findByUsername-loaded entity, never a silent overwrite
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> repository.saveAndFlush(stale));
+    }
+
     private int idOf(final String username) {
         return ((Number) entityManager
                 .createNativeQuery("SELECT id FROM custom_user WHERE username = :username")
