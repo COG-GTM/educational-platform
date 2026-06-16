@@ -1507,4 +1507,57 @@ public class OptimisticLockingTest {
 		entityManager.clear();
 		assertThat(reviewableCourseRepository.findById(id)).isEmpty();
 	}
+
+	// --- Seed fixture (course_review.sql) -----------------------------------
+
+	@Test
+	void seededFixtureRows_versionInitializedToZero() {
+		// when - the three rows the course_review.sql fixture inserts are read back through the public
+		// repositories. The fixture was changed in this PR to seed version = 0 on all three tables.
+		final CourseReview seededReview = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		final Reviewer seededReviewer = reviewerRepository.findByUsername("reviewer");
+		final ReviewableCourse seededCourse = reviewableCourseRepository.findByOriginalCourseId(COURSE_UUID).orElseThrow();
+
+		// then - every seeded row starts at version 0. Other tests assert this for the seeded course_review,
+		// but the seeded reviewer and reviewable_course versions (added by this PR's fixture edit) were never
+		// asserted; a missing version on either seed column would resurface the null-version NPE the edit fixes.
+		assertThat(ReflectionTestUtils.getField(seededReview, "version")).isEqualTo(0);
+		assertThat(ReflectionTestUtils.getField(seededReviewer, "version")).isEqualTo(0);
+		assertThat(ReflectionTestUtils.getField(seededCourse, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void reviewer_seededRowUpdated_versionIncrementsFromSeededZero() {
+		// given - the reviewer row inserted by the fixture (version seeded to 0, not by a JPA insert).
+		// The existing reviewer update test persists a fresh reviewer; this exercises the seeded row that
+		// the fixture edit targets - without the seeded version = 0 the update would increment a null version.
+		final Reviewer seeded = reviewerRepository.findByUsername("reviewer");
+		final Integer id = seeded.getId();
+
+		// when - the seeded reviewer is mutated and flushed
+		ReflectionTestUtils.setField(seeded, "username", "reviewer-renamed");
+		reviewerRepository.saveAndFlush(seeded);
+		entityManager.clear();
+
+		// then - the version increments cleanly from the seeded 0 to 1 instead of failing on a null version
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
+	}
+
+	@Test
+	void reviewableCourse_seededRowUpdated_versionIncrementsFromSeededZero() {
+		// given - the reviewable_course row inserted by the fixture (version seeded to 0). The existing
+		// reviewable_course update tests persist a fresh row; this exercises the seeded row the fixture targets.
+		final ReviewableCourse seeded = reviewableCourseRepository.findByOriginalCourseId(COURSE_UUID).orElseThrow();
+		final Integer id = seeded.getId();
+
+		// when - the seeded reviewable course is mutated and flushed
+		ReflectionTestUtils.setField(seeded, "originalCourseId", UUID.randomUUID());
+		reviewableCourseRepository.saveAndFlush(seeded);
+		entityManager.clear();
+
+		// then - the version increments cleanly from the seeded 0 to 1 instead of failing on a null version
+		final ReviewableCourse reloaded = reviewableCourseRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
+	}
 }

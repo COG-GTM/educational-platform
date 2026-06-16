@@ -222,6 +222,34 @@ class CourseReviewsLiquibaseMigrationTest {
 		}
 	}
 
+	@Test
+	void migration_versionColumnAddedToCourseReviewWithMultipleExistingRows_backfillsEveryRowToZero() throws Exception {
+		// given - several course_review rows already present before the version column exists. This is the
+		// headline FK-constrained aggregate, not the trivial reviewer table: the backfill-every-row case was
+		// only proven for reviewer, so the production upgrade of an already-populated course_review table -
+		// the table whose updates @Version is actually meant to guard - was left unverified for multiple rows.
+		try (PartialMigration migration = applyBaseSchemaOnly()) {
+			final JdbcTemplate jdbc = migration.jdbcTemplate();
+			jdbc.update("INSERT INTO reviewer (username) VALUES ('multi-row-reviewer')");
+			jdbc.update("INSERT INTO reviewable_course (uuid) VALUES (?)", UUID.randomUUID());
+			for (int rating = 1; rating <= 3; rating++) {
+				jdbc.update("INSERT INTO course_review (uuid, reviewer, course, rating, comment) VALUES (?, "
+						+ "(SELECT id FROM reviewer WHERE username = 'multi-row-reviewer'), "
+						+ "(SELECT MAX(id) FROM reviewable_course), ?, 'comment')", UUID.randomUUID(), (double) rating);
+			}
+
+			// when - the version column is added to the populated, FK-constrained table
+			migration.liquibase().update(new Contexts(), new LabelExpression());
+
+			// then - every pre-existing review is backfilled to 0 (not just one), and the ratings survive,
+			// so the migration neither fails on a non-empty course_review table nor leaves any row with a
+			// null version Hibernate's @Version guard could not compare against
+			assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM course_review WHERE version = 0", Long.class)).isEqualTo(3L);
+			assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM course_review WHERE version IS NULL", Long.class)).isZero();
+			assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM course_review", Long.class)).isEqualTo(3L);
+		}
+	}
+
 	@ParameterizedTest
 	@ValueSource(strings = {"COURSE_REVIEW", "REVIEWABLE_COURSE"})
 	void migration_appliedTwice_versionColumnNotDuplicated(String table) throws Exception {
