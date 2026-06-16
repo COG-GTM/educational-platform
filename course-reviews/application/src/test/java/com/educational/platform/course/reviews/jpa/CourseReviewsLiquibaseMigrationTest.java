@@ -18,7 +18,14 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+import liquibase.Contexts;
+import liquibase.LabelExpression;
+import liquibase.Liquibase;
+import liquibase.database.Database;
+import liquibase.database.DatabaseFactory;
+import liquibase.database.jvm.JdbcConnection;
 import liquibase.integration.spring.SpringLiquibase;
+import liquibase.resource.ClassLoaderResourceAccessor;
 
 /**
  * Verifies the Liquibase changeSets in {@code db/course-reviews.yml} that back the new {@code @Version}
@@ -161,6 +168,60 @@ class CourseReviewsLiquibaseMigrationTest {
 		}
 	}
 
+	@Test
+	void migration_versionColumnAddedToTablesWithExistingRows_backfillsExistingRowsToZeroAndPreservesData() throws Exception {
+		// given - the base schema only (the five 2021_06_25-* changeSets), built before any version column
+		// exists. This reproduces the production upgrade path: the three tables already hold rows when the
+		// add-version-column-* changeSets run. Every other test in this class inserts *after* the column
+		// already exists, so the backfill of pre-existing rows - the actual deploy-time behaviour - was never
+		// exercised. If Liquibase added the NOT NULL column before populating the default, the migration would
+		// fail on any non-empty production table; this proves it does not.
+		try (PartialMigration migration = applyBaseSchemaOnly()) {
+			final JdbcTemplate jdbc = migration.jdbcTemplate();
+			assertVersionColumnAbsent(migration.dataSource(), "REVIEWER");
+
+			jdbc.update("INSERT INTO reviewer (username) VALUES ('pre-existing-reviewer')");
+			jdbc.update("INSERT INTO reviewable_course (uuid) VALUES (?)", UUID.randomUUID());
+			jdbc.update("INSERT INTO course_review (uuid, reviewer, course, rating, comment) VALUES (?, "
+					+ "(SELECT id FROM reviewer WHERE username = 'pre-existing-reviewer'), "
+					+ "(SELECT MAX(id) FROM reviewable_course), 4.0, 'great course')", UUID.randomUUID());
+
+			// when - the add-version-column-* changeSets are applied to the already-populated tables
+			migration.liquibase().update(new Contexts(), new LabelExpression());
+
+			// then - the NOT NULL version column is backfilled to its default (0) for every pre-existing row,
+			// so the migration neither fails on populated tables nor leaves a row with a null version that
+			// Hibernate's @Version guard could not compare against
+			assertThat(jdbc.queryForObject(
+					"SELECT version FROM reviewer WHERE username = 'pre-existing-reviewer'", Long.class)).isZero();
+			assertThat(jdbc.queryForObject("SELECT version FROM reviewable_course", Long.class)).isZero();
+			assertThat(jdbc.queryForObject("SELECT version FROM course_review", Long.class)).isZero();
+
+			// and - the existing business data survives the migration untouched
+			assertThat(jdbc.queryForObject("SELECT rating FROM course_review", Double.class)).isEqualTo(4.0);
+			assertThat(jdbc.queryForObject("SELECT comment FROM course_review", String.class)).isEqualTo("great course");
+		}
+	}
+
+	@Test
+	void migration_versionColumnAddedToTableWithMultipleExistingRows_backfillsEveryRowToZero() throws Exception {
+		// given - several rows already in reviewer before the version column exists
+		try (PartialMigration migration = applyBaseSchemaOnly()) {
+			final JdbcTemplate jdbc = migration.jdbcTemplate();
+			jdbc.update("INSERT INTO reviewer (username) VALUES ('reviewer-a')");
+			jdbc.update("INSERT INTO reviewer (username) VALUES ('reviewer-b')");
+			jdbc.update("INSERT INTO reviewer (username) VALUES ('reviewer-c')");
+
+			// when - the version column is added to the populated table
+			migration.liquibase().update(new Contexts(), new LabelExpression());
+
+			// then - every pre-existing row is backfilled to 0 (not just one), so the default applies to all
+			// historical data rather than to a single arbitrary row
+			assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM reviewer WHERE version = 0", Long.class)).isEqualTo(3L);
+			assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM reviewer WHERE version IS NULL", Long.class)).isZero();
+		}
+	}
+
 	@ParameterizedTest
 	@ValueSource(strings = {"COURSE_REVIEW", "REVIEWABLE_COURSE"})
 	void migration_appliedTwice_versionColumnNotDuplicated(String table) throws Exception {
@@ -180,6 +241,48 @@ class CourseReviewsLiquibaseMigrationTest {
 			assertThat(columns.next()).as("version column should still exist on %s after re-run", table).isTrue();
 			assertThat(columns.next()).as("re-running the changelog should not duplicate the version column on %s", table)
 					.isFalse();
+		}
+	}
+
+	// The five 2021_06_25-* changeSets that build the base schema, before the three add-version-column-*
+	// changeSets. Applying exactly these reproduces a production database as it looked before this PR; the
+	// assertVersionColumnAbsent guard fails loudly if a base changeSet is ever added and this count drifts.
+	private static final int BASE_SCHEMA_CHANGE_SET_COUNT = 5;
+
+	/**
+	 * Builds a fresh in-memory database with only the base course-reviews schema applied (no version columns
+	 * yet), leaving the returned {@link Liquibase} positioned to apply the remaining add-version-column-*
+	 * changeSets once test data has been inserted.
+	 */
+	private PartialMigration applyBaseSchemaOnly() throws Exception {
+		final DriverManagerDataSource ds = new DriverManagerDataSource(
+				"jdbc:h2:mem:course-reviews-existing-rows-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", "");
+		final Database database = DatabaseFactory.getInstance()
+				.findCorrectDatabaseImplementation(new JdbcConnection(ds.getConnection()));
+		final Liquibase liquibase = new Liquibase("db/course-reviews.yml", new ClassLoaderResourceAccessor(), database);
+		liquibase.update(BASE_SCHEMA_CHANGE_SET_COUNT, new Contexts(), new LabelExpression());
+		return new PartialMigration(ds, new JdbcTemplate(ds), liquibase);
+	}
+
+	private static void assertVersionColumnAbsent(DriverManagerDataSource dataSource, String table) throws Exception {
+		try (Connection connection = dataSource.getConnection();
+				ResultSet columns = connection.getMetaData().getColumns(null, null, table, "VERSION")) {
+			assertThat(columns.next())
+					.as("base schema should not yet have a version column on %s (guards the changeSet count)", table)
+					.isFalse();
+		}
+	}
+
+	private record PartialMigration(DriverManagerDataSource dataSource, JdbcTemplate jdbcTemplate, Liquibase liquibase)
+			implements AutoCloseable {
+		@Override
+		public void close() {
+			try {
+				liquibase.close();
+			} catch (Exception ignored) {
+				// best-effort cleanup of the Liquibase-held connection before the in-memory database is dropped
+			}
+			jdbcTemplate.execute("SHUTDOWN");
 		}
 	}
 }
