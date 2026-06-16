@@ -155,6 +155,24 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void staleUser_holdsOutdatedVersion_afterConcurrentModification() {
+        // given a persisted user loaded into the context at version 0
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+
+        // when a concurrent transaction advances the row's version to 1
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // then the in-context instance still reports the version it was loaded with while the row has moved on
+        // - precisely the divergence the next write must detect
+        assertThat(stale).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(1L);
+    }
+
+    @Test
     void update_afterReloadingConcurrentlyModifiedUser_succeeds() {
         // given a persisted user that a concurrent transaction has since modified (version 0 -> 1)
         repository.saveAndFlush(newUser());
@@ -206,6 +224,24 @@ public class UserOptimisticLockingTest {
         // then
         assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
                 .isThrownBy(repository::flush);
+    }
+
+    @Test
+    void delete_afterReloadingConcurrentlyModifiedUser_succeeds() {
+        // given a persisted user that a concurrent transaction has since modified (version 0 -> 1)
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the entity is re-read (picking up the current version) and then deleted
+        final User reloaded = repository.findByUsername(USERNAME).orElseThrow();
+        repository.delete(reloaded);
+        repository.flush();
+
+        // then the conflict is recoverable: deleting the up-to-date reload removes the row
+        assertThat(repository.findByUsername(USERNAME)).isEmpty();
     }
 
     private void forceIncrementVersion() {
