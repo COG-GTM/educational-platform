@@ -12,6 +12,7 @@ import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.educational.platform.course.enrollments.CompletionStatus;
 import com.educational.platform.course.enrollments.CourseEnrollment;
 import com.educational.platform.course.enrollments.CourseEnrollmentRepository;
 import com.educational.platform.course.enrollments.course.EnrollCourse;
@@ -128,6 +129,35 @@ public class OptimisticLockingTest {
 		secondWriter.complete();
 		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
 				.isThrownBy(() -> courseEnrollmentRepository.saveAndFlush(secondWriter));
+	}
+
+	@Test
+	void saveAndFlush_concurrentlyEditedCourseEnrollment_winningChangeSurvivesAndStaleWriteIsRejected() {
+		// given a persisted enrollment and a stale snapshot taken before any change
+		final Integer id = entityManager
+				.getId(entityManager.persistFlushFind(new CourseEnrollment(COURSE_ID, STUDENT_ID)), Integer.class);
+		entityManager.clear();
+		final CourseEnrollment stale = courseEnrollmentRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+
+		// when a concurrent writer completes the enrollment through the repository (version 0 -> 1)
+		final CourseEnrollment winner = courseEnrollmentRepository.findById(id).orElseThrow();
+		entityManager.detach(winner);
+		winner.complete();
+		courseEnrollmentRepository.saveAndFlush(winner);
+		entityManager.clear();
+
+		// then the winning change is durably persisted
+		final CourseEnrollment persisted = courseEnrollmentRepository.findById(id).orElseThrow();
+		assertThat(persisted).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.COMPLETED);
+		assertThat(persisted).hasFieldOrPropertyWithValue("student", STUDENT_ID);
+		assertThat(persisted).hasFieldOrPropertyWithValue("version", 1);
+		entityManager.clear();
+
+		// and the stale writer cannot silently overwrite it with a competing edit
+		ReflectionTestUtils.setField(stale, "student", STUDENT_ID + 1);
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> courseEnrollmentRepository.saveAndFlush(stale));
 	}
 
 	@Test
@@ -284,6 +314,34 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void saveAndFlush_concurrentlyEditedStudent_winningChangeSurvivesAndStaleWriteIsRejected() {
+		// given a persisted student and a stale snapshot taken before any change
+		final Integer id = entityManager
+				.getId(entityManager.persistFlushFind(new Student(new CreateStudentCommand("username"))), Integer.class);
+		entityManager.clear();
+		final Student stale = studentRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+
+		// when a concurrent writer renames the student through the repository (version 0 -> 1)
+		final Student winner = studentRepository.findById(id).orElseThrow();
+		entityManager.detach(winner);
+		ReflectionTestUtils.setField(winner, "username", "renamed-by-winner");
+		studentRepository.saveAndFlush(winner);
+		entityManager.clear();
+
+		// then the winning change is durably persisted
+		final Student persisted = studentRepository.findById(id).orElseThrow();
+		assertThat(persisted).hasFieldOrPropertyWithValue("username", "renamed-by-winner");
+		assertThat(persisted).hasFieldOrPropertyWithValue("version", 1);
+		entityManager.clear();
+
+		// and the stale writer cannot silently overwrite it with a competing edit
+		ReflectionTestUtils.setField(stale, "username", "renamed-by-loser");
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> studentRepository.saveAndFlush(stale));
+	}
+
+	@Test
 	void update_studentMultipleTimes_versionIncrementsMonotonically() {
 		// given
 		final Student student = entityManager.persistFlushFind(new Student(new CreateStudentCommand("username")));
@@ -436,6 +494,36 @@ public class OptimisticLockingTest {
 		ReflectionTestUtils.setField(secondWriter, "uuid", UUID.randomUUID());
 		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
 				.isThrownBy(() -> enrollCourseRepository.saveAndFlush(secondWriter));
+	}
+
+	@Test
+	void saveAndFlush_concurrentlyEditedEnrollCourse_winningChangeSurvivesAndStaleWriteIsRejected() {
+		// given a persisted course and a stale snapshot taken before any change
+		final UUID winningUuid = UUID.randomUUID();
+		final Integer id = entityManager
+				.getId(entityManager.persistFlushFind(new EnrollCourse(new CreateCourseCommand(UUID.randomUUID()))),
+						Integer.class);
+		entityManager.clear();
+		final EnrollCourse stale = enrollCourseRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+
+		// when a concurrent writer changes the course through the repository (version 0 -> 1)
+		final EnrollCourse winner = enrollCourseRepository.findById(id).orElseThrow();
+		entityManager.detach(winner);
+		ReflectionTestUtils.setField(winner, "uuid", winningUuid);
+		enrollCourseRepository.saveAndFlush(winner);
+		entityManager.clear();
+
+		// then the winning change is durably persisted
+		final EnrollCourse persisted = enrollCourseRepository.findById(id).orElseThrow();
+		assertThat(persisted).hasFieldOrPropertyWithValue("uuid", winningUuid);
+		assertThat(persisted).hasFieldOrPropertyWithValue("version", 1);
+		entityManager.clear();
+
+		// and the stale writer cannot silently overwrite it with a competing edit
+		ReflectionTestUtils.setField(stale, "uuid", UUID.randomUUID());
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> enrollCourseRepository.saveAndFlush(stale));
 	}
 
 	@Test
