@@ -197,6 +197,39 @@ public class UserPersistenceTest {
         assertThat(reloaded).hasFieldOrPropertyWithValue("version", 0);
     }
 
+    @Test
+    void findById_afterVersionIncrement_preservesProjectionsAtNonZeroVersion() {
+        // given a persisted user whose version has since been bumped to 1
+        repository.saveAndFlush(newUser());
+        final int id = idOf(USERNAME);
+        entityManager.clear();
+        final User loaded = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+        entityManager.clear();
+
+        // when the entity is read back through the primary-key finder at its incremented version
+        final User reloaded = repository.findById(id).orElseThrow();
+
+        // then the by-id read path keeps projecting correctly once the version is non-zero. findById is otherwise
+        // only pinned at version 0 (findById_afterPersist_preservesProjectionsAndAssignsVersionZero), while the
+        // after-increment cell is covered for the findByUsername projections (projections_afterVersionIncrement_areUnaffected)
+        // and for the derived existence query (existsByUsername_afterVersionIncrement_stillReportsTrue) but not for
+        // findById. This closes that cell: an advanced version never leaks into the by-id read projections.
+        final UserDTO dto = reloaded.toDTO();
+        assertThat(dto.username()).isEqualTo(USERNAME);
+        assertThat(dto.email()).isEqualTo(EMAIL);
+        assertThat(dto.role()).isEqualTo(RoleDTO.ROLE_STUDENT);
+
+        final UserDetails userDetails = reloaded.toUserDetails();
+        assertThat(userDetails.getUsername()).isEqualTo(USERNAME);
+        assertThat(passwordEncoder.matches(RAW_PASSWORD, userDetails.getPassword())).isTrue();
+        assertThat(userDetails.getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactly(Role.ROLE_STUDENT.getAuthority());
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 1);
+    }
+
     private int idOf(final String username) {
         return ((Number) entityManager
                 .createNativeQuery("SELECT id FROM custom_user WHERE username = :username")

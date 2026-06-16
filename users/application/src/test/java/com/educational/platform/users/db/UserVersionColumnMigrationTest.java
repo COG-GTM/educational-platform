@@ -408,6 +408,70 @@ class UserVersionColumnMigrationTest {
                 .containsExactlyInAnyOrder("ID", "USERNAME", "EMAIL", "PASSWORD", "ROLE", "VERSION");
     }
 
+    @Test
+    void migration_legacyUpgrade_producesExactlyTheExpectedColumns() throws Exception {
+        // given a pre-existing table carrying only the original primary key and four business columns
+        givenLegacyCustomUserTable();
+
+        // when the upgrade runs (createTable is MARK_RAN, so only the addColumn changeSet executes)
+        runUsersChangelog();
+
+        // then the upgrade is purely additive at the schema level: custom_user ends up with exactly its original
+        // columns plus the single new version column - nothing was dropped, renamed, or added beyond version. This is
+        // the legacy/upgrade counterpart to migration_freshInstall_producesExactlyTheExpectedColumns (which pins the
+        // same shape on the createTable path) and is stricter than isPurelyAdditive_leavesPreExistingColumnsNotNull,
+        // which only checks the four business columns stay NOT NULL without bounding the full column set.
+        assertThat(customUserColumnNames())
+                .containsExactlyInAnyOrder("ID", "USERNAME", "EMAIL", "PASSWORD", "ROLE", "VERSION");
+    }
+
+    @Test
+    void migration_freshInstall_rollback_dropsVersionColumnButPreservesCreatedTableAndChangeSetRecord() throws Exception {
+        // given a fresh install: createTable and addColumn both execute (createTable is genuinely run here, not
+        // MARK_RAN as on the legacy path), with a row inserted onto the new schema
+        runUsersChangelog();
+        insertUserWithoutVersion("fresh");
+
+        // when the version changeSet is rolled back
+        rollbackUsersChangelog(1);
+
+        // then rollback is scoped to exactly the additive version changeSet: the column and its changelog record
+        // disappear, while the genuinely-executed createTable changeSet record, its table and the row all survive.
+        // The legacy rollback tests (migration_rollback_removesVersionColumnButPreservesTableAndData,
+        // migration_rollback_leavesOriginalCreateTableChangeSetRecorded) only exercise the path where createTable is
+        // MARK_RAN; this is their fresh-install counterpart, where createTable was actually applied and must be left
+        // recorded so rollback(1) does not cascade into the table-creating migration.
+        assertThat(versionColumnExists()).as("version column is dropped on rollback").isFalse();
+        assertThat(changeSetExecutionCount("add-version-column-to-custom_user", "devin")).isZero();
+        assertThat(changeSetExecutionCount("2021_06_25-1", "antonliauchuk")).isEqualTo(1);
+        assertThat(stringColumnOf("fresh", "email")).isEqualTo("fresh@gmail.com");
+        assertThat(stringColumnOf("fresh", "role")).isEqualTo("ROLE_STUDENT");
+    }
+
+    @Test
+    void migration_freshInstall_rollbackThenReRun_reAddsVersionColumnAndBackfillsToZero() throws Exception {
+        // given a fresh install with a row, then the version changeSet rolled back
+        runUsersChangelog();
+        insertUserWithoutVersion("fresh");
+        rollbackUsersChangelog(1);
+
+        // when the changelog is re-applied after the rollback (a downgrade followed by a re-upgrade)
+        runUsersChangelog();
+
+        // then the migration is cleanly repeatable on the fresh-install path too: the column is restored as a
+        // NOT NULL BIGINT, recorded once, and the row that survived the rollback is backfilled to 0 by the column
+        // DEFAULT. This is the fresh-install counterpart to migration_rollbackThenReRun_reAddsVersionColumnAndBackfillsToZero,
+        // which only exercises the legacy/upgrade path where createTable is MARK_RAN.
+        try (Connection connection = openConnection();
+             ResultSet columns = connection.getMetaData().getColumns(null, null, "CUSTOM_USER", "VERSION")) {
+            assertThat(columns.next()).as("version column is re-added after rollback").isTrue();
+            assertThat(columns.getInt("DATA_TYPE")).isEqualTo(Types.BIGINT);
+            assertThat(columns.getString("IS_NULLABLE")).isEqualTo("NO");
+        }
+        assertThat(changeSetExecutionCount("add-version-column-to-custom_user", "devin")).isEqualTo(1);
+        assertThat(versionOf("fresh")).isZero();
+    }
+
     private List<String> customUserColumnNames() throws SQLException {
         final List<String> names = new ArrayList<>();
         try (Connection connection = openConnection();
