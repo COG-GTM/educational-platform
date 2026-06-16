@@ -112,5 +112,12 @@ class ApproveCourseProposalCommandHandlerTest {
         // then - the conflict surfaces to the caller and no downstream integration event is emitted
         assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class).isThrownBy(handle);
         verifyNoInteractions(eventPublisher);
+
+        // and - the failure happens at the persistence write of an already-approved aggregate,
+        // confirming it is the @Version check (not a domain guard) that rejects the concurrent edit
+        final ArgumentCaptor<CourseProposal> savedProposal = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository).save(savedProposal.capture());
+        assertThat(savedProposal.getValue())
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED);
     }
 }

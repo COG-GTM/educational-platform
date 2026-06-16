@@ -3,7 +3,13 @@ package com.educational.platform.administration.course.jpa;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
 import java.util.UUID;
+
+import javax.sql.DataSource;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +31,9 @@ public class CourseProposalRepositoryTest {
 
 	@Autowired
 	private TestEntityManager entityManager;
+
+	@Autowired
+	private DataSource dataSource;
 
 	@Test
 	void listCourseProposals_unpaged_courseProposals() {
@@ -251,6 +260,56 @@ public class CourseProposalRepositoryTest {
 		seeded.approve();
 		final CourseProposal updated = sut.saveAndFlush(seeded);
 		assertThat(updated)
+				.hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED)
+				.hasFieldOrPropertyWithValue("version", 1);
+	}
+
+	@Test
+	void schema_versionColumn_mappedToNonNullBigint() throws SQLException {
+		// given - the @Version Integer field is deliberately mapped to a BIGINT column via
+		// @Column(columnDefinition = "bigint default 0 not null"). This test pins that mapping so a
+		// later refactor cannot silently revert it to Hibernate's default (nullable INTEGER), which is
+		// exactly the regression that broke optimistic locking for raw-SQL-seeded rows.
+		try (Connection connection = dataSource.getConnection();
+				ResultSet columns = connection.getMetaData().getColumns(null, null, "COURSE_PROPOSAL", "VERSION")) {
+
+			// then
+			assertThat(columns.next()).as("version column exists on course_proposal").isTrue();
+			assertThat(columns.getInt("DATA_TYPE")).isEqualTo(Types.BIGINT);
+			assertThat(columns.getString("TYPE_NAME")).isEqualToIgnoringCase("BIGINT");
+			assertThat(columns.getString("IS_NULLABLE")).isEqualTo("NO");
+		}
+	}
+
+	@Test
+	void save_staleCourseProposal_failedWriteLeavesWinningStatePersisted() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final Integer id = persistFlushClear(uuid);
+
+		// two independent (detached) reads of the same proposal simulate concurrent admins
+		final CourseProposal firstRead = sut.findById(id).orElseThrow();
+		entityManager.detach(firstRead);
+		final CourseProposal secondRead = sut.findById(id).orElseThrow();
+		entityManager.detach(secondRead);
+
+		// the first admin approves and the write wins
+		firstRead.approve();
+		sut.saveAndFlush(firstRead);
+		entityManager.clear();
+
+		// when - the second admin's stale decline is rejected by the @Version check
+		secondRead.decline();
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> sut.saveAndFlush(secondRead));
+
+		// the failed flush leaves the persistence context unusable, so clear it before reloading
+		entityManager.clear();
+
+		// then - the persisted row still reflects the winning approve and was NOT silently overwritten
+		// by the rejected decline (the whole point of optimistic locking)
+		final CourseProposal reloaded = sut.findById(id).orElseThrow();
+		assertThat(reloaded)
 				.hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED)
 				.hasFieldOrPropertyWithValue("version", 1);
 	}
