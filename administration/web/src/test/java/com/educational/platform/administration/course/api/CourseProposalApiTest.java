@@ -111,6 +111,33 @@ public class CourseProposalApiTest {
     }
 
     @Test
+    void approve_thenDecline_existingCourseProposal_bothNoContent() {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        // the seeded row starts at version 0; approving loads it, mutates and persists version 1
+        given()
+                .contentType(ContentType.JSON)
+
+                .when()
+                .put("/administration/course-proposals/{uuid}/approval-status", uuid.toString())
+
+                .then()
+                .statusCode(HttpStatus.NO_CONTENT.value());
+
+        // declining the now-APPROVED (version 1) aggregate is a legitimate cross-operation transition:
+        // it reloads the versioned row, passes the optimistic-lock check and persists version 2, so the
+        // new @Version column must not block valid sequential edits across different operations
+        given()
+                .contentType(ContentType.JSON)
+
+                .when()
+                .delete("/administration/course-proposals/{uuid}/approval-status", uuid.toString())
+
+                .then()
+                .statusCode(HttpStatus.NO_CONTENT.value());
+    }
+
+    @Test
     void courseProposals_listing_doesNotExposeVersionField() {
         // the new @Version column is a persistence concern; the read API contract (CourseProposalDTO)
         // must keep exposing only uuid + status and must not leak the version field to API clients

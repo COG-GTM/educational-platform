@@ -7,6 +7,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.util.List;
 import java.util.UUID;
 
 import javax.sql.DataSource;
@@ -19,8 +20,10 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.educational.platform.administration.course.CourseProposal;
+import com.educational.platform.administration.course.CourseProposalDTO;
 import com.educational.platform.administration.course.CourseProposalRepository;
 import com.educational.platform.administration.course.CourseProposalStatus;
+import com.educational.platform.administration.course.CourseProposalStatusDTO;
 import com.educational.platform.administration.course.create.CreateCourseProposalCommand;
 
 @DataJpaTest
@@ -417,6 +420,50 @@ public class CourseProposalRepositoryTest {
 		assertThat(reloaded)
 				.hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED)
 				.hasFieldOrPropertyWithValue("version", 1);
+	}
+
+	@Test
+	void save_multipleProposals_versionsTrackedIndependentlyPerRow() {
+		// given - two distinct proposals are persisted; each owns its own optimistic-lock counter
+		final UUID firstUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final UUID secondUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+		final Integer firstId = persistFlushClear(firstUuid);
+		final Integer secondId = persistFlushClear(secondUuid);
+
+		// when - only the first proposal is modified and flushed
+		final CourseProposal first = sut.findById(firstId).orElseThrow();
+		first.approve();
+		sut.saveAndFlush(first);
+		entityManager.clear();
+
+		// then - the @Version is a per-row counter: only the mutated row advances, while the untouched
+		// row keeps its initial 0 (the version is not a shared/global sequence across aggregates)
+		assertThat(sut.findById(firstId).orElseThrow())
+				.hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED)
+				.hasFieldOrPropertyWithValue("version", 1);
+		assertThat(sut.findById(secondId).orElseThrow())
+				.hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL)
+				.hasFieldOrPropertyWithValue("version", 0);
+	}
+
+	@Test
+	void listCourseProposals_afterVersionBump_projectionExposesOnlyUuidAndStatus() {
+		// given - a proposal whose @Version has been bumped to 1 by a persisted update
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final Integer id = persistFlushClear(uuid);
+		final CourseProposal loaded = sut.findById(id).orElseThrow();
+		loaded.approve();
+		sut.saveAndFlush(loaded);
+		entityManager.clear();
+
+		// when - the read projection (select new CourseProposalDTO(cp.uuid, cp.status)) is queried
+		final List<CourseProposalDTO> result = sut.listCourseProposals();
+
+		// then - the projection still works once the version column exists and is non-zero, and it
+		// exposes only the read model (uuid + status); the optimistic-lock counter never leaks into it
+		assertThat(result)
+				.singleElement()
+				.isEqualTo(new CourseProposalDTO(uuid, CourseProposalStatusDTO.APPROVED));
 	}
 
 	@Test
