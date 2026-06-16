@@ -11,11 +11,13 @@ import java.util.UUID;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 
+import org.hibernate.StaleObjectStateException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -124,6 +126,34 @@ public class OptimisticLockingTest {
 		// then
 		assertThatExceptionOfType(OptimisticLockingFailureException.class)
 				.isThrownBy(() -> courseReviewRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void courseReview_concurrentUpdate_failureIdentifiesEntityAndIsRootedInStaleVersion() {
+		// given - two instances reading the same row at version 0
+		final CourseReview stale = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		final Object reviewId = ReflectionTestUtils.getField(stale, "id");
+		entityManager.detach(stale);
+		final CourseReview fresh = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+
+		// and - the first update wins, bumping the persisted version to 1
+		fresh.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "first wins"));
+		courseReviewRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// when - the stale instance (still version 0) tries to update
+		stale.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 1.0, "stale loses"));
+
+		// then - the failure is the version-specific subtype, names the conflicting entity and row, and
+		// is rooted in Hibernate's stale-version detection (the "OptimisticLockException" the PR promises),
+		// so callers can distinguish a version conflict from other data-access failures
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> courseReviewRepository.saveAndFlush(stale))
+				.satisfies(ex -> {
+					assertThat(ex.getPersistentClassName()).isEqualTo(CourseReview.class.getName());
+					assertThat(ex.getIdentifier()).isEqualTo(reviewId);
+				})
+				.withRootCauseInstanceOf(StaleObjectStateException.class);
 	}
 
 	@Test
@@ -480,6 +510,36 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void reviewer_concurrentUpdate_failureIdentifiesEntityAndIsRootedInStaleVersion() {
+		// given - two instances reading the same row at version 0
+		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
+		entityManager.clear();
+
+		final Reviewer stale = reviewerRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+		final Reviewer fresh = reviewerRepository.findById(id).orElseThrow();
+
+		// and - the first update wins, bumping the persisted version to 1
+		ReflectionTestUtils.setField(fresh, "username", "first-wins");
+		reviewerRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// when - the stale instance (still version 0) tries to update
+		ReflectionTestUtils.setField(stale, "username", "stale-loses");
+
+		// then - the failure is the version-specific subtype, names the conflicting entity and row, and
+		// is rooted in Hibernate's stale-version detection (the "OptimisticLockException" the PR promises),
+		// so callers can distinguish a version conflict from other data-access failures
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> reviewerRepository.saveAndFlush(stale))
+				.satisfies(ex -> {
+					assertThat(ex.getPersistentClassName()).isEqualTo(Reviewer.class.getName());
+					assertThat(ex.getIdentifier()).isEqualTo(id);
+				})
+				.withRootCauseInstanceOf(StaleObjectStateException.class);
+	}
+
+	@Test
 	void reviewer_concurrentUpdate_winnerChangesPersistedAndStaleRejected() {
 		// given - two instances reading the same row at version 0
 		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
@@ -805,6 +865,37 @@ public class OptimisticLockingTest {
 		// then
 		assertThatExceptionOfType(OptimisticLockingFailureException.class)
 				.isThrownBy(() -> reviewableCourseRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void reviewableCourse_concurrentUpdate_failureIdentifiesEntityAndIsRootedInStaleVersion() {
+		// given - two instances reading the same row at version 0
+		final Integer id = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		entityManager.clear();
+
+		final ReviewableCourse stale = reviewableCourseRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+		final ReviewableCourse fresh = reviewableCourseRepository.findById(id).orElseThrow();
+
+		// and - the first update wins, bumping the persisted version to 1
+		ReflectionTestUtils.setField(fresh, "originalCourseId", UUID.randomUUID());
+		reviewableCourseRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// when - the stale instance (still version 0) tries to update
+		ReflectionTestUtils.setField(stale, "originalCourseId", UUID.randomUUID());
+
+		// then - the failure is the version-specific subtype, names the conflicting entity and row, and
+		// is rooted in Hibernate's stale-version detection (the "OptimisticLockException" the PR promises),
+		// so callers can distinguish a version conflict from other data-access failures
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> reviewableCourseRepository.saveAndFlush(stale))
+				.satisfies(ex -> {
+					assertThat(ex.getPersistentClassName()).isEqualTo(ReviewableCourse.class.getName());
+					assertThat(ex.getIdentifier()).isEqualTo(id);
+				})
+				.withRootCauseInstanceOf(StaleObjectStateException.class);
 	}
 
 	@Test
