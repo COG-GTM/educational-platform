@@ -139,6 +139,23 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void courseReview_multipleSequentialUpdates_finalVersionPersistedToDatabase() {
+		// given - the seeded review is updated twice in the same transaction
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "first update"));
+		courseReviewRepository.saveAndFlush(review);
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 3.0, "second update"));
+		courseReviewRepository.saveAndFlush(review);
+
+		// when - the persistence context is cleared and the row reloaded from the database
+		entityManager.clear();
+		final CourseReview reloaded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+
+		// then - both increments were actually written: the persisted version is 2, not only the first bump
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
+	}
+
+	@Test
 	void courseReview_updated_versionPersistedToDatabase() {
 		// given - an update is flushed
 		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
@@ -432,6 +449,24 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void reviewer_updated_newUsernamePersistedToDatabase() {
+		// given - a persisted reviewer whose username is changed and flushed
+		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
+		entityManager.clear();
+		final Reviewer reviewer = reviewerRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(reviewer, "username", "opt-lock-reviewer-renamed");
+		reviewerRepository.saveAndFlush(reviewer);
+
+		// when - the persistence context is cleared and the row reloaded from the database
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+
+		// then - the update wrote the new field value alongside the version bump, not the version alone
+		assertThat(ReflectionTestUtils.getField(reloaded, "username")).isEqualTo("opt-lock-reviewer-renamed");
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
+	}
+
+	@Test
 	void reviewer_staleDelete_throwsOptimisticLockingFailure() {
 		// given - two instances reading the same row at version 0
 		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
@@ -649,6 +684,26 @@ public class OptimisticLockingTest {
 		final ReviewableCourse reloaded = reviewableCourseRepository.findById(id).orElseThrow();
 
 		// then - the incremented version was actually written to the version column
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
+	}
+
+	@Test
+	void reviewableCourse_updated_newOriginalCourseIdPersistedToDatabase() {
+		// given - a persisted reviewable course whose originalCourseId is changed and flushed
+		final UUID updatedCourseId = UUID.randomUUID();
+		final Integer id = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		entityManager.clear();
+		final ReviewableCourse course = reviewableCourseRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(course, "originalCourseId", updatedCourseId);
+		reviewableCourseRepository.saveAndFlush(course);
+
+		// when - the persistence context is cleared and the row reloaded from the database
+		entityManager.clear();
+		final ReviewableCourse reloaded = reviewableCourseRepository.findById(id).orElseThrow();
+
+		// then - the update wrote the new field value alongside the version bump, not the version alone
+		assertThat(ReflectionTestUtils.getField(reloaded, "originalCourseId")).isEqualTo(updatedCourseId);
 		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
 	}
 
