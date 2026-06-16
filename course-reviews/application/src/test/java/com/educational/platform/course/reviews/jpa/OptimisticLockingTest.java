@@ -230,6 +230,36 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void courseReview_staleDelete_failureIdentifiesEntityAndIsRootedInStaleVersion() {
+		// given - two instances reading the same row at version 0
+		final CourseReview stale = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		final Object reviewId = ReflectionTestUtils.getField(stale, "id");
+		entityManager.detach(stale);
+		final CourseReview fresh = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+
+		// and - the first update wins, bumping the persisted version to 1
+		fresh.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "first wins"));
+		courseReviewRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// when - the stale instance (still version 0) tries to delete the row
+		// then - the delete guard surfaces the same diagnostics as the update guard: the version-specific
+		// subtype, the conflicting entity and row, and a StaleObjectStateException root cause. The existing
+		// courseReview_staleDelete_throwsOptimisticLockingFailure only asserts the generic supertype, so a
+		// stale delete that silently degraded into an undiagnosable failure would slip past it.
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> {
+					courseReviewRepository.delete(stale);
+					courseReviewRepository.flush();
+				})
+				.satisfies(ex -> {
+					assertThat(ex.getPersistentClassName()).isEqualTo(CourseReview.class.getName());
+					assertThat(ex.getIdentifier()).isEqualTo(reviewId);
+				})
+				.withRootCauseInstanceOf(StaleObjectStateException.class);
+	}
+
+	@Test
 	void courseReview_currentDelete_succeeds() {
 		// given - the seeded review read at its current persisted version
 		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();

@@ -17,6 +17,7 @@ import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -461,6 +462,65 @@ public class OptimisticLockingMigratedSchemaTest {
 		entityManager.clear();
 		final CourseReview afterReload = courseReviewRepository.findByUuid(uuid).orElseThrow();
 		assertThat(ReflectionTestUtils.getField(afterReload, "version")).isEqualTo((int) (largeVersion + 1));
+	}
+
+	@Test
+	void reviewer_versionExceedingIntegerRangeAgainstBigintColumn_failsFastOnRead() {
+		// given - a reviewer whose BIGINT version column is forced one past Integer.MAX_VALUE. The value is set
+		// directly via SQL because the Integer @Version field can never produce it itself - this is the far side
+		// of the boundary reviewer_largeVersionWithinIntRangeAgainstBigintColumn_incrementsAndRoundTrips stops
+		// just inside, where the BIGINT column outgrows what the Integer field can represent.
+		final long overIntVersion = Integer.MAX_VALUE + 1L; // 2_147_483_648: holds in BIGINT, overflows int
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("over-int-version-reviewer"))).getId();
+		entityManager.getEntityManager()
+				.createNativeQuery("UPDATE reviewer SET version = ? WHERE id = ?")
+				.setParameter(1, overIntVersion)
+				.setParameter(2, id)
+				.executeUpdate();
+		entityManager.clear();
+
+		// then - the value really is stored in the BIGINT column (it is not clamped on write) ...
+		final Number stored = (Number) entityManager.getEntityManager()
+				.createNativeQuery("SELECT version FROM reviewer WHERE id = ?")
+				.setParameter(1, id)
+				.getSingleResult();
+		assertThat(stored.longValue()).isEqualTo(overIntVersion);
+
+		// ... but loading it through the entity fails fast instead of silently truncating the over-int value
+		// into the Integer @Version field, so a row can never be read back with a corrupted (overflowed)
+		// version. This documents the limit of the PR's deliberate Integer-field / BIGINT-column mismatch.
+		assertThatExceptionOfType(DataIntegrityViolationException.class)
+				.isThrownBy(() -> reviewerRepository.findById(id));
+	}
+
+	@Test
+	void courseReview_versionExceedingIntegerRangeAgainstBigintColumn_failsFastOnRead() throws Exception {
+		// given - a course review whose BIGINT version column is forced one past Integer.MAX_VALUE, set directly
+		// via SQL. Same boundary as the reviewer case but for the headline aggregate against its real
+		// FK-constrained table, which courseReview_largeVersionWithinIntRangeAgainstBigintColumn stops just inside.
+		final long overIntVersion = Integer.MAX_VALUE + 1L; // 2_147_483_648: holds in BIGINT, overflows int
+		final CourseReview review = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = review.toIdentifier();
+		final Object id = ReflectionTestUtils.getField(courseReviewRepository.saveAndFlush(review), "id");
+		entityManager.getEntityManager()
+				.createNativeQuery("UPDATE course_review SET version = ? WHERE id = ?")
+				.setParameter(1, overIntVersion)
+				.setParameter(2, id)
+				.executeUpdate();
+		entityManager.clear();
+
+		// then - the value really is stored in the BIGINT column ...
+		final Number stored = (Number) entityManager.getEntityManager()
+				.createNativeQuery("SELECT version FROM course_review WHERE id = ?")
+				.setParameter(1, id)
+				.getSingleResult();
+		assertThat(stored.longValue()).isEqualTo(overIntVersion);
+
+		// ... but loading the aggregate through the entity fails fast rather than truncating the over-int
+		// version into the Integer @Version field, the headline-aggregate counterpart of the reviewer boundary
+		assertThatExceptionOfType(DataIntegrityViolationException.class)
+				.isThrownBy(() -> courseReviewRepository.findByUuid(uuid));
 	}
 
 	/**
