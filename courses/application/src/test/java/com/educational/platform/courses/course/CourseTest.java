@@ -224,4 +224,40 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(4.5));
     }
 
+    @Test
+    void increaseNumberOfStudents_leavesRatingUntouched() {
+        // given - a fresh course starts with the default zero rating
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when - the number-of-students write path runs
+        course.increaseNumberOfStudents();
+
+        // then - it mutates only its own field; the rating retry path must not observe a side effect here
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(1))
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0));
+    }
+
+    @Test
+    void updateRating_leavesNumberOfStudentsUntouched() {
+        // given - a fresh course starts with zero students
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when - the rating write path runs
+        course.updateRating(3.2);
+
+        // then - it mutates only its own field; the number-of-students retry path must not observe a side effect here
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(3.2))
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(0));
+    }
+
 }

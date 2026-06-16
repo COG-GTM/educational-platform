@@ -1,6 +1,7 @@
 package com.educational.platform.courses;
 
 import com.educational.platform.courses.course.Course;
+import com.educational.platform.courses.course.CourseRating;
 import com.educational.platform.courses.course.CourseRepository;
 import com.educational.platform.courses.course.NumberOfStudents;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
@@ -105,9 +106,28 @@ class CourseRetryApplicationContextWiringTest {
         // when - invoking the real component-scanned bean
         updateCourseRatingCommandHandler.handle(new UpdateCourseRatingCommand(uuid, 3.2));
 
-        // then - the production wiring re-invokes the handler once
+        // then - the production wiring re-invokes the handler once and persists the command's rating
+        final ArgumentCaptor<Course> saved = ArgumentCaptor.forClass(Course.class);
         verify(repository, times(2)).findByUuid(uuid);
-        verify(repository, times(2)).save(any(Course.class));
+        verify(repository, times(2)).save(saved.capture());
+        assertThat(saved.getValue()).hasFieldOrPropertyWithValue("rating", new CourseRating(3.2));
+    }
+
+    @Test
+    void productionContext_updateCourseRatingHandler_persistentOptimisticLock_exhaustsConfiguredAttemptsThenRethrows() {
+        // given - every save clashes on the version
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1));
+
+        // when
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 3.2);
+
+        // then - the rating write path honours maxAttempts=3 through the real proxied bean too, then rethrows
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> updateCourseRatingCommandHandler.handle(command));
+        verify(repository, times(3)).findByUuid(uuid);
+        verify(repository, times(3)).save(any(Course.class));
     }
 
     @Test
