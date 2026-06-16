@@ -103,6 +103,28 @@ class CourseOptimisticLockingTest {
     }
 
     @Test
+    void update_multipleMutationsBeforeSingleFlush_versionIncrementsOnce() {
+        // given - a persisted course at version 0
+        final Course course = newCourse(persistTeacher().getId());
+        final UUID uuid = course.toIdentity();
+        courseRepository.saveAndFlush(course);
+        entityManager.clear();
+
+        // when - two mutations are applied to the same managed instance before a single flush
+        final Course loaded = courseRepository.findByUuid(uuid).orElseThrow();
+        loaded.increaseNumberOfStudents();
+        loaded.increaseNumberOfStudents();
+        courseRepository.saveAndFlush(loaded);
+
+        // then - the optimistic-lock version tracks flushed UPDATEs, not in-memory mutator calls, so it
+        // advances exactly once despite two mutations; the state changes still accumulate to two. This
+        // is the invariant that lets each retry attempt (one fresh transaction = one flush) bump the
+        // version by exactly one, distinct from the once-per-flush test that flushes three times
+        assertThat(ReflectionTestUtils.getField(loaded, "version")).isEqualTo(1);
+        assertThat(loaded).hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(2));
+    }
+
+    @Test
     void saveAndFlush_reloadAfterConcurrentUpdate_succeedsWithIncrementedVersion() {
         // given - a persisted course at version 0
         final Course course = newCourse(persistTeacher().getId());

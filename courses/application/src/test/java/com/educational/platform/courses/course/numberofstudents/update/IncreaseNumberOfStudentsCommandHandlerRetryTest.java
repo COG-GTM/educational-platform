@@ -212,6 +212,30 @@ class IncreaseNumberOfStudentsCommandHandlerRetryTest {
     }
 
     @Test
+    void handle_invokedAgainAfterExhaustingRetries_getsAFreshRetryBudget() {
+        // given - every reload returns a fresh course; the save clashes on the version four times in
+        // a row before finally persisting on the fifth call
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when - the first invocation burns all three attempts on the first three clashes and rethrows
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> sut.handle(command));
+
+        // then - retry is stateless, so a second independent invocation is granted a fresh maxAttempts
+        // budget rather than inheriting the exhausted state: it retries the fourth clash and persists
+        // on the fifth save. A regression to stateful retry would starve this call and rethrow instead
+        sut.handle(command);
+        verify(repository, times(5)).findByUuid(uuid);
+        verify(repository, times(5)).save(any(Course.class));
+    }
+
+    @Test
     void handle_missingCourse_resourceNotFoundExceptionIsNotRetried() {
         // given
         when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
