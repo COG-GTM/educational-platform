@@ -157,6 +157,25 @@ class CourseOptimisticLockingTest {
         assertThat(hasVersion).isTrue();
     }
 
+    @Test
+    void curriculumItem_versionAttributeIsNamedVersionAndTypedInteger() {
+        // CurriculumItem persistence cannot be exercised directly in this @DataJpaTest: Hibernate's
+        // generated single-table-inheritance discriminator check constraint rejects inserts in the
+        // test schema (production uses Liquibase, which carries no such constraint). The version
+        // increment/conflict mechanics are generic JPA behaviour already proven for Course/Teacher
+        // above, so here we pin the CurriculumItem-specific mapping contract: the @Version field is
+        // the optimistic-lock version, named "version" and typed Integer (matching the BIGINT column
+        // the Liquibase change set adds to curriculum_item).
+        final var versionAttribute = entityManager.getEntityManager()
+                .getMetamodel()
+                .entity(CurriculumItem.class)
+                .getVersion(Integer.class);
+
+        assertThat(versionAttribute.isVersion()).isTrue();
+        assertThat(versionAttribute.getName()).isEqualTo("version");
+        assertThat(versionAttribute.getJavaType()).isEqualTo(Integer.class);
+    }
+
     private Teacher persistTeacher() {
         final Teacher teacher = new Teacher(new CreateTeacherCommand(TEACHER));
         return teacherRepository.saveAndFlush(teacher);
