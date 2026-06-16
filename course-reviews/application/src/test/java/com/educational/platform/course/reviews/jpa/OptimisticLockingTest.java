@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Constructor;
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Validation;
@@ -428,6 +429,38 @@ public class OptimisticLockingTest {
 		entityManager.clear();
 		final CourseReview reloaded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
 		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void courseReview_listCourseReviews_seededReviewProjectsAllFieldsWithNoVersionLeak() {
+		// when - the seeded review is read through the public query projection, which joins
+		// course_review -> reviewable_course -> reviewer (all three gained a version column in this PR)
+		final List<CourseReviewDTO> reviews = courseReviewRepository.listCourseReviews(COURSE_UUID);
+
+		// then - the projection is intact: every DTO field still resolves across the joined tables, and the
+		// new internal @Version field is not part of the public read contract (CourseReviewDTO exposes no version),
+		// confirming the PR's claim that no repository/read-side code had to change
+		assertThat(reviews).hasSize(1);
+		final CourseReviewDTO dto = reviews.get(0);
+		assertThat(dto.uuid()).isEqualTo(COURSE_REVIEW_UUID);
+		assertThat(dto.course()).isEqualTo(COURSE_UUID);
+		assertThat(dto.username()).isEqualTo("reviewer");
+		assertThat(dto.comment()).isEqualTo("comment");
+		assertThat(dto.rating()).isEqualTo(4.0);
+	}
+
+	@Test
+	void courseReview_updatedBumpingVersion_isReviewerQueryStillResolves() {
+		// given - the seeded review is updated, which bumps its version to 1
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "updated comment"));
+		courseReviewRepository.saveAndFlush(review);
+		entityManager.clear();
+
+		// then - the existing reviewer-identity query is unaffected by the version mechanics: it still
+		// resolves the original reviewer and rejects a non-reviewer after the version-bumping update
+		assertThat(courseReviewRepository.isReviewer(COURSE_REVIEW_UUID, "reviewer")).isTrue();
+		assertThat(courseReviewRepository.isReviewer(COURSE_REVIEW_UUID, "another-reviewer")).isFalse();
 	}
 
 	// --- Reviewer -----------------------------------------------------------
