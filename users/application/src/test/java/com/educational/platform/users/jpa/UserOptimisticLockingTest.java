@@ -435,6 +435,36 @@ public class UserOptimisticLockingTest {
         assertThat(repository.findByUsername(USERNAME)).isEmpty();
     }
 
+    @Test
+    void update_staleUserLoadedById_throwsOptimisticLockException() {
+        // given a user loaded through the primary-key finder - the read path a request flow uses
+        // (load aggregate by id, then write), which the findByUsername-based tests never exercise
+        repository.saveAndFlush(newUser());
+        final int id = idOf(USERNAME);
+        entityManager.clear();
+        final User stale = repository.findById(id).orElseThrow();
+
+        // simulate a concurrent transaction that updated the row and bumped its version
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back, the version check fails exactly as for a
+        // findByUsername-loaded entity: optimistic locking is bound to the row, not the finder used
+        assertThatExceptionOfType(OptimisticLockException.class)
+                .isThrownBy(() -> {
+                    entityManager.lock(stale, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+                    repository.flush();
+                });
+    }
+
+    private int idOf(final String username) {
+        return ((Number) entityManager
+                .createNativeQuery("SELECT id FROM custom_user WHERE username = :username")
+                .setParameter("username", username)
+                .getSingleResult()).intValue();
+    }
+
     private void forceIncrementVersion() {
         entityManager.clear();
         final User loaded = repository.findByUsername(USERNAME).orElseThrow();

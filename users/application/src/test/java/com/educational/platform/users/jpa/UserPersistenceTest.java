@@ -151,11 +151,32 @@ public class UserPersistenceTest {
         assertThat(idOf(USERNAME)).isPositive();
     }
 
-    private long idOf(final String username) {
+    @Test
+    void findById_afterPersist_preservesProjectionsAndAssignsVersionZero() {
+        // given a user persisted with the new @Version column in place
+        repository.saveAndFlush(newUser());
+        final int id = idOf(USERNAME);
+        entityManager.clear();
+
+        // when it is read back through the primary-key finder - the read path request flows use,
+        // and the only one not exercised by the findByUsername-based persistence tests
+        final User reloaded = repository.findById(id).orElseThrow();
+
+        // then loading by id is unaffected by the new @Version/@Id pairing: both projections
+        // round-trip and a freshly persisted row reports version 0
+        final UserDTO dto = reloaded.toDTO();
+        assertThat(dto.username()).isEqualTo(USERNAME);
+        assertThat(dto.email()).isEqualTo(EMAIL);
+        assertThat(dto.role()).isEqualTo(RoleDTO.ROLE_STUDENT);
+        assertThat(reloaded.toUserDetails().getUsername()).isEqualTo(USERNAME);
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 0);
+    }
+
+    private int idOf(final String username) {
         return ((Number) entityManager
                 .createNativeQuery("SELECT id FROM custom_user WHERE username = :username")
                 .setParameter("username", username)
-                .getSingleResult()).longValue();
+                .getSingleResult()).intValue();
     }
 
     private User newUser() {
