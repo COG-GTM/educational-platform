@@ -69,6 +69,23 @@ public class CourseProposalTest {
     }
 
     @Test
+    void approve_versionAlreadyPopulated_versionLeftUntouchedByDomain() {
+        // given - a proposal whose @Version has already been populated by the persistence provider
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        ReflectionTestUtils.setField(proposal, "version", 5);
+
+        // when - a domain mutation occurs
+        proposal.approve();
+
+        // then - approving flips the status but must not read, reset or otherwise manage the @Version;
+        // the optimistic-lock counter is owned exclusively by JPA and only advances on a persisted write
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED)
+                .hasFieldOrPropertyWithValue("version", 5);
+    }
+
+    @Test
     void approve_courseProposalAlreadyApproved_courseProposalAlreadyApprovedException() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -110,6 +127,23 @@ public class CourseProposalTest {
 
         // then - the @Version field is owned by the persistence provider and is never touched by domain logic
         assertThat(proposal).hasFieldOrPropertyWithValue("version", null);
+    }
+
+    @Test
+    void decline_versionAlreadyPopulated_versionLeftUntouchedByDomain() {
+        // given - a proposal whose @Version has already been populated by the persistence provider
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        ReflectionTestUtils.setField(proposal, "version", 5);
+
+        // when - a domain mutation occurs
+        proposal.decline();
+
+        // then - declining flips the status but must not read, reset or otherwise manage the @Version;
+        // the optimistic-lock counter is owned exclusively by JPA and only advances on a persisted write
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED)
+                .hasFieldOrPropertyWithValue("version", 5);
     }
 
     @Test

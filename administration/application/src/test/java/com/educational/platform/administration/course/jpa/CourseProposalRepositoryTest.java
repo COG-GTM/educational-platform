@@ -248,6 +248,26 @@ public class CourseProposalRepositoryTest {
 	}
 
 	@Test
+	void save_multipleMutationsBeforeSingleFlush_versionIncrementedOnce() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final Integer id = persistFlushClear(uuid);
+
+		// when - two domain mutations are applied to the managed aggregate before a single flush
+		final CourseProposal loaded = sut.findById(id).orElseThrow();
+		loaded.approve();
+		loaded.decline();
+		final CourseProposal updated = sut.saveAndFlush(loaded);
+
+		// then - the batched mutations collapse into one UPDATE, so the @Version advances exactly once;
+		// it tracks persisted writes, not the number of in-memory domain operations (contrast with the
+		// sequential-updates test, where each mutation is flushed in its own cycle and bumps the version)
+		assertThat(updated)
+				.hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED)
+				.hasFieldOrPropertyWithValue("version", 1);
+	}
+
+	@Test
 	void save_staleCourseProposal_winningWriteNotOverwritten() {
 		// given
 		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
