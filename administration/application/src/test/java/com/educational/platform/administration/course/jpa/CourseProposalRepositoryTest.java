@@ -75,6 +75,23 @@ public class CourseProposalRepositoryTest {
 	}
 
 	@Test
+	void save_declinedCourseProposal_versionIncremented() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final Integer id = persistFlushClear(uuid);
+
+		// when - the decline write path is the mutation, mirroring the approve increment test
+		final CourseProposal loaded = sut.findById(id).orElseThrow();
+		loaded.decline();
+		final CourseProposal updated = sut.saveAndFlush(loaded);
+
+		// then - declining also bumps the @Version exactly once
+		assertThat(updated)
+				.hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED)
+				.hasFieldOrPropertyWithValue("version", 1);
+	}
+
+	@Test
 	void save_staleCourseProposal_optimisticLockingFailureException() {
 		// given
 		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -121,6 +138,31 @@ public class CourseProposalRepositoryTest {
 		secondRead.approve();
 
 		// then - the conflict is caught purely by the @Version check, not by the domain status guard
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> sut.saveAndFlush(secondRead));
+	}
+
+	@Test
+	void save_staleProposalAfterWinningDecline_optimisticLockingFailureException() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final Integer id = persistFlushClear(uuid);
+
+		// two independent (detached) reads of the same proposal simulate concurrent admins
+		final CourseProposal firstRead = sut.findById(id).orElseThrow();
+		entityManager.detach(firstRead);
+		final CourseProposal secondRead = sut.findById(id).orElseThrow();
+		entityManager.detach(secondRead);
+
+		// the first admin declines and that write wins, bumping the version in the database
+		firstRead.decline();
+		sut.saveAndFlush(firstRead);
+		entityManager.clear();
+
+		// when - the second admin's approve is based on a now stale version
+		secondRead.approve();
+
+		// then - the conflict is detected symmetrically when decline is the winning write
 		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
 				.isThrownBy(() -> sut.saveAndFlush(secondRead));
 	}
