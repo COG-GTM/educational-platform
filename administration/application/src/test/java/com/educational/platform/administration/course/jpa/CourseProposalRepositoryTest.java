@@ -159,6 +159,60 @@ public class CourseProposalRepositoryTest {
 				.isThrownBy(() -> sut.saveAndFlush(secondRead));
 	}
 
+	@Test
+	void findByUuid_persistedProposal_initialVersionLoadedFromDatabase() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		persistFlushClear(uuid);
+
+		// when - reload through the uuid lookup used by the approve/decline handlers
+		final CourseProposal reloaded = sut.findByUuid(uuid).orElseThrow();
+
+		// then - the @Version column is populated on the production read path
+		assertThat(reloaded)
+				.hasFieldOrPropertyWithValue("version", 0)
+				.hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL);
+	}
+
+	@Test
+	void save_staleProposalLoadedByUuid_optimisticLockingFailureException() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		persistFlushClear(uuid);
+
+		// two independent (detached) reads via findByUuid mirror the approve/decline handler flow
+		final CourseProposal firstRead = sut.findByUuid(uuid).orElseThrow();
+		entityManager.detach(firstRead);
+		final CourseProposal secondRead = sut.findByUuid(uuid).orElseThrow();
+		entityManager.detach(secondRead);
+
+		// one admin approves and the write wins
+		firstRead.approve();
+		sut.saveAndFlush(firstRead);
+		entityManager.clear();
+
+		// when - the other admin's decline is based on a now stale version
+		secondRead.decline();
+
+		// then - the conflict is detected on the same read path the handlers use
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> sut.saveAndFlush(secondRead));
+	}
+
+	@Test
+	void save_reloadedProposalWithoutChanges_versionNotIncremented() {
+		// given
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final Integer id = persistFlushClear(uuid);
+
+		// when - reload and persist again without mutating any state
+		final CourseProposal loaded = sut.findById(id).orElseThrow();
+		final CourseProposal resaved = sut.saveAndFlush(loaded);
+
+		// then - the version only advances on a real modification, never on a no-op save
+		assertThat(resaved).hasFieldOrPropertyWithValue("version", 0);
+	}
+
 	private Integer persistFlushClear(UUID uuid) {
 		final CourseProposal courseProposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
 		final CourseProposal saved = sut.saveAndFlush(courseProposal);
