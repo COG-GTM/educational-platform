@@ -1,0 +1,133 @@
+package com.educational.platform.users.registration;
+
+import com.educational.platform.common.exception.UnprocessableEntityException;
+import com.educational.platform.users.RoleDTO;
+import com.educational.platform.users.User;
+import com.educational.platform.users.UserDTO;
+import com.educational.platform.users.UserRepository;
+import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
+import com.educational.platform.users.security.JwtTokenProvider;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+/**
+ * Integration coverage that drives the real {@link UserRegistrationCommandHandler#handle} write path against
+ * a database, exercising the {@code @Version} optimistic-locking field added to {@link User} through the actual
+ * production flow rather than a synthetic test-only write.
+ *
+ * <p>The {@code jpa} tests prove version semantics via {@code saveAndFlush} / forced increments, and the existing
+ * {@link UserRegistrationCommandHandlerTest} drives the handler against a mocked repository (so JPA never assigns
+ * a version). This pins the remaining gap: registering a user via {@code repository.save(...)} inside the handler's
+ * {@code TransactionTemplate} persists an aggregate whose {@code @Version} is initialised by JPA, and that adding
+ * {@code @Version} leaves the handler's existing duplicate-username and integration-event contracts intact.
+ */
+@DataJpaTest
+class UserRegistrationVersioningTest {
+
+    private static final String USERNAME = "username";
+    private static final String EMAIL = "email@gmail.com";
+    private static final String PASSWORD = "password";
+
+    @Autowired
+    private UserRepository repository;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    private final List<Object> publishedEvents = new ArrayList<>();
+
+    private UserRegistrationCommandHandler handler;
+
+    @BeforeEach
+    void setUp() {
+        final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+        final JwtTokenProvider jwtTokenProvider = mock(JwtTokenProvider.class);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+        final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+        final ApplicationEventPublisher eventPublisher = publishedEvents::add;
+        handler = new UserRegistrationCommandHandler(
+                new TransactionTemplate(transactionManager),
+                passwordEncoder,
+                jwtTokenProvider,
+                repository,
+                eventPublisher,
+                validator);
+    }
+
+    @Test
+    void handle_validCommand_persistsUserWithInitialVersionZero() {
+        // when the real registration flow runs (validate -> save inside the handler's transaction)
+        handler.handle(command(USERNAME, EMAIL));
+
+        // force a genuine DB round trip so the version is read back from the row, not the in-context instance
+        entityManager.flush();
+        entityManager.clear();
+
+        // then the aggregate persisted through the production write path - not just a synthetic saveAndFlush -
+        // carries the JPA-initialised optimistic-lock version (0), and its read projection is unaffected
+        final User reloaded = repository.findByUsername(USERNAME).orElseThrow();
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 0);
+        final UserDTO dto = reloaded.toDTO();
+        assertThat(dto.username()).isEqualTo(USERNAME);
+        assertThat(dto.email()).isEqualTo(EMAIL);
+        assertThat(dto.role()).isEqualTo(RoleDTO.ROLE_STUDENT);
+    }
+
+    @Test
+    void handle_validCommand_emitsIntegrationEventUnaffectedByVersion() {
+        // when the real flow registers a user (which now persists a @Version-bearing aggregate)
+        handler.handle(command(USERNAME, EMAIL));
+
+        // then the single cross-context event is still emitted with exactly username/email: adding @Version to the
+        // aggregate must not disturb - nor leak the optimistic-lock version onto - the published integration event
+        assertThat(publishedEvents).singleElement()
+                .isInstanceOfSatisfying(UserCreatedIntegrationEvent.class, event -> {
+                    assertThat(event).hasFieldOrPropertyWithValue("username", USERNAME);
+                    assertThat(event).hasFieldOrPropertyWithValue("email", EMAIL);
+                });
+    }
+
+    @Test
+    void handle_duplicateUsername_unprocessableEntityException_withVersionColumnPresent() {
+        // given an already-registered user (persisted with the new @Version column in place)
+        handler.handle(command(USERNAME, EMAIL));
+
+        // when the same username is registered again
+        // then the existsByUsername guard still rejects it: introducing @Version does not disturb the
+        // existing duplicate-username contract of the registration flow
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(() -> handler.handle(command(USERNAME, "other@gmail.com")));
+    }
+
+    private UserRegistrationCommand command(final String username, final String email) {
+        return UserRegistrationCommand.builder()
+                .username(username)
+                .email(email)
+                .password(PASSWORD)
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+    }
+}
