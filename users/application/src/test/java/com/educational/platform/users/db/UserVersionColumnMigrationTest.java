@@ -194,6 +194,31 @@ class UserVersionColumnMigrationTest {
         });
     }
 
+    @Test
+    void migration_recordsVersionChangeSetExactlyOnce() throws Exception {
+        givenLegacyCustomUserTable();
+
+        runUsersChangelog();
+        // a second run must not re-record the changeSet
+        runUsersChangelog();
+
+        // the changeSet identity (id/author) is what makes the migration idempotent; assert it ran once
+        assertThat(changeSetExecutionCount("add-version-column-to-custom_user", "devin")).isEqualTo(1);
+    }
+
+    private int changeSetExecutionCount(final String id, final String author) throws SQLException {
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT COUNT(*) FROM DATABASECHANGELOG WHERE ID = ? AND AUTHOR = ?")) {
+            statement.setString(1, id);
+            statement.setString(2, author);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).isTrue();
+                return resultSet.getInt(1);
+            }
+        }
+    }
+
     private void runUsersChangelog() throws Exception {
         try (Connection connection = openConnection()) {
             final Database database = DatabaseFactory.getInstance()

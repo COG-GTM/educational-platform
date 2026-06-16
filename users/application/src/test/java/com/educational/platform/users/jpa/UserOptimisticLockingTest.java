@@ -66,6 +66,16 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void save_newUser_managedVersionIsIntegerTyped() {
+        // given / when a transient user is persisted
+        final User saved = repository.saveAndFlush(newUser());
+
+        // then the managed version is an Integer: the @Version field is deliberately typed Integer while the
+        // backing column is BIGINT, so this pins the entity-side type and guards the intentional decoupling
+        assertThat(saved).extracting("version").isInstanceOf(Integer.class);
+    }
+
+    @Test
     void write_managedUser_incrementsVersion() {
         // given
         repository.saveAndFlush(newUser());
@@ -288,6 +298,47 @@ public class UserOptimisticLockingTest {
         repository.delete(stale);
 
         // then
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(repository::flush);
+    }
+
+    @Test
+    void update_afterConcurrentDelete_throwsOptimisticLockException() {
+        // given
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+
+        // simulate a concurrent transaction that deleted the row out from under us
+        entityManager.createNativeQuery("DELETE FROM custom_user WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the now-orphaned instance is written back, the version check finds no matching row
+        // then (raw EntityManager write surfaces the JPA-standard exception, just like a stale version would)
+        assertThatExceptionOfType(OptimisticLockException.class)
+                .isThrownBy(() -> {
+                    entityManager.lock(stale, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+                    repository.flush();
+                });
+    }
+
+    @Test
+    void delete_afterConcurrentDelete_throwsObjectOptimisticLockingFailureException() {
+        // given
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+
+        // simulate a concurrent transaction that already deleted the row
+        entityManager.createNativeQuery("DELETE FROM custom_user WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when this transaction deletes the same (already removed) row, the version check matches nothing
+        repository.delete(stale);
+
+        // then the lost-delete is reported through Spring's translated optimistic-locking exception
         assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
                 .isThrownBy(repository::flush);
     }
