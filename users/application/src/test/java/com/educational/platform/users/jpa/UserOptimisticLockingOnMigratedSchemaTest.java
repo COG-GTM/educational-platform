@@ -233,6 +233,34 @@ class UserOptimisticLockingOnMigratedSchemaTest {
     }
 
     @Test
+    void write_afterRefreshingConcurrentlyModifiedUser_onMigratedSchema_succeeds() {
+        // given a stale managed instance loaded at version 0, then a concurrent transaction advances the row (0 -> 1)
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the conflict is resolved by refreshing the *same* managed instance in place (re-syncing its version
+        // from the row) rather than re-reading a new one via the finder, then writing it back. This is the recovery
+        // counterpart to write_afterReReadingConcurrentlyModifiedUser_onMigratedSchema_..., which discards the stale
+        // instance and loads a fresh one; refresh re-attaches the existing one against the migrated BIGINT column.
+        // UserOptimisticLockingTest.update_afterRefreshingConcurrentlyModifiedUser_succeeds pins this on the
+        // Hibernate-generated INTEGER schema only; this is its missing production-schema counterpart.
+        entityManager.refresh(stale);
+        assertThat(stale).as("refresh re-syncs the stale instance's version from the row")
+                .hasFieldOrPropertyWithValue("version", 1);
+        entityManager.lock(stale, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+
+        // then the refreshed instance is no longer treated as stale: the write succeeds and advances from the
+        // refreshed version (1 -> 2) on the real BIGINT column
+        assertThat(stale).hasFieldOrPropertyWithValue("version", 2);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(2L);
+    }
+
+    @Test
     void repeatedWrites_onMigratedSchema_incrementVersionMonotonically() {
         // given a freshly persisted user at version 0 on the migrated schema
         repository.saveAndFlush(newUser());

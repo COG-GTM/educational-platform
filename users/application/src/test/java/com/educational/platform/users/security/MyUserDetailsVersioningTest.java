@@ -103,6 +103,27 @@ class MyUserDetailsVersioningTest {
     }
 
     @Test
+    void loadUserByUsername_teacher_afterVersionIncrement_stillReturnsTeacherAuthority() {
+        // given a teacher whose version has since been bumped to 1
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        entityManager.clear();
+        final User loaded = repository.findByUsername("teacher").orElseThrow();
+        entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+        entityManager.clear();
+
+        // when the teacher is loaded for authentication at a non-zero version
+        final UserDetails userDetails = new MyUserDetails(repository).loadUserByUsername("teacher");
+
+        // then the non-default role still maps through the login read path at a non-zero version: completes the
+        // role x version matrix (loadUserByUsername_afterVersionIncrement_... only covers the student role, and
+        // loadUserByUsername_teacher_... only covers version 0)
+        assertThat(userDetails.getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactly(Role.ROLE_TEACHER.getAuthority());
+    }
+
+    @Test
     void loadUserByUsername_unknownUser_throwsUsernameNotFoundException() {
         // given a populated table that carries the new version column
         repository.saveAndFlush(newUser(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));

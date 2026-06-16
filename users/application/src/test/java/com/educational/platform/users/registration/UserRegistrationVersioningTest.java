@@ -122,12 +122,50 @@ class UserRegistrationVersioningTest {
                 .isThrownBy(() -> handler.handle(command(USERNAME, "other@gmail.com")));
     }
 
+    @Test
+    void handle_validTeacherCommand_persistsUserWithInitialVersionZero() {
+        // when the real registration flow persists a teacher (the non-default role) through the production write path
+        handler.handle(command("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+
+        // force a genuine DB round trip so the version is read back from the row, not the in-context instance
+        entityManager.flush();
+        entityManager.clear();
+
+        // then the teacher aggregate persisted through the production write path carries the JPA-initialised
+        // optimistic-lock version (0) and its non-default role projection is unaffected by @Version - completes the
+        // role coverage of the registration write path (handle_validCommand_... only covers the student role)
+        final User reloaded = repository.findByUsername("teacher").orElseThrow();
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(reloaded.toDTO().role()).isEqualTo(RoleDTO.ROLE_TEACHER);
+    }
+
+    @Test
+    void handle_distinctUsers_eachPersistedAtIndependentVersionZero() {
+        // when two distinct users are registered through the real production write path
+        handler.handle(command(USERNAME, EMAIL));
+        handler.handle(command("other", "other@gmail.com"));
+
+        // force a genuine DB round trip so each version is read back from its row
+        entityManager.flush();
+        entityManager.clear();
+
+        // then version initialisation is per-row through the production handler: registering a second user neither
+        // shares nor advances the first user's optimistic-lock version - both fresh inserts start at 0
+        // (handle_validCommand_persistsUserWithInitialVersionZero only exercises a single registration)
+        assertThat(repository.findByUsername(USERNAME).orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(repository.findByUsername("other").orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
+    }
+
     private UserRegistrationCommand command(final String username, final String email) {
+        return command(username, email, RoleDTO.ROLE_STUDENT);
+    }
+
+    private UserRegistrationCommand command(final String username, final String email, final RoleDTO role) {
         return UserRegistrationCommand.builder()
                 .username(username)
                 .email(email)
                 .password(PASSWORD)
-                .role(RoleDTO.ROLE_STUDENT)
+                .role(role)
                 .build();
     }
 }

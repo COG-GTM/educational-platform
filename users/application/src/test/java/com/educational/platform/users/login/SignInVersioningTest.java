@@ -119,6 +119,26 @@ class SignInVersioningTest {
         assertThat(rolesResolvedFor("teacher")).containsExactly(Role.ROLE_TEACHER);
     }
 
+    @Test
+    void handle_teacher_afterVersionIncrement_stillResolvesTeacherRole() {
+        // given a teacher whose version has since been bumped to 1
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        entityManager.clear();
+        final User loaded = repository.findByUsername("teacher").orElseThrow();
+        entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+        entityManager.clear();
+
+        // when the teacher signs in at a non-zero version
+        final String token = handler.handle(command("teacher"));
+
+        // then the non-default role resolves through the sign-in read path at a non-zero version too: completes the
+        // role x version matrix (handle_afterVersionIncrement_... only covers the student role, and
+        // handle_teacher_... only covers version 0)
+        assertThat(token).isEqualTo(TOKEN);
+        assertThat(rolesResolvedFor("teacher")).containsExactly(Role.ROLE_TEACHER);
+    }
+
     @SuppressWarnings("unchecked")
     private List<Role> rolesResolvedFor(final String username) {
         // the role passed to the token is resolved from the persisted user the handler reads back by username,
