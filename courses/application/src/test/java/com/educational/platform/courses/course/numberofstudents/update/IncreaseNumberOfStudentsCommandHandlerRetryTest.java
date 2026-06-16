@@ -135,6 +135,25 @@ class IncreaseNumberOfStudentsCommandHandlerRetryTest {
     }
 
     @Test
+    void handle_optimisticLockThenNonRetryableException_propagatesOnSecondAttemptWithoutFurtherRetry() {
+        // given - the first save clashes on the version (retryable), the retry then fails with an
+        // exception outside retryFor
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenThrow(new IllegalStateException("boom"));
+
+        // when
+        final ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - the retry policy re-classifies each failure, so the non-retryable exception thrown on
+        // the second attempt propagates immediately, short-circuiting the third (still-allowed) attempt
+        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(handle);
+        verify(repository, times(2)).findByUuid(uuid);
+        verify(repository, times(2)).save(any(Course.class));
+    }
+
+    @Test
     void handle_optimisticLockThenSuccess_retriesUntilSavePersists() {
         // given - the first two saves clash on the version, the third one succeeds
         when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
