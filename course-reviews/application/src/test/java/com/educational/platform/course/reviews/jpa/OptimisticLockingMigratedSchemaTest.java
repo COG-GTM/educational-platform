@@ -20,6 +20,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.educational.platform.course.reviews.Comment;
+import com.educational.platform.course.reviews.CourseRating;
 import com.educational.platform.course.reviews.CourseReview;
 import com.educational.platform.course.reviews.CourseReviewRepository;
 import com.educational.platform.course.reviews.create.ReviewCourseCommand;
@@ -113,6 +115,22 @@ public class OptimisticLockingMigratedSchemaTest {
 	}
 
 	@Test
+	void reviewer_persistedAgainstBigintColumn_versionZeroReadBackFromDatabase() {
+		// given - a reviewer persisted with its Integer @Version written into the migrated BIGINT column
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("migrated-reviewer"))).getId();
+
+		// when - the persistence context is cleared and the row reloaded from the migrated schema
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+
+		// then - the initial version round-trips back out of the BIGINT column as 0. The existing insert
+		// test only checks the in-memory entity returned by saveAndFlush; this confirms the value is
+		// actually read back from the column on the insert path, not just the update path.
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
+	}
+
+	@Test
 	void reviewer_concurrentUpdateAgainstBigintColumn_throwsOptimisticLockingFailure() {
 		// given - two instances reading the same migrated row at version 0
 		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("migrated-reviewer"))).getId();
@@ -187,6 +205,40 @@ public class OptimisticLockingMigratedSchemaTest {
 		stale.update(new UpdateCourseReviewCommand(uuid, 1.0, "stale loses"));
 
 		// then - the version guard rejects it just as it does on the Hibernate-generated schema
+		assertThatExceptionOfType(OptimisticLockingFailureException.class)
+				.isThrownBy(() -> courseReviewRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void courseReview_concurrentUpdateAgainstBigintColumn_winnerPersistedAndStaleRejected() throws Exception {
+		// given - two instances reading the same migrated row at version 0
+		final CourseReview seed = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = seed.toIdentifier();
+		courseReviewRepository.saveAndFlush(seed);
+		entityManager.clear();
+		final CourseReview stale = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		entityManager.detach(stale);
+		final CourseReview fresh = courseReviewRepository.findByUuid(uuid).orElseThrow();
+
+		// and - the first writer wins, persisting its rating and comment against the BIGINT-versioned row
+		fresh.update(new UpdateCourseReviewCommand(uuid, 5.0, "first wins"));
+		courseReviewRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// then - the winner's values are the ones actually stored. The Hibernate-schema test asserts this
+		// through listCourseReviews, but that query selects reviewable_course.original_course_id, which the
+		// migrated reviewable_course table does not expose, so the row is reloaded through the entity instead.
+		entityManager.clear();
+		final CourseReview reloaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		assertThat(((CourseRating) ReflectionTestUtils.getField(reloaded, "rating")).rating()).isEqualTo(5.0);
+		assertThat(((Comment) ReflectionTestUtils.getField(reloaded, "comment")).comment()).isEqualTo("first wins");
+		entityManager.clear();
+
+		// when - the stale instance (still version 0) tries to overwrite with its own values
+		stale.update(new UpdateCourseReviewCommand(uuid, 1.0, "stale loses"));
+
+		// then - it is rejected instead of silently overwriting the winner on the production-shaped column,
+		// directly exercising the PR's "instead of silently overwriting each other" contract against BIGINT
 		assertThatExceptionOfType(OptimisticLockingFailureException.class)
 				.isThrownBy(() -> courseReviewRepository.saveAndFlush(stale));
 	}
