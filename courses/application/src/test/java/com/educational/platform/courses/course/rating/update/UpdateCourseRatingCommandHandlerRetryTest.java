@@ -225,6 +225,27 @@ class UpdateCourseRatingCommandHandlerRetryTest {
     }
 
     @Test
+    void handle_optimisticLockThenCourseDeletedOnRetry_resourceNotFoundPropagatesWithoutFurtherRetry() {
+        // given - the first attempt loads the course and clashes on save (retryable); before the
+        // retry reloads, a concurrent writer deletes the course, so the second findByUuid is empty
+        when(repository.findByUuid(uuid))
+                .thenReturn(Optional.of(newCourse()))
+                .thenReturn(Optional.empty());
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1));
+
+        // when
+        final ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - each retry re-runs the full load -> mutate -> save, so the now-missing course makes
+        // the second attempt raise ResourceNotFoundException. That exception is outside retryFor, so it
+        // propagates immediately (no third attempt) and the only save issued is the first attempt's clash
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verify(repository, times(2)).findByUuid(uuid);
+        verify(repository, times(1)).save(any(Course.class));
+    }
+
+    @Test
     void handle_isAnnotatedWithExpectedRetryableContract() throws NoSuchMethodException {
         // given - reflect on the production handler method (the proxy delegates to this contract)
         final Method handleMethod = UpdateCourseRatingCommandHandler.class
