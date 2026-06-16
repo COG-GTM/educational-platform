@@ -76,6 +76,23 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void reloadedUser_exposesIntegerTypedVersion() {
+        // given a persisted user, with the in-memory instance evicted so the next read is a genuine DB round trip
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+
+        // when the entity is read back from the database into a fresh persistence context
+        final User reloaded = repository.findByUsername(USERNAME).orElseThrow();
+
+        // then the version materialised from the (BIGINT) column maps back to the Integer-typed @Version field.
+        // save_newUser_managedVersionIsIntegerTyped only inspects the instance returned by saveAndFlush, which
+        // JPA populates directly without ever reading the column - this pins the column -> field read mapping,
+        // the other half of the intentional Integer<->BIGINT decoupling.
+        assertThat(reloaded).extracting("version").isInstanceOf(Integer.class);
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 0);
+    }
+
+    @Test
     void write_managedUser_incrementsVersion() {
         // given
         repository.saveAndFlush(newUser());

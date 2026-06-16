@@ -1,5 +1,6 @@
 package com.educational.platform.users;
 
+import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
 import com.educational.platform.users.login.SignInCommand;
 import com.educational.platform.users.registration.UserRegistrationCommand;
 import jakarta.persistence.Transient;
@@ -103,6 +104,21 @@ class UserVersionMappingTest {
         assertThat(UserDTO.class.getDeclaredFields())
                 .extracting(Field::getName)
                 .as("UserDTO must not expose a version field")
+                .doesNotContain("version");
+    }
+
+    @Test
+    void userCreatedIntegrationEvent_doesNotCarryVersion() {
+        // governance, extended to the bounded-context boundary: UserCreatedIntegrationEvent is the only
+        // user-data payload this module publishes to other contexts. The optimistic-locking version is an
+        // internal persistence concern of the User aggregate, so it must never cross that boundary - the
+        // event can neither declare a @Version-annotated field nor expose a "version" field/record component.
+        assertThat(UserCreatedIntegrationEvent.class.getDeclaredFields())
+                .as("UserCreatedIntegrationEvent must not declare a @Version-annotated field")
+                .noneMatch(field -> field.isAnnotationPresent(Version.class));
+        assertThat(UserCreatedIntegrationEvent.class.getDeclaredFields())
+                .extracting(Field::getName)
+                .as("UserCreatedIntegrationEvent must not expose a version field")
                 .doesNotContain("version");
     }
 
