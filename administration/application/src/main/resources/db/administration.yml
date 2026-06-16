@@ -30,3 +30,16 @@ databaseChangeLog:
                     nullable: false
                   name: status
                   type: VARCHAR(14)
+  - changeSet:
+      id: add-version-column-to-course_proposal
+      author: devin
+      changes:
+        - addColumn:
+            tableName: course_proposal
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false

@@ -28,6 +28,19 @@ public class CourseProposalTest {
     }
 
     @Test
+    void create_validCommand_versionNotInitializedByDomain() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+
+        // when
+        final CourseProposal courseProposal = new CourseProposal(command);
+
+        // then - the @Version field is owned by the persistence provider and stays null until persisted
+        assertThat(courseProposal).hasFieldOrPropertyWithValue("version", null);
+    }
+
+    @Test
     void approve_approvedStatus() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -40,6 +53,36 @@ public class CourseProposalTest {
         // then
         assertThat(proposal)
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED);
+    }
+
+    @Test
+    void approve_validCommand_versionNotManagedByDomain() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+
+        // when - a domain mutation occurs
+        proposal.approve();
+
+        // then - the @Version field is owned by the persistence provider and is never touched by domain logic
+        assertThat(proposal).hasFieldOrPropertyWithValue("version", null);
+    }
+
+    @Test
+    void approve_versionAlreadyPopulated_versionLeftUntouchedByDomain() {
+        // given - a proposal whose @Version has already been populated by the persistence provider
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        ReflectionTestUtils.setField(proposal, "version", 5);
+
+        // when - a domain mutation occurs
+        proposal.approve();
+
+        // then - approving flips the status but must not read, reset or otherwise manage the @Version;
+        // the optimistic-lock counter is owned exclusively by JPA and only advances on a persisted write
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED)
+                .hasFieldOrPropertyWithValue("version", 5);
     }
 
     @Test
@@ -59,6 +102,43 @@ public class CourseProposalTest {
     }
 
     @Test
+    void approve_alreadyApprovedWithVersionPopulated_versionLeftUntouchedOnGuardRejection() {
+        // given - an already-approved proposal whose @Version has been populated by the persistence provider
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        proposal.approve();
+        ReflectionTestUtils.setField(proposal, "version", 5);
+
+        // when - re-approving trips the domain guard
+        final ThrowableAssert.ThrowingCallable reApprove = proposal::approve;
+
+        // then - the guard rejects before mutating anything, so on the exception path neither the status
+        // nor the JPA-owned @Version is touched (the counter only ever advances on a persisted write)
+        assertThatExceptionOfType(CourseProposalAlreadyApprovedException.class).isThrownBy(reApprove);
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED)
+                .hasFieldOrPropertyWithValue("version", 5);
+    }
+
+    @Test
+    void approveThenDecline_versionPopulated_versionLeftUntouchedAcrossLegalTransition() {
+        // given - a proposal whose @Version has already been populated by the persistence provider
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        ReflectionTestUtils.setField(proposal, "version", 2);
+
+        // when - a legal WAITING -> APPROVED -> DECLINED sequence of domain mutations is applied
+        proposal.approve();
+        proposal.decline();
+
+        // then - the status reflects the final transition while the @Version stays untouched regardless
+        // of how many in-memory mutations occur; the optimistic-lock counter is a persistence concern
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED)
+                .hasFieldOrPropertyWithValue("version", 2);
+    }
+
+    @Test
     void decline_declinedStatus() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -71,6 +151,36 @@ public class CourseProposalTest {
         // then
         assertThat(proposal)
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED);
+    }
+
+    @Test
+    void decline_validCommand_versionNotManagedByDomain() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+
+        // when - a domain mutation occurs
+        proposal.decline();
+
+        // then - the @Version field is owned by the persistence provider and is never touched by domain logic
+        assertThat(proposal).hasFieldOrPropertyWithValue("version", null);
+    }
+
+    @Test
+    void decline_versionAlreadyPopulated_versionLeftUntouchedByDomain() {
+        // given - a proposal whose @Version has already been populated by the persistence provider
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        ReflectionTestUtils.setField(proposal, "version", 5);
+
+        // when - a domain mutation occurs
+        proposal.decline();
+
+        // then - declining flips the status but must not read, reset or otherwise manage the @Version;
+        // the optimistic-lock counter is owned exclusively by JPA and only advances on a persisted write
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED)
+                .hasFieldOrPropertyWithValue("version", 5);
     }
 
     @Test
@@ -90,6 +200,25 @@ public class CourseProposalTest {
     }
 
     @Test
+    void decline_alreadyDeclinedWithVersionPopulated_versionLeftUntouchedOnGuardRejection() {
+        // given - an already-declined proposal whose @Version has been populated by the persistence provider
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        proposal.decline();
+        ReflectionTestUtils.setField(proposal, "version", 5);
+
+        // when - re-declining trips the domain guard
+        final ThrowableAssert.ThrowingCallable reDecline = proposal::decline;
+
+        // then - the guard rejects before mutating anything, so on the exception path neither the status
+        // nor the JPA-owned @Version is touched (symmetric to the already-approved rejection case)
+        assertThatExceptionOfType(CourseProposalAlreadyDeclinedException.class).isThrownBy(reDecline);
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED)
+                .hasFieldOrPropertyWithValue("version", 5);
+    }
+
+    @Test
     void toDTO_correspondingDTOCreated() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -103,6 +232,62 @@ public class CourseProposalTest {
         assertThat(dto)
                 .hasFieldOrPropertyWithValue("uuid", uuid)
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void toDTO_versionPopulated_versionExcludedFromReadModel() {
+        // given - a proposal whose @Version has been populated by the persistence provider
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal versioned = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        ReflectionTestUtils.setField(versioned, "version", 7);
+
+        // when
+        final CourseProposalDTO dto = versioned.toDTO();
+
+        // then - the @Version field is a persistence concern and must not leak into the read model;
+        // the DTO is identical to the one produced from an unversioned proposal with the same state
+        final CourseProposalDTO unversionedDto = new CourseProposal(new CreateCourseProposalCommand(uuid)).toDTO();
+        assertThat(dto)
+                .isEqualTo(unversionedDto)
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void toDTO_approvedProposalWithVersion_statusMappedAndVersionExcluded() {
+        // given - in production the @Version is only non-zero once a proposal has been approved and
+        // persisted; the existing version-exclusion test only covers the WAITING construction state
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal approved = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        approved.approve();
+        ReflectionTestUtils.setField(approved, "version", 3);
+
+        // when
+        final CourseProposalDTO dto = approved.toDTO();
+
+        // then - the read model exposes only uuid + the mapped status and never the @Version, so the
+        // exclusion holds for the APPROVED terminal state the optimistic-lock counter actually reaches
+        assertThat(dto)
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.APPROVED);
+    }
+
+    @Test
+    void toDTO_declinedProposalWithVersion_statusMappedAndVersionExcluded() {
+        // given - symmetric to the approved case: the @Version is non-zero only after a persisted decline
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal declined = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        declined.decline();
+        ReflectionTestUtils.setField(declined, "version", 3);
+
+        // when
+        final CourseProposalDTO dto = declined.toDTO();
+
+        // then - the read model exposes only uuid + the mapped status and never the @Version, so the
+        // exclusion holds for the DECLINED terminal state the optimistic-lock counter actually reaches
+        assertThat(dto)
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.DECLINED);
     }
 
 }
