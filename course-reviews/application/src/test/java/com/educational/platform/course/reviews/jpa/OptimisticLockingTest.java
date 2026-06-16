@@ -3,6 +3,7 @@ package com.educational.platform.course.reviews.jpa;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
+import java.lang.reflect.Constructor;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,7 @@ import com.educational.platform.course.reviews.CourseReviewRepository;
 import com.educational.platform.course.reviews.course.ReviewableCourse;
 import com.educational.platform.course.reviews.course.ReviewableCourseRepository;
 import com.educational.platform.course.reviews.course.create.CreateReviewableCourseCommand;
+import com.educational.platform.course.reviews.create.ReviewCourseCommand;
 import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommand;
 import com.educational.platform.course.reviews.reviewer.Reviewer;
 import com.educational.platform.course.reviews.reviewer.ReviewerRepository;
@@ -57,6 +59,27 @@ public class OptimisticLockingTest {
 
 		// then
 		assertThat(ReflectionTestUtils.getField(review, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void courseReview_transientBeforePersist_versionIsNull() throws Exception {
+		// given - a freshly constructed, not-yet-persisted course review. The domain constructor is
+		// package-private to the entity, so it is reached reflectively from this test package.
+		final Constructor<CourseReview> constructor = CourseReview.class
+				.getDeclaredConstructor(ReviewCourseCommand.class, Integer.class, Integer.class);
+		constructor.setAccessible(true);
+		final CourseReview review = constructor
+				.newInstance(new ReviewCourseCommand(UUID.randomUUID(), 4.0, "transient"), 1, 1);
+
+		// then - the JPA-managed version is null until the row is persisted
+		assertThat(ReflectionTestUtils.getField(review, "version")).isNull();
+
+		// when - it is persisted
+		final CourseReview saved = courseReviewRepository.saveAndFlush(review);
+
+		// then - Hibernate initialises the version to zero (the null-version condition the seed SQL
+		// works around so updating a row does not increment a null version and NPE)
+		assertThat(ReflectionTestUtils.getField(saved, "version")).isEqualTo(0);
 	}
 
 	@Test
@@ -269,6 +292,35 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void reviewer_concurrentUpdate_winnerChangesPersistedAndStaleRejected() {
+		// given - two instances reading the same row at version 0
+		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
+		entityManager.clear();
+
+		final Reviewer stale = reviewerRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+		final Reviewer fresh = reviewerRepository.findById(id).orElseThrow();
+
+		// and - the first writer wins, persisting its username
+		ReflectionTestUtils.setField(fresh, "username", "first-wins");
+		reviewerRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// then - the winner's value is the one actually stored
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "username")).isEqualTo("first-wins");
+		entityManager.clear();
+
+		// when - the stale instance (still version 0) tries to overwrite with its own value
+		ReflectionTestUtils.setField(stale, "username", "stale-loses");
+
+		// then - it is rejected instead of silently overwriting the winner
+		assertThatExceptionOfType(OptimisticLockingFailureException.class)
+				.isThrownBy(() -> reviewerRepository.saveAndFlush(stale));
+	}
+
+	@Test
 	void reviewer_multipleSequentialUpdates_versionIncrementsEachTime() {
 		// given
 		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
@@ -409,6 +461,37 @@ public class OptimisticLockingTest {
 		ReflectionTestUtils.setField(stale, "originalCourseId", UUID.randomUUID());
 
 		// then
+		assertThatExceptionOfType(OptimisticLockingFailureException.class)
+				.isThrownBy(() -> reviewableCourseRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void reviewableCourse_concurrentUpdate_winnerChangesPersistedAndStaleRejected() {
+		// given - two instances reading the same row at version 0
+		final Integer id = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		entityManager.clear();
+
+		final ReviewableCourse stale = reviewableCourseRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+		final ReviewableCourse fresh = reviewableCourseRepository.findById(id).orElseThrow();
+
+		// and - the first writer wins, persisting its originalCourseId
+		final UUID winnerCourseId = UUID.randomUUID();
+		ReflectionTestUtils.setField(fresh, "originalCourseId", winnerCourseId);
+		reviewableCourseRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// then - the winner's value is the one actually stored
+		entityManager.clear();
+		final ReviewableCourse reloaded = reviewableCourseRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "originalCourseId")).isEqualTo(winnerCourseId);
+		entityManager.clear();
+
+		// when - the stale instance (still version 0) tries to overwrite with its own value
+		ReflectionTestUtils.setField(stale, "originalCourseId", UUID.randomUUID());
+
+		// then - it is rejected instead of silently overwriting the winner
 		assertThatExceptionOfType(OptimisticLockingFailureException.class)
 				.isThrownBy(() -> reviewableCourseRepository.saveAndFlush(stale));
 	}
