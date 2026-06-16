@@ -4,6 +4,10 @@ import com.educational.platform.users.integration.event.UserCreatedIntegrationEv
 import com.educational.platform.users.login.SignInCommand;
 import com.educational.platform.users.registration.UserRegistrationCommand;
 import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
 import org.junit.jupiter.api.Test;
@@ -43,6 +47,51 @@ class UserVersionMappingTest {
             assertThat(field.getName()).isEqualTo("version");
             assertThat(field.getType()).isEqualTo(Integer.class);
         });
+    }
+
+    @Test
+    void entityUser_mapsToCustomUserTableTargetedByMigration() {
+        // the optimistic-locking column the Liquibase migration adds lives on the "custom_user" table. The
+        // version-column-name seam below pins the column, but the table mapping is the other half: in production
+        // (ddl-auto=none, schema owned by Liquibase) a renamed @Table would bind @Version to a different/absent
+        // table than the one the migration alters, silently disabling optimistic locking. The migration test
+        // asserts the column on "custom_user" with no entity in play, so this is the only place the entity-side
+        // mapping back to that exact table is pinned.
+        assertThat(User.class.isAnnotationPresent(Entity.class))
+                .as("User must remain a JPA @Entity for @Version to be managed")
+                .isTrue();
+
+        final Table table = User.class.getAnnotation(Table.class);
+        assertThat(table)
+                .as("User must declare @Table mapping it to the migration's table")
+                .isNotNull();
+        assertThat(table.name())
+                .as("User must map to the migration's \"custom_user\" table")
+                .isEqualTo("custom_user");
+    }
+
+    @Test
+    void entityUser_versionField_isNeitherIdNorGenerated() throws NoSuchFieldException {
+        // the @Version field is a dedicated optimistic-lock field, distinct from the primary key. Pin that it
+        // is neither the @Id nor @GeneratedValue-managed: conflating version with identity generation would make
+        // Hibernate populate it as a generated key rather than bump it on each write, silently breaking locking
+        // while still satisfying the "single Integer @Version field" checks above.
+        final Field version = User.class.getDeclaredField("version");
+        assertThat(version.isAnnotationPresent(Id.class))
+                .as("@Version field must not also be the @Id")
+                .isFalse();
+        assertThat(version.isAnnotationPresent(GeneratedValue.class))
+                .as("@Version must be bumped by JPA on write, not populated as a @GeneratedValue")
+                .isFalse();
+
+        // and the identity lives on a separate field, so the two concerns are not accidentally merged
+        final List<Field> idFields = List.of(User.class.getDeclaredFields()).stream()
+                .filter(field -> field.isAnnotationPresent(Id.class))
+                .toList();
+        assertThat(idFields).singleElement().satisfies(field ->
+                assertThat(field.getName())
+                        .as("the @Id must be a different field than the @Version field")
+                        .isNotEqualTo("version"));
     }
 
     @Test

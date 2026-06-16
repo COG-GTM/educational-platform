@@ -387,6 +387,28 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void save_detachedUserAtCurrentVersionAfterConcurrentModification_throughRepository_succeeds() {
+        // given a user that a concurrent transaction has since advanced (version 0 -> 1)
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the conflict is resolved by re-reading the now-current version and the unchanged detached instance
+        // is written back through the Spring Data merge path - the write path the registration handler uses
+        final User current = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.detach(current);
+        repository.saveAndFlush(current);
+
+        // then the merge succeeds: optimistic locking rejects only a behind version, it does not blanket-reject
+        // every merge. This is the recovery counterpart to save_staleUserThroughRepository_..., and unlike
+        // save_unchangedUpToDateUserThroughRepository_... it starts from a non-zero version produced by a genuine
+        // concurrent modification - the no-op merge neither trips the version check nor spuriously bumps the row.
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(1L);
+    }
+
+    @Test
     void delete_currentUser_succeeds() {
         // given
         repository.saveAndFlush(newUser());
