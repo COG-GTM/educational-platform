@@ -7,6 +7,7 @@ import com.educational.platform.users.UserDTO;
 import com.educational.platform.users.UserRepository;
 import com.educational.platform.users.registration.UserRegistrationCommand;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,6 +74,49 @@ public class UserPersistenceTest {
     }
 
     @Test
+    void persistAndReload_preservesTeacherRoleProjection() {
+        // given a teacher persisted with the new @Version column in place
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        entityManager.clear();
+
+        // when it is read back from the database
+        final User reloaded = repository.findByUsername("teacher").orElseThrow();
+
+        // then the version field does not interfere with mapping the non-default role through either projection
+        assertThat(reloaded.toDTO().role()).isEqualTo(RoleDTO.ROLE_TEACHER);
+        assertThat(reloaded.toUserDetails().getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactly(Role.ROLE_TEACHER.getAuthority());
+    }
+
+    @Test
+    void projections_afterVersionIncrement_areUnaffected() {
+        // given a persisted user whose version has since been bumped to 1
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User loaded = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+        entityManager.clear();
+
+        // when the entity is read back at its incremented version and projected
+        final User reloaded = repository.findByUsername(USERNAME).orElseThrow();
+
+        // then a changed version never leaks into the read projections
+        final UserDTO dto = reloaded.toDTO();
+        assertThat(dto.username()).isEqualTo(USERNAME);
+        assertThat(dto.email()).isEqualTo(EMAIL);
+        assertThat(dto.role()).isEqualTo(RoleDTO.ROLE_STUDENT);
+
+        final UserDetails userDetails = reloaded.toUserDetails();
+        assertThat(userDetails.getUsername()).isEqualTo(USERNAME);
+        assertThat(passwordEncoder.matches(RAW_PASSWORD, userDetails.getPassword())).isTrue();
+        assertThat(userDetails.getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactly(Role.ROLE_STUDENT.getAuthority());
+    }
+
+    @Test
     void existsByUsername_reflectsPersistedAndAbsentUsers() {
         // given a single persisted user
         repository.saveAndFlush(newUser());
@@ -83,11 +127,15 @@ public class UserPersistenceTest {
     }
 
     private User newUser() {
+        return newUser(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT);
+    }
+
+    private User newUser(final String username, final String email, final RoleDTO role) {
         final UserRegistrationCommand command = UserRegistrationCommand.builder()
-                .username(USERNAME)
-                .email(EMAIL)
+                .username(username)
+                .email(email)
                 .password(RAW_PASSWORD)
-                .role(RoleDTO.ROLE_STUDENT)
+                .role(role)
                 .build();
         return new User(command, passwordEncoder);
     }

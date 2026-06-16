@@ -56,6 +56,16 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void save_newUser_populatesManagedEntityVersionToZero() {
+        // given / when a transient user is persisted
+        final User saved = repository.saveAndFlush(newUser());
+
+        // then JPA assigns version 0 on the managed in-memory instance, not only on the row
+        // (complements save_newUser_initializesVersionToZero, which asserts the persisted column)
+        assertThat(saved).hasFieldOrPropertyWithValue("version", 0);
+    }
+
+    @Test
     void write_managedUser_incrementsVersion() {
         // given
         repository.saveAndFlush(newUser());
@@ -147,6 +157,27 @@ public class UserOptimisticLockingTest {
 
         // when the stale instance is written back, the version check fails
         // then (raw EntityManager write surfaces the JPA-standard exception)
+        assertThatExceptionOfType(OptimisticLockException.class)
+                .isThrownBy(() -> {
+                    entityManager.lock(stale, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+                    repository.flush();
+                });
+    }
+
+    @Test
+    void update_staleUserMultipleVersionsBehind_throwsOptimisticLockException() {
+        // given
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+
+        // simulate two successive concurrent transactions, advancing the row two versions ahead (0 -> 2)
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 2 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back, any divergence (not just an off-by-one) is detected
+        // then
         assertThatExceptionOfType(OptimisticLockException.class)
                 .isThrownBy(() -> {
                     entityManager.lock(stale, LockModeType.PESSIMISTIC_FORCE_INCREMENT);

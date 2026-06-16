@@ -135,6 +135,18 @@ class UserVersionColumnMigrationTest {
     }
 
     @Test
+    void migration_freshInstall_newRowWithoutVersion_defaultsToZero() throws Exception {
+        // given no pre-existing table: createTable + addColumn both run, exercising the
+        // full changelog (not just the addColumn upgrade path)
+        runUsersChangelog();
+
+        insertUserWithoutVersion("fresh");
+
+        // then the column DEFAULT 0 still applies to inserts that omit the version
+        assertThat(versionOf("fresh")).isZero();
+    }
+
+    @Test
     void migration_preservesExistingRowDataWhileBackfillingVersion() throws Exception {
         givenLegacyCustomUserTable();
         insertUserWithoutVersion("legacy");
