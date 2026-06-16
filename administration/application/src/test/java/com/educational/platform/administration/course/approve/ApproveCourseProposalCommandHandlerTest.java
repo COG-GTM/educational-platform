@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,6 +27,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -158,5 +160,24 @@ class ApproveCourseProposalCommandHandlerTest {
         assertThatExceptionOfType(CourseProposalAlreadyApprovedException.class).isThrownBy(handle);
         verify(repository, never()).save(any());
         verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void handle_existingCourseProposal_eventPublishedOnlyAfterVersionedSave() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+
+        final CourseProposal correspondingCourseProposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        sut.handle(command);
+
+        // then - the integration event must be emitted strictly AFTER the version-checked save, so an
+        // approval is never announced for a write the @Version optimistic-lock check could still reject
+        final InOrder inOrder = inOrder(repository, eventPublisher);
+        inOrder.verify(repository).save(any(CourseProposal.class));
+        inOrder.verify(eventPublisher).publishEvent(any(CourseApprovedByAdminIntegrationEvent.class));
     }
 }
