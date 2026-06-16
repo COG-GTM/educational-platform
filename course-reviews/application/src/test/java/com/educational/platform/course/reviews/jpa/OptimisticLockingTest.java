@@ -189,6 +189,21 @@ public class OptimisticLockingTest {
 				.isThrownBy(() -> courseReviewRepository.saveAndFlush(stale));
 	}
 
+	@Test
+	void courseReview_updatedWithSameValues_versionNotIncremented() {
+		// given - the seeded review (version 0, rating 4.0, comment "comment")
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+
+		// when - it is "updated" with the values it already has and flushed
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 4.0, "comment"));
+		courseReviewRepository.saveAndFlush(review);
+
+		// then - nothing actually changed, so Hibernate issues no UPDATE and the version stays 0
+		entityManager.clear();
+		final CourseReview reloaded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
+	}
+
 	// --- Reviewer -----------------------------------------------------------
 
 	@Test
@@ -313,6 +328,22 @@ public class OptimisticLockingTest {
 					reviewerRepository.delete(stale);
 					reviewerRepository.flush();
 				});
+	}
+
+	@Test
+	void reviewer_savedWithoutModification_versionNotIncremented() {
+		// given - a persisted reviewer at version 0
+		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
+		entityManager.clear();
+
+		// when - it is re-saved and flushed without changing any field
+		final Reviewer reviewer = reviewerRepository.findById(id).orElseThrow();
+		reviewerRepository.saveAndFlush(reviewer);
+
+		// then - with nothing dirty Hibernate issues no UPDATE, so the version stays 0
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
 	}
 
 	// --- ReviewableCourse ---------------------------------------------------
@@ -445,5 +476,22 @@ public class OptimisticLockingTest {
 					reviewableCourseRepository.delete(stale);
 					reviewableCourseRepository.flush();
 				});
+	}
+
+	@Test
+	void reviewableCourse_savedWithoutModification_versionNotIncremented() {
+		// given - a persisted reviewable course at version 0
+		final Integer id = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		entityManager.clear();
+
+		// when - it is re-saved and flushed without changing any field
+		final ReviewableCourse course = reviewableCourseRepository.findById(id).orElseThrow();
+		reviewableCourseRepository.saveAndFlush(course);
+
+		// then - with nothing dirty Hibernate issues no UPDATE, so the version stays 0
+		entityManager.clear();
+		final ReviewableCourse reloaded = reviewableCourseRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
 	}
 }
