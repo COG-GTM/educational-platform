@@ -396,6 +396,28 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void delete_staleUserAfterRealJpaWrite_throwsObjectOptimisticLockingFailureException() {
+        // given a user detached at version 0 (a request's view captured before a concurrent write)
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.detach(stale);
+
+        // a concurrent flow performs a real JPA write (forced increment, not a native UPDATE) that bumps the row to 1
+        forceIncrementVersion();
+        entityManager.clear();
+
+        // when the stale instance is deleted through the Spring Data merge path
+        // then a lost-delete produced by a genuine application write is rejected too, not just one forged via raw SQL
+        // (the delete-path sibling of save_staleUserAfterRealJpaWrite)
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> {
+                    repository.delete(stale);
+                    repository.flush();
+                });
+    }
+
+    @Test
     void delete_staleUserMultipleVersionsBehind_throwsObjectOptimisticLockingFailureException() {
         // given
         repository.saveAndFlush(newUser());

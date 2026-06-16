@@ -273,6 +273,30 @@ class UserVersionColumnMigrationTest {
         assertThat(columnIsNotNullable("ROLE")).as("role stays NOT NULL").isTrue();
     }
 
+    @Test
+    void migration_explicitVersionValueOnInsert_isHonouredOverColumnDefault() throws Exception {
+        givenLegacyCustomUserTable();
+        runUsersChangelog();
+
+        // when a row is inserted that explicitly supplies a non-zero version
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "INSERT INTO custom_user (username, email, password, role, version) VALUES (?, ?, ?, ?, ?)")) {
+            statement.setString(1, "explicit");
+            statement.setString(2, "explicit@gmail.com");
+            statement.setString(3, "password");
+            statement.setString(4, "ROLE_STUDENT");
+            statement.setLong(5, 7L);
+            statement.executeUpdate();
+        }
+
+        // then DEFAULT 0 only fills an omitted column - an explicitly provided version is stored verbatim, never
+        // clobbered to 0. This is the complement of migration_newRowWithoutVersion_defaultsToZero: that pins the
+        // default kicks in when the column is absent, this pins it stays out of the way when the column is given,
+        // which is exactly what an INSERT carrying a JPA-managed @Version relies on.
+        assertThat(versionOf("explicit")).isEqualTo(7L);
+    }
+
     private boolean columnIsNotNullable(final String column) throws SQLException {
         try (Connection connection = openConnection();
              ResultSet columns = connection.getMetaData().getColumns(null, null, "CUSTOM_USER", column)) {
