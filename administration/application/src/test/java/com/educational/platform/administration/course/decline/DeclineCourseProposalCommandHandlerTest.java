@@ -163,6 +163,32 @@ public class DeclineCourseProposalCommandHandlerTest {
     }
 
     @Test
+    void handle_loadedAggregateAlreadyVersioned_savedAndEventPublishedWithVersionUntouched() {
+        // given - in production findByUuid returns an already-persisted aggregate whose @Version has
+        // been populated by JPA; the existing happy-path test only exercises a transient version==null
+        // instance. Simulate a row previously persisted at version 4.
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+
+        final CourseProposal loaded = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        ReflectionTestUtils.setField(loaded, "version", 4);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(loaded));
+
+        // when
+        sut.handle(command);
+
+        // then - the handler flips the status and hands the aggregate to save with its @Version passed
+        // through untouched (the counter is advanced by JPA on the write, never by the handler), and the
+        // integration event is published
+        final ArgumentCaptor<CourseProposal> saved = ArgumentCaptor.forClass(CourseProposal.class);
+        verify(repository).save(saved.capture());
+        assertThat(saved.getValue())
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED)
+                .hasFieldOrPropertyWithValue("version", 4);
+        verify(eventPublisher).publishEvent(any(CourseDeclinedByAdminIntegrationEvent.class));
+    }
+
+    @Test
     void handle_existingCourseProposal_eventPublishedOnlyAfterVersionedSave() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

@@ -197,4 +197,41 @@ public class CourseProposalTest {
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
     }
 
+    @Test
+    void toDTO_approvedProposalWithVersion_statusMappedAndVersionExcluded() {
+        // given - in production the @Version is only non-zero once a proposal has been approved and
+        // persisted; the existing version-exclusion test only covers the WAITING construction state
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal approved = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        approved.approve();
+        ReflectionTestUtils.setField(approved, "version", 3);
+
+        // when
+        final CourseProposalDTO dto = approved.toDTO();
+
+        // then - the read model exposes only uuid + the mapped status and never the @Version, so the
+        // exclusion holds for the APPROVED terminal state the optimistic-lock counter actually reaches
+        assertThat(dto)
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.APPROVED);
+    }
+
+    @Test
+    void toDTO_declinedProposalWithVersion_statusMappedAndVersionExcluded() {
+        // given - symmetric to the approved case: the @Version is non-zero only after a persisted decline
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal declined = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        declined.decline();
+        ReflectionTestUtils.setField(declined, "version", 3);
+
+        // when
+        final CourseProposalDTO dto = declined.toDTO();
+
+        // then - the read model exposes only uuid + the mapped status and never the @Version, so the
+        // exclusion holds for the DECLINED terminal state the optimistic-lock counter actually reaches
+        assertThat(dto)
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.DECLINED);
+    }
+
 }
