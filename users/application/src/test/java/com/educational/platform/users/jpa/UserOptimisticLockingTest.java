@@ -287,6 +287,25 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void save_staleUserMultipleVersionsBehindThroughRepository_throwsObjectOptimisticLockingFailureException() {
+        // given a user detached at version 0
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.detach(stale);
+
+        // simulate two successive concurrent transactions, advancing the row two versions ahead (0 -> 2)
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 2 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back through the Spring Data merge path
+        // then any divergence (not just an off-by-one) is rejected, complementing the +1 merge-path case
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> repository.saveAndFlush(stale));
+    }
+
+    @Test
     void save_unchangedUpToDateUserThroughRepository_succeedsWithoutChangingVersion() {
         // given an up-to-date user detached at version 0
         repository.saveAndFlush(newUser());
@@ -333,6 +352,26 @@ public class UserOptimisticLockingTest {
         repository.delete(stale);
 
         // then
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(repository::flush);
+    }
+
+    @Test
+    void delete_staleUserMultipleVersionsBehind_throwsObjectOptimisticLockingFailureException() {
+        // given
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+
+        // simulate two successive concurrent transactions, advancing the row two versions ahead (0 -> 2)
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 2 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is deleted, any divergence (not just an off-by-one) is detected
+        repository.delete(stale);
+
+        // then the delete path rejects a deleter more than one version behind, mirroring the update-path case
         assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
                 .isThrownBy(repository::flush);
     }
