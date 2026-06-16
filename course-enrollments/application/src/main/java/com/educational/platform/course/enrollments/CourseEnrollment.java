@@ -15,6 +15,9 @@ public class CourseEnrollment implements AggregateRoot {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    @Version
+    private Integer version;
+
     private UUID uuid;
 
     private Integer course;

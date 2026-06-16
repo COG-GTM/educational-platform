@@ -116,3 +116,42 @@ databaseChangeLog:
             referencedColumnNames: id
             referencedTableName: student
             validate: true
+  - changeSet:
+      id: add-version-column-to-course_enrollment
+      author: devin
+      changes:
+        - addColumn:
+            tableName: course_enrollment
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: add-version-column-to-enroll_course
+      author: devin
+      changes:
+        - addColumn:
+            tableName: enroll_course
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: add-version-column-to-student
+      author: devin
+      changes:
+        - addColumn:
+            tableName: student
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
