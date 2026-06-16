@@ -287,6 +287,28 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void concurrentWriters_firstCommitWins_andStaleSecondWriteIsRejectedNotSilentlyApplied() {
+        // given two writers that both loaded the user at version 0; the second keeps a detached copy
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User secondWriter = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.detach(secondWriter);
+
+        // when the first writer commits a real JPA write, advancing the persisted row to version 1
+        forceIncrementVersion();
+        entityManager.clear();
+
+        // then the first writer's change is durably in place before the second writer acts...
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(1L);
+
+        // ...and the second, now-stale writer is rejected rather than silently overwriting it - this is
+        // the headline guarantee of the PR: concurrent updates are detected, not lost. Every other test
+        // asserts either the conflict or the surviving state; this pins both halves in one flow.
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> repository.saveAndFlush(secondWriter));
+    }
+
+    @Test
     void save_staleUserMultipleVersionsBehindThroughRepository_throwsObjectOptimisticLockingFailureException() {
         // given a user detached at version 0
         repository.saveAndFlush(newUser());

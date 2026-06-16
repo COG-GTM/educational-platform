@@ -2,12 +2,15 @@ package com.educational.platform.users;
 
 import com.educational.platform.users.login.SignInCommand;
 import com.educational.platform.users.registration.UserRegistrationCommand;
+import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -38,6 +41,32 @@ class UserVersionMappingTest {
             assertThat(field.getName()).isEqualTo("version");
             assertThat(field.getType()).isEqualTo(Integer.class);
         });
+    }
+
+    @Test
+    void entityUser_versionField_isAPersistentInstanceField() throws NoSuchFieldException {
+        // a static or @Transient field would still satisfy the "single Integer @Version field" check above
+        // yet silently disable optimistic locking - Hibernate only manages a persistent instance field.
+        // Pin that the mapping is genuinely active, not merely present.
+        final Field version = User.class.getDeclaredField("version");
+
+        assertThat(Modifier.isStatic(version.getModifiers()))
+                .as("@Version must be an instance field, not static")
+                .isFalse();
+        assertThat(version.isAnnotationPresent(Transient.class))
+                .as("@Version must be persistent, not @Transient")
+                .isFalse();
+    }
+
+    @Test
+    void entityUser_doesNotExposeVersionAccessorOrMutator() {
+        // the PR's design rests on User having no field mutators - the version is owned by JPA and the
+        // only domain write path is the constructor. Enforce that the optimistic-locking version can be
+        // neither read nor set through the public API (no getVersion/setVersion leaks it onto callers).
+        assertThat(User.class.getDeclaredMethods())
+                .extracting(Method::getName)
+                .as("User must not expose any accessor or mutator for the version field")
+                .doesNotContain("getVersion", "setVersion", "isVersion", "version");
     }
 
     @Test
