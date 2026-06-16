@@ -622,6 +622,33 @@ class UserOptimisticLockingOnMigratedSchemaTest {
     }
 
     @Test
+    void delete_afterRefreshingConcurrentlyModifiedUser_onMigratedSchema_succeeds() {
+        // given a stale managed instance loaded at version 0, then a concurrent transaction advances the row (0 -> 1)
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the conflict is resolved by refreshing the *same* managed instance in place (re-syncing its version
+        // from the row) rather than re-reading a new one via the finder, then deleting it against the migrated BIGINT
+        // column. This is the delete-path counterpart to write_afterRefreshingConcurrentlyModifiedUser_onMigratedSchema_succeeds
+        // and the refresh-based sibling of delete_afterReReadingConcurrentlyModifiedUser_onMigratedSchema_succeeds (which
+        // discards the stale instance and loads a fresh one). UserOptimisticLockingTest.delete_afterRefreshingConcurrentlyModifiedUser_succeeds
+        // pins this on the Hibernate-generated INTEGER schema only; this is its missing production-schema counterpart.
+        entityManager.refresh(stale);
+        assertThat(stale).as("refresh re-syncs the stale instance's version from the row")
+                .hasFieldOrPropertyWithValue("version", 1);
+        repository.delete(stale);
+        repository.flush();
+
+        // then the refreshed instance is no longer treated as stale: the delete succeeds and removes the row on the
+        // real BIGINT column
+        assertThat(repository.findByUsername(USERNAME)).isEmpty();
+    }
+
+    @Test
     void update_staleUserLoadedById_onMigratedSchema_throwsOptimisticLockException() {
         // given a user loaded through the primary-key finder on the migrated schema - the read path a request flow
         // uses (load aggregate by id, then write), which the findByUsername-based migrated-schema tests never exercise

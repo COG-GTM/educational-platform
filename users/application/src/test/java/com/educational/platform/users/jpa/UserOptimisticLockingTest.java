@@ -617,6 +617,31 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void delete_afterRefreshingConcurrentlyModifiedUser_succeeds() {
+        // given a stale managed instance: loaded at version 0, then a concurrent transaction advances the row (0 -> 1)
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the conflict is resolved by refreshing the *same* managed instance in place (re-syncing its version
+        // from the row) rather than re-reading a new instance via the finder, then deleting it. This is the
+        // delete-path counterpart to update_afterRefreshingConcurrentlyModifiedUser_succeeds and the refresh-based
+        // sibling of delete_afterReloadingConcurrentlyModifiedUser_succeeds (which discards the stale instance and
+        // loads a fresh one); refresh re-attaches the existing one.
+        entityManager.refresh(stale);
+        assertThat(stale).as("refresh re-syncs the stale instance's version from the row")
+                .hasFieldOrPropertyWithValue("version", 1);
+        repository.delete(stale);
+        repository.flush();
+
+        // then the refreshed instance is no longer treated as stale: the delete is not rejected and the row is removed
+        assertThat(repository.findByUsername(USERNAME)).isEmpty();
+    }
+
+    @Test
     void update_staleUserLoadedById_throwsOptimisticLockException() {
         // given a user loaded through the primary-key finder - the read path a request flow uses
         // (load aggregate by id, then write), which the findByUsername-based tests never exercise
