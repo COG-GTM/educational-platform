@@ -106,6 +106,31 @@ class CourseOptimisticLockingTest {
     }
 
     @Test
+    void saveAndFlush_staleTeacher_throwsObjectOptimisticLockingFailureException() {
+        // given - a persisted teacher at version 0
+        final Teacher teacher = teacherRepository.saveAndFlush(new Teacher(new CreateTeacherCommand(TEACHER)));
+        final Integer id = teacher.getId();
+        entityManager.clear();
+
+        // and - a detached copy snapshotting version 0
+        final Teacher stale = teacherRepository.findById(id).orElseThrow();
+        entityManager.detach(stale);
+
+        // and - a concurrent update bumps the persisted version to 1
+        final Teacher concurrent = teacherRepository.findById(id).orElseThrow();
+        ReflectionTestUtils.setField(concurrent, "username", "concurrent");
+        teacherRepository.saveAndFlush(concurrent);
+        entityManager.clear();
+
+        // when - persisting the now-stale copy
+        ReflectionTestUtils.setField(stale, "username", "stale");
+
+        // then
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> teacherRepository.saveAndFlush(stale));
+    }
+
+    @Test
     void update_persistedTeacher_versionIncremented() {
         // given
         final Teacher teacher = teacherRepository.saveAndFlush(new Teacher(new CreateTeacherCommand(TEACHER)));
