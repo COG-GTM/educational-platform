@@ -2,6 +2,8 @@ package com.educational.platform.course.reviews.jpa;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Constructor;
 import java.util.UUID;
@@ -19,16 +21,21 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.educational.platform.course.reviews.CourseReview;
 import com.educational.platform.course.reviews.CourseReviewDTO;
+import com.educational.platform.course.reviews.CourseReviewFactory;
 import com.educational.platform.course.reviews.CourseReviewRepository;
+import com.educational.platform.course.reviews.CurrentUserAsReviewer;
 import com.educational.platform.course.reviews.course.ReviewableCourse;
 import com.educational.platform.course.reviews.course.ReviewableCourseRepository;
 import com.educational.platform.course.reviews.course.create.CreateReviewableCourseCommand;
+import com.educational.platform.course.reviews.course.create.CreateReviewableCourseCommandHandler;
 import com.educational.platform.course.reviews.create.ReviewCourseCommand;
+import com.educational.platform.course.reviews.create.ReviewCourseCommandHandler;
 import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommand;
 import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommandHandler;
 import com.educational.platform.course.reviews.reviewer.Reviewer;
 import com.educational.platform.course.reviews.reviewer.ReviewerRepository;
 import com.educational.platform.course.reviews.reviewer.create.CreateReviewerCommand;
+import com.educational.platform.course.reviews.reviewer.create.CreateReviewerCommandHandler;
 
 /**
  * Verifies the JPA optimistic locking ({@code @Version}) behaviour added to the course-reviews entities:
@@ -269,6 +276,32 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void courseReview_createdViaCommandHandler_versionInitializedToZero() {
+		// given - the production create path: the real factory + command handler wired with the real
+		// repositories. Only the security-dependent reviewer lookup is mocked, as in CourseReviewFactoryTest.
+		final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+		final CurrentUserAsReviewer currentUserAsReviewer = mock(CurrentUserAsReviewer.class);
+		when(currentUserAsReviewer.userAsReviewer()).thenReturn(reviewerRepository.findByUsername("reviewer"));
+		final CourseReviewFactory factory = new CourseReviewFactory(validator, currentUserAsReviewer, reviewableCourseRepository);
+		final ReviewCourseCommandHandler handler = new ReviewCourseCommandHandler(courseReviewRepository, factory);
+
+		// when - a brand new review is created for the seeded course through the handler
+		final UUID createdUuid = handler.handle(new ReviewCourseCommand(COURSE_UUID, 3.0, "created via handler"));
+		entityManager.flush();
+		entityManager.clear();
+
+		// then - @Version integrates transparently with the existing create flow: the fresh row starts at
+		// version 0 and its field values are persisted, confirming no factory/handler change was required
+		final CourseReview created = courseReviewRepository.findByUuid(createdUuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(created, "version")).isEqualTo(0);
+		final CourseReviewDTO dto = courseReviewRepository.listCourseReviews(COURSE_UUID).stream()
+				.filter(review -> review.uuid().equals(createdUuid))
+				.findFirst().orElseThrow();
+		assertThat(dto.rating()).isEqualTo(3.0);
+		assertThat(dto.comment()).isEqualTo("created via handler");
+	}
+
+	@Test
 	void courseReview_concurrentUpdateAfterRefresh_succeedsAndVersionIncrements() {
 		// given - the first writer wins, bumping the persisted version to 1
 		final CourseReview first = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
@@ -376,6 +409,21 @@ public class OptimisticLockingTest {
 
 		// then
 		assertThat(ReflectionTestUtils.getField(reviewer, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void reviewer_createdViaCommandHandler_versionInitializedToZero() {
+		// given - the production create path: the real command handler wired with the real repository
+		final CreateReviewerCommandHandler handler = new CreateReviewerCommandHandler(reviewerRepository);
+
+		// when - a reviewer is created through the handler
+		handler.handle(new CreateReviewerCommand("created-via-handler"));
+		entityManager.flush();
+		entityManager.clear();
+
+		// then - the fresh row starts at version 0, confirming @Version needs no create-handler change
+		final Reviewer created = reviewerRepository.findByUsername("created-via-handler");
+		assertThat(ReflectionTestUtils.getField(created, "version")).isEqualTo(0);
 	}
 
 	@Test
@@ -668,6 +716,22 @@ public class OptimisticLockingTest {
 
 		// then
 		assertThat(ReflectionTestUtils.getField(course, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void reviewableCourse_createdViaCommandHandler_versionInitializedToZero() {
+		// given - the production create path: the real command handler wired with the real repository
+		final UUID originalCourseId = UUID.randomUUID();
+		final CreateReviewableCourseCommandHandler handler = new CreateReviewableCourseCommandHandler(reviewableCourseRepository);
+
+		// when - a reviewable course is created through the handler
+		handler.handle(new CreateReviewableCourseCommand(originalCourseId));
+		entityManager.flush();
+		entityManager.clear();
+
+		// then - the fresh row starts at version 0, confirming @Version needs no create-handler change
+		final ReviewableCourse created = reviewableCourseRepository.findByOriginalCourseId(originalCourseId).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(created, "version")).isEqualTo(0);
 	}
 
 	@Test
