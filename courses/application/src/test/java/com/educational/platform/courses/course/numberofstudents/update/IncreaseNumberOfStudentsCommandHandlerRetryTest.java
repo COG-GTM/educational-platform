@@ -69,6 +69,53 @@ class IncreaseNumberOfStudentsCommandHandlerRetryTest {
     }
 
     @Test
+    void handle_succeedsOnFirstAttempt_doesNotRetry() {
+        // given - the save persists immediately, no version clash
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        sut.handle(command);
+
+        // then - the happy path runs exactly once, the retry proxy does not re-invoke
+        verify(repository, times(1)).findByUuid(uuid);
+        final ArgumentCaptor<Course> saved = ArgumentCaptor.forClass(Course.class);
+        verify(repository, times(1)).save(saved.capture());
+        assertThat(saved.getValue()).hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(1));
+    }
+
+    @Test
+    void handle_singleOptimisticLockThenSuccess_retriesOnce() {
+        // given - only the first save clashes on the version, the retry succeeds
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        sut.handle(command);
+
+        // then - retry stops as soon as a save succeeds: exactly two attempts, fewer than maxAttempts
+        verify(repository, times(2)).findByUuid(uuid);
+        verify(repository, times(2)).save(any(Course.class));
+    }
+
+    @Test
+    void handle_nonRetryableException_propagatesWithoutRetry() {
+        // given - save fails with an exception outside retryFor
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class))).thenThrow(new IllegalStateException("boom"));
+
+        // when
+        final ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - only ObjectOptimisticLockingFailureException is retried, so this propagates on the first attempt
+        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(handle);
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, times(1)).save(any(Course.class));
+    }
+
+    @Test
     void handle_optimisticLockThenSuccess_retriesUntilSavePersists() {
         // given - the first two saves clash on the version, the third one succeeds
         when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
