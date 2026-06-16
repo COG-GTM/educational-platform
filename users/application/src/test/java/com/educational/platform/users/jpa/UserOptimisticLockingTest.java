@@ -615,6 +615,35 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void delete_staleUserFromNonZeroBaseline_throwsObjectOptimisticLockingFailureException() {
+        // given a long-lived row whose version has already advanced to 2 before any conflict - every other
+        // delete-path stale test loads a freshly persisted version-0 entity. The update path
+        // (update_staleUserFromNonZeroBaseline) and the merge/save path
+        // (save_staleUserFromNonZeroBaseline_throughRepository) each pin this non-zero baseline; the delete path
+        // is the missing cell, so this completes the non-zero-baseline coverage across all three write paths.
+        repository.saveAndFlush(newUser());
+        forceIncrementVersion();
+        forceIncrementVersion();
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        assertThat(stale).hasFieldOrPropertyWithValue("version", 2);
+
+        // when a concurrent transaction advances the row past the loaded baseline (2 -> 3)
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is deleted, the version check finds no row at the loaded version
+        repository.delete(stale);
+
+        // then the lost delete is rejected from a non-zero baseline too: optimistic locking compares the loaded
+        // version against the row, it is not special-cased to the initial 0 -> 1 transition the other delete-path
+        // stale tests all start from
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(repository::flush);
+    }
+
+    @Test
     void update_afterConcurrentDelete_throwsOptimisticLockException() {
         // given
         repository.saveAndFlush(newUser());

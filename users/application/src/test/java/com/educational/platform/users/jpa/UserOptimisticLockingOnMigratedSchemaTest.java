@@ -1,5 +1,6 @@
 package com.educational.platform.users.jpa;
 
+import com.educational.platform.users.Role;
 import com.educational.platform.users.RoleDTO;
 import com.educational.platform.users.User;
 import com.educational.platform.users.UserRepository;
@@ -110,6 +111,37 @@ class UserOptimisticLockingOnMigratedSchemaTest {
         // entity<->migration agreement holds at runtime, not just by reflection
         assertThat(saved).hasFieldOrPropertyWithValue("version", 0);
         assertThat(((Number) versionOf(USERNAME)).longValue()).isZero();
+    }
+
+    @Test
+    void legacyRowInsertedWithoutVersion_onMigratedSchema_loadsAtZeroAndParticipatesInOptimisticLocking() {
+        // given a row inserted directly into the migrated table without supplying a version - the shape of a
+        // pre-existing/legacy row the upgrade backfills via the column's DEFAULT 0, rather than one the
+        // version-aware entity inserted itself (every other test here creates rows through repository.save).
+        // On the Hibernate-generated INTEGER schema this cannot even be expressed: that column has no DB-level
+        // default, so this DEFAULT-0 backfill behaviour is unique to the migration-owned BIGINT column.
+        entityManager.createNativeQuery(
+                        "INSERT INTO custom_user (username, email, password, role) VALUES (:username, :email, :password, :role)")
+                .setParameter("username", USERNAME)
+                .setParameter("email", "email@gmail.com")
+                .setParameter("password", "password")
+                .setParameter("role", Role.ROLE_STUDENT.ordinal())
+                .executeUpdate();
+        entityManager.clear();
+
+        // when the backfilled row is loaded through the JPA entity, then written back
+        final User loaded = repository.findByUsername(USERNAME).orElseThrow();
+
+        // then the migration's DEFAULT materialises onto the Integer-typed @Version field as 0...
+        assertThat(loaded).extracting("version").isInstanceOf(Integer.class);
+        assertThat(loaded).hasFieldOrPropertyWithValue("version", 0);
+
+        // ...and the backfilled row is a first-class optimistic-locking participant: a write advances it from the
+        // DEFAULT-0 baseline (0 -> 1), proving the entity locks rows it did not itself insert, not just ones it did
+        entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+        assertThat(loaded).hasFieldOrPropertyWithValue("version", 1);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(1L);
     }
 
     @Test
@@ -652,6 +684,36 @@ class UserOptimisticLockingOnMigratedSchemaTest {
 
         // then the delete path rejects a deleter more than one version behind on the production schema too, mirroring
         // staleDelete_onMigratedSchema_... (which only covers the +1 case)
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(repository::flush);
+    }
+
+    @Test
+    void delete_staleUserFromNonZeroBaseline_onMigratedSchema_throwsObjectOptimisticLockingFailureException() {
+        // given a long-lived row on the migrated schema whose version has already advanced to 2 before any
+        // conflict - every other delete-path stale test here loads a freshly persisted version-0 entity. The
+        // update path (staleWriteFromNonZeroBaseline_onMigratedSchema) and merge/save path
+        // (save_staleUserFromNonZeroBaseline_throughRepository_onMigratedSchema) each pin this non-zero baseline
+        // on the BIGINT column; the delete path is the missing cell, completing the non-zero-baseline matrix
+        // across all three write paths on the production schema (the counterpart to
+        // UserOptimisticLockingTest.delete_staleUserFromNonZeroBaseline_...).
+        repository.saveAndFlush(newUser());
+        forceIncrementVersion();
+        forceIncrementVersion();
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        assertThat(stale).hasFieldOrPropertyWithValue("version", 2);
+
+        // and a concurrent transaction that advances the row past the loaded baseline (2 -> 3)
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is deleted, the version check finds no row at the loaded version
+        repository.delete(stale);
+
+        // then the lost delete is rejected from a non-zero baseline on the BIGINT column too: detection compares
+        // the loaded version against the row and is not special-cased to the initial 0 -> 1 transition
         assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
                 .isThrownBy(repository::flush);
     }
