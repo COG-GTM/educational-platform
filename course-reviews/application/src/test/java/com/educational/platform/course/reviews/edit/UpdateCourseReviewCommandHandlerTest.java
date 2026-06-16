@@ -212,6 +212,26 @@ public class UpdateCourseReviewCommandHandlerTest {
         verify(courseReviewRepository, never()).save(any(CourseReview.class));
     }
 
+    @Test
+    void handle_notFoundWithInvalidRating_notFoundWinsAndNoVersionBumpingSavePerformed() {
+        // given - no review exists for the command's uuid AND the rating violates @NotNull, so both the
+        // not-found and the validation guard would reject the update
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, null, "updated comment");
+        when(courseReviewRepository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when - the missing-and-invalid update is handled
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - the handler resolves the row before validating, so the not-found check short-circuits first
+        // (ResourceNotFoundException, not ConstraintViolationException) and save is never reached. This pins the
+        // order-of-operations that guarantees no rejection path can reach the version-bumping persist: the
+        // existing no-save tests cover not-found-with-valid-rating and present-with-invalid-rating separately,
+        // but not the overlap where both rejections apply at once.
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verify(courseReviewRepository, never()).save(any(CourseReview.class));
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
