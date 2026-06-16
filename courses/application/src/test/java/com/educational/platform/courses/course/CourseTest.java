@@ -243,6 +243,39 @@ public class CourseTest {
     }
 
     @Test
+    void create_validCommand_initialRatingAndNumberOfStudentsAreZero() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // then - the mutation tests assume these start at zero; make the baseline explicit
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0))
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(0));
+    }
+
+    @Test
+    void create_validCommand_versionIsNullBeforePersist() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // then - the @Version field is JPA-managed; before persist it must be null so that Hibernate
+        // initialises it to 0 on INSERT rather than issuing an UPDATE with a stale snapshot
+        assertThat(ReflectionTestUtils.getField(course, "version")).isNull();
+    }
+
+    @Test
     void updateRating_leavesNumberOfStudentsUntouched() {
         // given - a fresh course starts with zero students
         final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()

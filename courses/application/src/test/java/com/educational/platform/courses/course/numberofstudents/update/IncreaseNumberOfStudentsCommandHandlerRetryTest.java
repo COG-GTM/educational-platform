@@ -240,6 +240,14 @@ class IncreaseNumberOfStudentsCommandHandlerRetryTest {
         assertThat(backoff.delay()).isEqualTo(100L);
     }
 
+    @Test
+    void handle_declaringClass_isAnnotatedWithTransactional() {
+        // the retry-wraps-outside-transaction contract requires @Transactional on the handler class;
+        // without it, retry attempts would not run in their own fresh transactions
+        assertThat(IncreaseNumberOfStudentsCommandHandler.class.getAnnotation(
+                org.springframework.transaction.annotation.Transactional.class)).isNotNull();
+    }
+
     private static Course newCourse() {
         final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
                 .name("name")

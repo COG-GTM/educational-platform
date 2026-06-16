@@ -79,6 +79,15 @@ class CourseRetryConfigurationTest {
     }
 
     @Test
+    void courseRetryConfiguration_isAnnotatedWithConfigurationAndEnableRetry() {
+        // pin the annotation contract; removing either annotation silently disables retry in production
+        assertThat(CourseRetryConfiguration.class.getAnnotation(
+                org.springframework.context.annotation.Configuration.class)).isNotNull();
+        assertThat(CourseRetryConfiguration.class.getAnnotation(
+                org.springframework.retry.annotation.EnableRetry.class)).isNotNull();
+    }
+
+    @Test
     void enableRetry_wrapsCommandHandlersInRetryAwareProxies() {
         // the @EnableRetry advisor from CourseRetryConfiguration proxies the @Retryable handlers
         assertThat(AopUtils.isAopProxy(increaseNumberOfStudentsCommandHandler)).isTrue();

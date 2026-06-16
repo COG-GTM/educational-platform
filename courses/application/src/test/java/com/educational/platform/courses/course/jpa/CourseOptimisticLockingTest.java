@@ -245,6 +245,49 @@ class CourseOptimisticLockingTest {
         assertThat(versionAttribute.getJavaType()).isEqualTo(Integer.class);
     }
 
+    @Test
+    void update_persistedTeacherRepeatedly_versionIncrementsOncePerFlush() {
+        // given - a persisted teacher at version 0
+        final Teacher teacher = teacherRepository.saveAndFlush(new Teacher(new CreateTeacherCommand(TEACHER)));
+        final Integer id = teacher.getId();
+
+        // when - three independent reload -> mutate -> flush cycles
+        for (int i = 0; i < 3; i++) {
+            entityManager.clear();
+            final Teacher loaded = teacherRepository.findById(id).orElseThrow();
+            ReflectionTestUtils.setField(loaded, "username", "renamed-" + i);
+            teacherRepository.saveAndFlush(loaded);
+        }
+
+        // then - the version advances exactly once per flush
+        entityManager.clear();
+        final Teacher reloaded = teacherRepository.findById(id).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(3);
+    }
+
+    @Test
+    void saveAndFlush_reloadTeacherAfterConcurrentUpdate_succeedsWithIncrementedVersion() {
+        // given - a persisted teacher at version 0
+        final Teacher teacher = teacherRepository.saveAndFlush(new Teacher(new CreateTeacherCommand(TEACHER)));
+        final Integer id = teacher.getId();
+        entityManager.clear();
+
+        // and - a concurrent writer bumps the persisted version to 1
+        final Teacher concurrent = teacherRepository.findById(id).orElseThrow();
+        ReflectionTestUtils.setField(concurrent, "username", "concurrent");
+        teacherRepository.saveAndFlush(concurrent);
+        entityManager.clear();
+
+        // when - reloading a fresh copy (what a retry attempt does) and saving it
+        final Teacher reloaded = teacherRepository.findById(id).orElseThrow();
+        ReflectionTestUtils.setField(reloaded, "username", "retried");
+        teacherRepository.saveAndFlush(reloaded);
+
+        // then - the reload sees version 1 and the save succeeds, advancing it to 2
+        assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
+        assertThat(reloaded.toIdentity()).isEqualTo("retried");
+    }
+
     private Teacher persistTeacher() {
         final Teacher teacher = new Teacher(new CreateTeacherCommand(TEACHER));
         return teacherRepository.saveAndFlush(teacher);
