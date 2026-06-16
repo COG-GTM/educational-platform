@@ -259,6 +259,26 @@ public class OptimisticLockingTest {
 		assertThat(reloaded).hasFieldOrPropertyWithValue("version", 1);
 	}
 
+	@Test
+	void delete_staleStudent_concurrentlyUpdated_optimisticLockingFailure() {
+		// given a persisted student and a stale snapshot of it
+		final Integer id = entityManager
+				.getId(entityManager.persistFlushFind(new Student(new CreateStudentCommand("username"))), Integer.class);
+		entityManager.clear();
+		final Student stale = studentRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+
+		// when another transaction updates the same row (version 0 -> 1)
+		incrementVersion("student", id);
+
+		// then deleting the stale snapshot fails fast instead of dropping fresh data
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> {
+					studentRepository.delete(stale);
+					studentRepository.flush();
+				});
+	}
+
 	// --- EnrollCourse -------------------------------------------------------
 
 	@Test
@@ -357,6 +377,27 @@ public class OptimisticLockingTest {
 
 		// then the non-zero version is mapped back onto the Integer field
 		assertThat(reloaded).hasFieldOrPropertyWithValue("version", 1);
+	}
+
+	@Test
+	void delete_staleEnrollCourse_concurrentlyUpdated_optimisticLockingFailure() {
+		// given a persisted course and a stale snapshot of it
+		final Integer id = entityManager
+				.getId(entityManager.persistFlushFind(new EnrollCourse(new CreateCourseCommand(UUID.randomUUID()))),
+						Integer.class);
+		entityManager.clear();
+		final EnrollCourse stale = enrollCourseRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+
+		// when another transaction updates the same row (version 0 -> 1)
+		incrementVersion("enroll_course", id);
+
+		// then deleting the stale snapshot fails fast instead of dropping fresh data
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> {
+					enrollCourseRepository.delete(stale);
+					enrollCourseRepository.flush();
+				});
 	}
 
 	/**
