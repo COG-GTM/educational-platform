@@ -106,4 +106,53 @@ public class CourseReviewApiTest {
 				.statusCode(HttpStatus.NO_CONTENT.value());
 	}
 
+	@Test
+	void updateTwice_validRequests_latestReviewPersisted() {
+		// given - a review created through the API. With the @Version this PR added, the row is persisted at
+		// version 0 and every subsequent update reads the current version, bumps it and writes it back.
+		var token = SignUpHelper.signUpStudent();
+		final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final UUID reviewUuid = UUID.fromString(given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + token)
+				.body("{\n" + "  \"rating\": 3.2\n" + "}")
+
+				.when()
+				.post("/courses/{uuid}/reviews", courseUuid)
+				.path("uuid"));
+
+		// when - the same review is updated twice in a row through the full HTTP stack (controller, security filter,
+		// command handler, JPA). Both updates must succeed end-to-end: the second one operates on the version-1 row
+		// the first one produced, so a mishandled optimistic-lock version would fail it instead of returning 204.
+		updateReview(token, courseUuid, reviewUuid, 3.5, "first update");
+		updateReview(token, courseUuid, reviewUuid, 4.5, "second update");
+
+		// then - the latest write wins and is observable through the public read API. Existing API coverage only
+		// creates-then-updates once and asserts the 204 status; it never re-updates nor reads the value back, so
+		// repeated version-incrementing updates through the controller were previously unverified end-to-end.
+		given()
+				.header("Authorization", "Bearer " + token)
+
+				.when()
+				.get("/courses/{uuid}/reviews", courseUuid)
+
+				.then()
+				.body("[0].uuid", equalTo(reviewUuid.toString()))
+				.body("[0].comment", equalTo("second update"))
+				.statusCode(HttpStatus.OK.value());
+	}
+
+	private void updateReview(String token, UUID courseUuid, UUID reviewUuid, double rating, String comment) {
+		given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + token)
+				.body("{\n" + "  \"comment\": \"" + comment + "\",\n" + "  \"rating\": " + rating + "\n}")
+
+				.when()
+				.put("/courses/{courseUuid}/reviews/{reviewUuid}", courseUuid, reviewUuid)
+
+				.then()
+				.statusCode(HttpStatus.NO_CONTENT.value());
+	}
+
 }
