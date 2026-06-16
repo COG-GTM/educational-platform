@@ -107,4 +107,24 @@ class CourseReviewsLiquibaseMigrationTest {
 		final Long version = jdbcTemplate.queryForObject("SELECT version FROM course_review", Long.class);
 		assertThat(version).isZero();
 	}
+
+	@Test
+	void migration_appliedTwice_isIdempotent() throws Exception {
+		// given - the changelog already applied once by @BeforeEach
+		// when - the same changelog is applied a second time against the same datasource
+		final SpringLiquibase rerun = new SpringLiquibase();
+		rerun.setDataSource(dataSource);
+		rerun.setChangeLog("classpath:db/course-reviews.yml");
+		rerun.setResourceLoader(new DefaultResourceLoader());
+		rerun.afterPropertiesSet();
+
+		// then - Liquibase skips the already-applied add-version-column changeSets instead of failing,
+		// and the version column is not duplicated on the table (re-running migrations is a deploy-time
+		// reality, so the changeSets must stay idempotent)
+		try (Connection connection = dataSource.getConnection();
+				ResultSet columns = connection.getMetaData().getColumns(null, null, "REVIEWER", "VERSION")) {
+			assertThat(columns.next()).as("version column should still exist after re-running the changelog").isTrue();
+			assertThat(columns.next()).as("re-running the changelog should not duplicate the version column").isFalse();
+		}
+	}
 }

@@ -661,6 +661,24 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void reviewer_updatedWithSameUsername_versionNotIncremented() {
+		// given - a persisted reviewer at version 0
+		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
+		entityManager.clear();
+
+		// when - the username is reassigned to the value it already has and flushed (distinct from
+		// savedWithoutModification: here the field is touched, but to an equal value)
+		final Reviewer reviewer = reviewerRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(reviewer, "username", "opt-lock-reviewer");
+		reviewerRepository.saveAndFlush(reviewer);
+
+		// then - nothing actually changed, so Hibernate issues no UPDATE and the version stays 0
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
+	}
+
+	@Test
 	void reviewer_concurrentUpdateAfterRefresh_succeedsAndVersionIncrements() {
 		// given - the first writer wins, bumping the persisted version to 1
 		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
@@ -955,6 +973,26 @@ public class OptimisticLockingTest {
 		reviewableCourseRepository.saveAndFlush(course);
 
 		// then - with nothing dirty Hibernate issues no UPDATE, so the version stays 0
+		entityManager.clear();
+		final ReviewableCourse reloaded = reviewableCourseRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void reviewableCourse_updatedWithSameOriginalCourseId_versionNotIncremented() {
+		// given - a persisted reviewable course at version 0
+		final UUID originalCourseId = UUID.randomUUID();
+		final Integer id = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(originalCourseId))).getId();
+		entityManager.clear();
+
+		// when - the originalCourseId is reassigned to the value it already has and flushed (distinct from
+		// savedWithoutModification: here the field is touched, but to an equal value)
+		final ReviewableCourse course = reviewableCourseRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(course, "originalCourseId", originalCourseId);
+		reviewableCourseRepository.saveAndFlush(course);
+
+		// then - nothing actually changed, so Hibernate issues no UPDATE and the version stays 0
 		entityManager.clear();
 		final ReviewableCourse reloaded = reviewableCourseRepository.findById(id).orElseThrow();
 		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
