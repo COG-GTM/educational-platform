@@ -172,6 +172,35 @@ class UserOptimisticLockingOnMigratedSchemaTest {
     }
 
     @Test
+    void staleMerge_failureIdentifiesConflictingUserAndId_onMigratedSchema() {
+        // given a user detached at version 0, with its primary key captured up front for the assertion below
+        repository.saveAndFlush(newUser());
+        final int id = idOf(USERNAME);
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.detach(stale);
+
+        // and a concurrent transaction that advanced the row's version
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back through the Spring Data merge path against the migrated schema
+        // then the translated failure names the conflicting aggregate and its identifier on the real BIGINT column
+        // too, not merely that *a* conflict happened. staleMerge_onMigratedSchema_... pins only the exception type
+        // here, and UserOptimisticLockingTest.save_staleUserThroughRepository_failureIdentifiesConflictingUserAndId
+        // pins this identity payload on the Hibernate-generated INTEGER schema. This is its missing production-schema
+        // counterpart: a retyped/misbound version column could change how Hibernate's StaleObjectStateException
+        // identifier round-trips through Spring's translation on the only schema that ships.
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> repository.saveAndFlush(stale))
+                .satisfies(thrown -> {
+                    assertThat(thrown.getPersistentClassName()).isEqualTo(User.class.getName());
+                    assertThat(thrown.getIdentifier()).isEqualTo(id);
+                });
+    }
+
+    @Test
     void staleDelete_onMigratedSchema_throwsObjectOptimisticLockingFailureException() {
         // given a user loaded at version 0 from the migrated schema
         repository.saveAndFlush(newUser());

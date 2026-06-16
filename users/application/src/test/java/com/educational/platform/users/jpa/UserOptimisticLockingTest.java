@@ -365,6 +365,36 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void delete_staleUserThroughRepository_failureIdentifiesConflictingUserAndId() {
+        // given a user loaded at version 0, with its primary key captured up front for the assertion below
+        repository.saveAndFlush(newUser());
+        final int id = idOf(USERNAME);
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+
+        // simulate a concurrent transaction that updated the row and bumped its version
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is deleted, the version check finds no row at the loaded version
+        repository.delete(stale);
+
+        // then a lost delete does not merely signal that *a* conflict happened: it names the conflicting aggregate
+        // and its identifier - the information a caller needs to report which User lost the race. The delete-path
+        // conflict tests (delete_staleUserAfterConcurrentModification_..., delete_afterConcurrentDelete_...) pin only
+        // the exception type, and save_staleUserThroughRepository_failureIdentifiesConflictingUserAndId pins this
+        // identity payload on the merge/save path. A lost delete is a distinct Hibernate action carrying its own
+        // StaleObjectStateException, so this pins that Spring also carries the identity over for the delete path.
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(repository::flush)
+                .satisfies(thrown -> {
+                    assertThat(thrown.getPersistentClassName()).isEqualTo(User.class.getName());
+                    assertThat(thrown.getIdentifier()).isEqualTo(id);
+                });
+    }
+
+    @Test
     void save_staleUserAfterRealJpaWrite_throwsObjectOptimisticLockingFailureException() {
         // given a user detached at version 0 (a request's view captured before a concurrent write)
         repository.saveAndFlush(newUser());
