@@ -332,6 +332,41 @@ public class OptimisticLockingTest {
 		assertThat(ReflectionTestUtils.getField(reloadedSeeded, "version")).isEqualTo(0);
 	}
 
+	@Test
+	void courseReview_staleUpdateAfterConcurrentDelete_throwsOptimisticLockingFailure() {
+		// given - two instances reading the same row at version 0
+		final CourseReview stale = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		entityManager.detach(stale);
+		final CourseReview fresh = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+
+		// and - the other writer deletes the row out from under the stale instance
+		courseReviewRepository.delete(fresh);
+		courseReviewRepository.flush();
+		entityManager.clear();
+
+		// when - the stale instance (still version 0) tries to update the now-deleted row
+		stale.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 1.0, "stale loses"));
+
+		// then - the version guard rejects the update instead of resurrecting the deleted row
+		assertThatExceptionOfType(OptimisticLockingFailureException.class)
+				.isThrownBy(() -> courseReviewRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void courseReview_savedWithoutModification_versionNotIncremented() {
+		// given - the seeded review at version 0
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+
+		// when - it is re-saved and flushed without changing any field (distinct from re-running
+		// update() with identical values: here the entity is not touched at all)
+		courseReviewRepository.saveAndFlush(review);
+
+		// then - with nothing dirty Hibernate issues no UPDATE, so the version stays 0
+		entityManager.clear();
+		final CourseReview reloaded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
+	}
+
 	// --- Reviewer -----------------------------------------------------------
 
 	@Test
@@ -598,6 +633,29 @@ public class OptimisticLockingTest {
 		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
 		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
 		assertThat(ReflectionTestUtils.getField(reloaded, "username")).isEqualTo("second-also-wins");
+	}
+
+	@Test
+	void reviewer_staleUpdateAfterConcurrentDelete_throwsOptimisticLockingFailure() {
+		// given - two instances reading the same row at version 0
+		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
+		entityManager.clear();
+
+		final Reviewer stale = reviewerRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+		final Reviewer fresh = reviewerRepository.findById(id).orElseThrow();
+
+		// and - the other writer deletes the row out from under the stale instance
+		reviewerRepository.delete(fresh);
+		reviewerRepository.flush();
+		entityManager.clear();
+
+		// when - the stale instance (still version 0) tries to update the now-deleted row
+		ReflectionTestUtils.setField(stale, "username", "stale-loses");
+
+		// then - the version guard rejects the update instead of resurrecting the deleted row
+		assertThatExceptionOfType(OptimisticLockingFailureException.class)
+				.isThrownBy(() -> reviewerRepository.saveAndFlush(stale));
 	}
 
 	// --- ReviewableCourse ---------------------------------------------------
@@ -883,5 +941,29 @@ public class OptimisticLockingTest {
 		final ReviewableCourse reloaded = reviewableCourseRepository.findById(id).orElseThrow();
 		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
 		assertThat(ReflectionTestUtils.getField(reloaded, "originalCourseId")).isEqualTo(secondCourseId);
+	}
+
+	@Test
+	void reviewableCourse_staleUpdateAfterConcurrentDelete_throwsOptimisticLockingFailure() {
+		// given - two instances reading the same row at version 0
+		final Integer id = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		entityManager.clear();
+
+		final ReviewableCourse stale = reviewableCourseRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+		final ReviewableCourse fresh = reviewableCourseRepository.findById(id).orElseThrow();
+
+		// and - the other writer deletes the row out from under the stale instance
+		reviewableCourseRepository.delete(fresh);
+		reviewableCourseRepository.flush();
+		entityManager.clear();
+
+		// when - the stale instance (still version 0) tries to update the now-deleted row
+		ReflectionTestUtils.setField(stale, "originalCourseId", UUID.randomUUID());
+
+		// then - the version guard rejects the update instead of resurrecting the deleted row
+		assertThatExceptionOfType(OptimisticLockingFailureException.class)
+				.isThrownBy(() -> reviewableCourseRepository.saveAndFlush(stale));
 	}
 }
