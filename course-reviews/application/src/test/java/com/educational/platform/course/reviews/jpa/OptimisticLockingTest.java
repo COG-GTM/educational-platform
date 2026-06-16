@@ -14,6 +14,7 @@ import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.educational.platform.course.reviews.CourseReview;
+import com.educational.platform.course.reviews.CourseReviewDTO;
 import com.educational.platform.course.reviews.CourseReviewRepository;
 import com.educational.platform.course.reviews.course.ReviewableCourse;
 import com.educational.platform.course.reviews.course.ReviewableCourseRepository;
@@ -33,6 +34,7 @@ import com.educational.platform.course.reviews.reviewer.create.CreateReviewerCom
 public class OptimisticLockingTest {
 
 	private static final UUID COURSE_REVIEW_UUID = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+	private static final UUID COURSE_UUID = UUID.fromString("123e4567-e89b-12d3-a456-426655440000");
 
 	@Autowired
 	private TestEntityManager entityManager;
@@ -145,6 +147,48 @@ public class OptimisticLockingTest {
 				});
 	}
 
+	@Test
+	void courseReview_updated_newRatingAndCommentPersistedToDatabase() {
+		// given - the seeded review is updated with a new rating and comment
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "updated comment"));
+		courseReviewRepository.saveAndFlush(review);
+
+		// when - the persistence context is cleared and the row read back through the query API
+		entityManager.clear();
+		final CourseReviewDTO reloaded = courseReviewRepository.listCourseReviews(COURSE_UUID).get(0);
+
+		// then - the update persisted the new field values, not only the version bump
+		assertThat(reloaded.rating()).isEqualTo(5.0);
+		assertThat(reloaded.comment()).isEqualTo("updated comment");
+	}
+
+	@Test
+	void courseReview_concurrentUpdate_winnerChangesPersistedAndStaleRejected() {
+		// given - two instances reading the same row at version 0
+		final CourseReview stale = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		entityManager.detach(stale);
+		final CourseReview fresh = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+
+		// and - the first writer wins, persisting its rating and comment
+		fresh.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "first wins"));
+		courseReviewRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// then - the winner's values are the ones actually stored
+		entityManager.clear();
+		final CourseReviewDTO reloaded = courseReviewRepository.listCourseReviews(COURSE_UUID).get(0);
+		assertThat(reloaded.rating()).isEqualTo(5.0);
+		assertThat(reloaded.comment()).isEqualTo("first wins");
+
+		// when - the stale instance (still version 0) tries to overwrite with its own values
+		stale.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 1.0, "stale loses"));
+
+		// then - it is rejected instead of silently overwriting the winner
+		assertThatExceptionOfType(OptimisticLockingFailureException.class)
+				.isThrownBy(() -> courseReviewRepository.saveAndFlush(stale));
+	}
+
 	// --- Reviewer -----------------------------------------------------------
 
 	@Test
@@ -169,6 +213,21 @@ public class OptimisticLockingTest {
 
 		// then
 		assertThat(ReflectionTestUtils.getField(saved, "version")).isEqualTo(1);
+	}
+
+	@Test
+	void reviewer_transientBeforePersist_versionIsNull() {
+		// given - a freshly constructed, not-yet-persisted reviewer
+		final Reviewer reviewer = new Reviewer(new CreateReviewerCommand("transient-reviewer"));
+
+		// then - the JPA-managed version is null until the row is persisted
+		assertThat(ReflectionTestUtils.getField(reviewer, "version")).isNull();
+
+		// when - it is persisted
+		final Reviewer saved = reviewerRepository.saveAndFlush(reviewer);
+
+		// then - Hibernate initialises the version to zero
+		assertThat(ReflectionTestUtils.getField(saved, "version")).isEqualTo(0);
 	}
 
 	@Test
@@ -266,6 +325,21 @@ public class OptimisticLockingTest {
 
 		// then
 		assertThat(ReflectionTestUtils.getField(course, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void reviewableCourse_transientBeforePersist_versionIsNull() {
+		// given - a freshly constructed, not-yet-persisted reviewable course
+		final ReviewableCourse course = new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()));
+
+		// then - the JPA-managed version is null until the row is persisted
+		assertThat(ReflectionTestUtils.getField(course, "version")).isNull();
+
+		// when - it is persisted
+		final ReviewableCourse saved = reviewableCourseRepository.saveAndFlush(course);
+
+		// then - Hibernate initialises the version to zero
+		assertThat(ReflectionTestUtils.getField(saved, "version")).isEqualTo(0);
 	}
 
 	@Test
