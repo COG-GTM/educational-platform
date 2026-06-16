@@ -6,6 +6,7 @@ import com.educational.platform.courses.course.CurriculumItem;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
 import com.educational.platform.courses.course.create.CreateCurriculumItemCommand;
 import com.educational.platform.courses.course.create.CreateLectureCommand;
+import com.educational.platform.courses.course.create.CreateQuizCommand;
 import com.educational.platform.courses.teacher.Teacher;
 import com.educational.platform.courses.teacher.TeacherRepository;
 import com.educational.platform.courses.teacher.create.CreateTeacherCommand;
@@ -98,6 +99,49 @@ class CurriculumItemOptimisticLockingTest {
     }
 
     @Test
+    void update_persistedCurriculumItemRepeatedly_versionIncrementsOncePerFlush() {
+        // given - a persisted curriculum item at version 0
+        final UUID courseUuid = persistCourseWithLecture();
+
+        // when - three independent reload -> mutate -> flush cycles (one per "retry attempt")
+        for (int i = 0; i < 3; i++) {
+            entityManager.clear();
+            final Course course = courseRepository.findByUuid(courseUuid).orElseThrow();
+            final CurriculumItem item = singleCurriculumItem(course);
+            ReflectionTestUtils.setField(item, "title", "renamed-" + i);
+            courseRepository.saveAndFlush(course);
+        }
+
+        // then - the cascaded versioned UPDATE advances the version exactly once per flush
+        entityManager.clear();
+        final Course reloaded = courseRepository.findByUuid(courseUuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(singleCurriculumItem(reloaded), "version")).isEqualTo(3);
+    }
+
+    @Test
+    void save_persistedQuizCurriculumItem_versionInitializedThenIncrementsOnUpdate() {
+        // given - a course whose single curriculum item is a Quiz: a different
+        // @DiscriminatorValue concrete subtype than Lecture, sharing the @Version declared on the
+        // abstract CurriculumItem base under single-table inheritance
+        final UUID courseUuid = persistCourseWithQuiz();
+        entityManager.clear();
+
+        // when - the freshly persisted quiz is loaded through its aggregate root
+        final Course course = courseRepository.findByUuid(courseUuid).orElseThrow();
+        final CurriculumItem quiz = singleCurriculumItem(course);
+
+        // then - the inherited @Version starts at 0 for the Quiz subtype too
+        assertThat(ReflectionTestUtils.getField(quiz, "version")).isEqualTo(0);
+
+        // and when - a dirty update is flushed through the aggregate root
+        ReflectionTestUtils.setField(quiz, "title", "renamed");
+        courseRepository.saveAndFlush(course);
+
+        // then - the inherited @Version increments regardless of the concrete subtype
+        assertThat(ReflectionTestUtils.getField(quiz, "version")).isEqualTo(1);
+    }
+
+    @Test
     void saveAndFlush_staleCurriculumItem_throwsObjectOptimisticLockingFailureException() {
         // given - a persisted course whose single curriculum item is at version 0
         final UUID courseUuid = persistCourseWithLecture();
@@ -134,6 +178,25 @@ class CurriculumItemOptimisticLockingTest {
                 .name("name")
                 .description("description")
                 .curriculumItems(List.of(lecture))
+                .build();
+        final Course course = new Course(command, teacher.getId());
+        courseRepository.saveAndFlush(course);
+        return course.toIdentity();
+    }
+
+    private UUID persistCourseWithQuiz() {
+        final Teacher teacher = teacherRepository.saveAndFlush(new Teacher(new CreateTeacherCommand(TEACHER)));
+        final CreateCurriculumItemCommand quiz = CreateQuizCommand.builder()
+                .title("title")
+                .description("description")
+                .serialNumber(1)
+                .text("content")
+                .questions(List.of())
+                .build();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .curriculumItems(List.of(quiz))
                 .build();
         final Course course = new Course(command, teacher.getId());
         courseRepository.saveAndFlush(course);
