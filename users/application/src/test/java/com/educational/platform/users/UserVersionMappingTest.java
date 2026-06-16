@@ -60,6 +60,18 @@ class UserVersionMappingTest {
     }
 
     @Test
+    void entityUser_versionField_isNotFinal() throws NoSuchFieldException {
+        // a final field would satisfy every other structural check yet silently break optimistic locking:
+        // Hibernate must reassign the version on each write, which it cannot do for a final field. Pin that
+        // the mapping stays writable by JPA, completing the static/@Transient guard above.
+        final Field version = User.class.getDeclaredField("version");
+
+        assertThat(Modifier.isFinal(version.getModifiers()))
+                .as("@Version must be reassignable by JPA, not final")
+                .isFalse();
+    }
+
+    @Test
     void entityUser_versionField_isPrivate() throws NoSuchFieldException {
         // the no-accessor/mutator check below rules out methods, but a non-private field would still leak the
         // optimistic-locking version onto callers via direct field access. Pin that the version is fully

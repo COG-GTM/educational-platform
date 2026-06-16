@@ -418,6 +418,28 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void save_staleUserAfterConcurrentDelete_throughRepository_throwsObjectOptimisticLockingFailureException() {
+        // given a user detached at version 0 (the state a request holds between read and write)
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.detach(stale);
+
+        // simulate a concurrent transaction that deleted the row out from under us
+        entityManager.createNativeQuery("DELETE FROM custom_user WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back through the Spring Data merge path (repository.save):
+        // the set @Version marks it detached, so Hibernate issues an UPDATE (not an INSERT) that matches no row.
+        // then the lost update is rejected as a translated optimistic-locking failure - it is neither silently
+        // dropped nor re-inserted as a new row. update_afterConcurrentDelete covers this for the raw-EM update
+        // path and delete_afterConcurrentDelete for the delete path; this pins the merge/save update path.
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> repository.saveAndFlush(stale));
+    }
+
+    @Test
     void delete_staleUserMultipleVersionsBehind_throwsObjectOptimisticLockingFailureException() {
         // given
         repository.saveAndFlush(newUser());
