@@ -192,6 +192,26 @@ class CurriculumItemOptimisticLockingTest {
         assertThat(ReflectionTestUtils.getField(item, "title")).isEqualTo("retried");
     }
 
+    @Test
+    void saveAndFlush_courseAndCurriculumItemBothDirtyInOneFlush_eachVersionIncrementsIndependently() {
+        // given - a persisted course (version 0) whose single curriculum item is also at version 0
+        final UUID courseUuid = persistCourseWithLecture();
+        entityManager.clear();
+
+        // when - both the aggregate root and its cascaded child are mutated before a single flush
+        final Course course = courseRepository.findByUuid(courseUuid).orElseThrow();
+        course.updateRating(4.5);
+        final CurriculumItem item = singleCurriculumItem(course);
+        ReflectionTestUtils.setField(item, "title", "renamed");
+        courseRepository.saveAndFlush(course);
+
+        // then - the @Version columns this PR adds to course and curriculum_item are independent, so
+        // the single flush advances each row's own version from 0 to 1 rather than sharing one counter;
+        // every other test mutates exactly one of the two entities at a time
+        assertThat(ReflectionTestUtils.getField(course, "version")).isEqualTo(1);
+        assertThat(ReflectionTestUtils.getField(item, "version")).isEqualTo(1);
+    }
+
     private UUID persistCourseWithLecture() {
         final Teacher teacher = teacherRepository.saveAndFlush(new Teacher(new CreateTeacherCommand(TEACHER)));
         final CreateCurriculumItemCommand lecture = CreateLectureCommand.builder()

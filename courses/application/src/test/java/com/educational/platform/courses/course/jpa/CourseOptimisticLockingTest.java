@@ -1,6 +1,7 @@
 package com.educational.platform.courses.course.jpa;
 
 import com.educational.platform.courses.course.Course;
+import com.educational.platform.courses.course.CourseRating;
 import com.educational.platform.courses.course.CourseRepository;
 import com.educational.platform.courses.course.CurriculumItem;
 import com.educational.platform.courses.course.NumberOfStudents;
@@ -78,6 +79,27 @@ class CourseOptimisticLockingTest {
 
         // then
         assertThat(ReflectionTestUtils.getField(loaded, "version")).isEqualTo(1);
+    }
+
+    @Test
+    void update_persistedCourseViaRatingUpdate_versionIncremented() {
+        // given - a persisted course at version 0
+        final Course course = newCourse(persistTeacher().getId());
+        final UUID uuid = course.toIdentity();
+        courseRepository.saveAndFlush(course);
+        entityManager.clear();
+
+        // when - the rating mutator is flushed. The other version tests drive the optimistic-lock
+        // column through increaseNumberOfStudents() only; this pins that updateRating() - the second
+        // @Retryable handler's mutation - likewise issues a versioned UPDATE, the persistence-level
+        // contract UpdateCourseRatingCommandHandler's retry relies on
+        final Course loaded = courseRepository.findByUuid(uuid).orElseThrow();
+        loaded.updateRating(4.5);
+        courseRepository.saveAndFlush(loaded);
+
+        // then
+        assertThat(ReflectionTestUtils.getField(loaded, "version")).isEqualTo(1);
+        assertThat(loaded).hasFieldOrPropertyWithValue("rating", new CourseRating(4.5));
     }
 
     @Test
