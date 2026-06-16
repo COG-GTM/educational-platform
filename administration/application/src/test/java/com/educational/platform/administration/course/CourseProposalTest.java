@@ -102,6 +102,43 @@ public class CourseProposalTest {
     }
 
     @Test
+    void approve_alreadyApprovedWithVersionPopulated_versionLeftUntouchedOnGuardRejection() {
+        // given - an already-approved proposal whose @Version has been populated by the persistence provider
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        proposal.approve();
+        ReflectionTestUtils.setField(proposal, "version", 5);
+
+        // when - re-approving trips the domain guard
+        final ThrowableAssert.ThrowingCallable reApprove = proposal::approve;
+
+        // then - the guard rejects before mutating anything, so on the exception path neither the status
+        // nor the JPA-owned @Version is touched (the counter only ever advances on a persisted write)
+        assertThatExceptionOfType(CourseProposalAlreadyApprovedException.class).isThrownBy(reApprove);
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED)
+                .hasFieldOrPropertyWithValue("version", 5);
+    }
+
+    @Test
+    void approveThenDecline_versionPopulated_versionLeftUntouchedAcrossLegalTransition() {
+        // given - a proposal whose @Version has already been populated by the persistence provider
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        ReflectionTestUtils.setField(proposal, "version", 2);
+
+        // when - a legal WAITING -> APPROVED -> DECLINED sequence of domain mutations is applied
+        proposal.approve();
+        proposal.decline();
+
+        // then - the status reflects the final transition while the @Version stays untouched regardless
+        // of how many in-memory mutations occur; the optimistic-lock counter is a persistence concern
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED)
+                .hasFieldOrPropertyWithValue("version", 2);
+    }
+
+    @Test
     void decline_declinedStatus() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -160,6 +197,25 @@ public class CourseProposalTest {
 
         // then
         assertThatExceptionOfType(CourseProposalAlreadyDeclinedException.class).isThrownBy(sendToDecline);
+    }
+
+    @Test
+    void decline_alreadyDeclinedWithVersionPopulated_versionLeftUntouchedOnGuardRejection() {
+        // given - an already-declined proposal whose @Version has been populated by the persistence provider
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        proposal.decline();
+        ReflectionTestUtils.setField(proposal, "version", 5);
+
+        // when - re-declining trips the domain guard
+        final ThrowableAssert.ThrowingCallable reDecline = proposal::decline;
+
+        // then - the guard rejects before mutating anything, so on the exception path neither the status
+        // nor the JPA-owned @Version is touched (symmetric to the already-approved rejection case)
+        assertThatExceptionOfType(CourseProposalAlreadyDeclinedException.class).isThrownBy(reDecline);
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED)
+                .hasFieldOrPropertyWithValue("version", 5);
     }
 
     @Test
