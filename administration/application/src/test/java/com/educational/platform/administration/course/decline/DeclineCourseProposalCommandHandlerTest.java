@@ -14,6 +14,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -23,7 +24,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -89,5 +92,25 @@ public class DeclineCourseProposalCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_optimisticLockingConflictOnSave_exceptionPropagatedAndNoEventPublished() {
+        // given - the proposal is loaded but a concurrent admin already bumped the @Version,
+        // so the save inside the transaction fails the optimistic-lock check
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+
+        final CourseProposal correspondingCourseProposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+        when(repository.save(any(CourseProposal.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(CourseProposal.class, uuid));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - the conflict surfaces to the caller and no downstream integration event is emitted
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class).isThrownBy(handle);
+        verifyNoInteractions(eventPublisher);
     }
 }

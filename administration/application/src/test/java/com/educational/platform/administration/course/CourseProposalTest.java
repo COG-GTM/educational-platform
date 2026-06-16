@@ -28,6 +28,19 @@ public class CourseProposalTest {
     }
 
     @Test
+    void create_validCommand_versionNotInitializedByDomain() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand command = new CreateCourseProposalCommand(uuid);
+
+        // when
+        final CourseProposal courseProposal = new CourseProposal(command);
+
+        // then - the @Version field is owned by the persistence provider and stays null until persisted
+        assertThat(courseProposal).hasFieldOrPropertyWithValue("version", null);
+    }
+
+    @Test
     void approve_approvedStatus() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
