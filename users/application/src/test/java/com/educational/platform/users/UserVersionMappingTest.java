@@ -3,6 +3,7 @@ package com.educational.platform.users;
 import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
 import com.educational.platform.users.login.SignInCommand;
 import com.educational.platform.users.registration.UserRegistrationCommand;
+import jakarta.persistence.Column;
 import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,36 @@ class UserVersionMappingTest {
             assertThat(field.getName()).isEqualTo("version");
             assertThat(field.getType()).isEqualTo(Integer.class);
         });
+    }
+
+    @Test
+    void entityUser_versionField_isMappedToVersionColumn() throws NoSuchFieldException {
+        // the JPA-mapped column name must match the "version" column the Liquibase migration adds. The jpa
+        // tests run against a Hibernate-generated schema and the migration tests run with no entity, so neither
+        // pins this seam: in production (ddl-auto=none, schema owned by Liquibase) a renamed @Column would map
+        // @Version onto a non-existent column and silently disable optimistic locking.
+        final Field version = User.class.getDeclaredField("version");
+        final Column column = version.getAnnotation(Column.class);
+
+        final String mappedColumnName = (column == null || column.name().isEmpty())
+                ? version.getName()
+                : column.name();
+        assertThat(mappedColumnName)
+                .as("@Version must map to the migration's \"version\" column")
+                .isEqualTo("version");
+    }
+
+    @Test
+    void usersModule_declaresVersionFieldOnlyOnUserEntity() throws ClassNotFoundException {
+        // governance, generalised: rather than naming a fixed set of classes that must stay version-free
+        // (UserDTO / the integration event / the commands, each pinned above), assert the optimistic-locking
+        // version lives on exactly one class in the whole module - the User aggregate. Any future class that
+        // grows a @Version field (a second entity, a projection, a payload) is automatically caught.
+        final List<Class<?>> versionBearingClasses = classesInUsersModuleDeclaringVersionField();
+
+        assertThat(versionBearingClasses)
+                .as("@Version must be declared on the User aggregate and nowhere else in the users module")
+                .containsExactly(User.class);
     }
 
     @Test
@@ -144,6 +175,30 @@ class UserVersionMappingTest {
                 .extracting(Field::getName)
                 .as("UserCreatedIntegrationEvent must not expose a version field")
                 .doesNotContain("version");
+    }
+
+    private static List<Class<?>> classesInUsersModuleDeclaringVersionField() throws ClassNotFoundException {
+        final List<Class<?>> versionBearingClasses = new ArrayList<>();
+        for (final Class<?> candidate : allClassesInUsersModule()) {
+            final boolean declaresVersionField = List.of(candidate.getDeclaredFields()).stream()
+                    .anyMatch(field -> field.isAnnotationPresent(Version.class));
+            if (declaresVersionField) {
+                versionBearingClasses.add(candidate);
+            }
+        }
+        return versionBearingClasses;
+    }
+
+    private static List<Class<?>> allClassesInUsersModule() throws ClassNotFoundException {
+        final ClassPathScanningCandidateComponentProvider scanner =
+                new ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter((metadataReader, metadataReaderFactory) -> true);
+
+        final List<Class<?>> classes = new ArrayList<>();
+        for (final BeanDefinition definition : scanner.findCandidateComponents(USERS_PACKAGE)) {
+            classes.add(Class.forName(definition.getBeanClassName()));
+        }
+        return classes;
     }
 
     private static List<Class<?>> commandClassesInUsersModule() throws ClassNotFoundException {

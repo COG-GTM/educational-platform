@@ -230,6 +230,32 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void update_staleUserFromNonZeroBaseline_throwsOptimisticLockException() {
+        // given a long-lived row whose version has already advanced to 2 before any conflict - unlike every
+        // other stale-write test, which loads a freshly persisted version-0 entity
+        repository.saveAndFlush(newUser());
+        forceIncrementVersion();
+        forceIncrementVersion();
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        assertThat(stale).hasFieldOrPropertyWithValue("version", 2);
+
+        // when a concurrent transaction advances the row past the loaded baseline (2 -> 3)
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back, the version check still fires from a non-zero baseline:
+        // then optimistic locking compares the loaded version against the row, it is not special-cased to the
+        // initial 0 -> 1 transition the other stale-write tests all start from
+        assertThatExceptionOfType(OptimisticLockException.class)
+                .isThrownBy(() -> {
+                    entityManager.lock(stale, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+                    repository.flush();
+                });
+    }
+
+    @Test
     void staleUser_holdsOutdatedVersion_afterConcurrentModification() {
         // given a persisted user loaded into the context at version 0
         repository.saveAndFlush(newUser());
