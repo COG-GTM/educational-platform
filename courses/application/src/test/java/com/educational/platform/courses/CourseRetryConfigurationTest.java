@@ -2,7 +2,9 @@ package com.educational.platform.courses;
 
 import com.educational.platform.common.exception.ResourceNotFoundException;
 import com.educational.platform.courses.course.Course;
+import com.educational.platform.courses.course.CourseRating;
 import com.educational.platform.courses.course.CourseRepository;
+import com.educational.platform.courses.course.NumberOfStudents;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
 import com.educational.platform.courses.course.numberofsudents.update.IncreaseNumberOfStudentsCommand;
 import com.educational.platform.courses.course.numberofsudents.update.IncreaseNumberOfStudentsCommandHandler;
@@ -11,6 +13,7 @@ import com.educational.platform.courses.course.rating.update.UpdateCourseRatingC
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -112,6 +115,38 @@ class CourseRetryConfigurationTest {
         // then - the production configuration enabled retry, so the handler is re-invoked once
         verify(repository, times(2)).findByUuid(uuid);
         verify(repository, times(2)).save(any(Course.class));
+    }
+
+    @Test
+    void enableRetry_increaseNumberOfStudentsHandler_conflictFreeSave_runsExactlyOnceAndIncrements() {
+        // given - the save persists immediately under the real production configuration, no version clash
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        increaseNumberOfStudentsCommandHandler.handle(new IncreaseNumberOfStudentsCommand(uuid));
+
+        // then - the production retry advisor must not re-invoke the happy path, and the increment is persisted
+        final ArgumentCaptor<Course> saved = ArgumentCaptor.forClass(Course.class);
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, times(1)).save(saved.capture());
+        assertThat(saved.getValue()).hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(1));
+    }
+
+    @Test
+    void enableRetry_updateCourseRatingHandler_conflictFreeSave_runsExactlyOnceAndUpdatesRating() {
+        // given - the save persists immediately under the real production configuration, no version clash
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        updateCourseRatingCommandHandler.handle(new UpdateCourseRatingCommand(uuid, 3.2));
+
+        // then - the production retry advisor must not re-invoke the happy path, and the new rating is persisted
+        final ArgumentCaptor<Course> saved = ArgumentCaptor.forClass(Course.class);
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, times(1)).save(saved.capture());
+        assertThat(saved.getValue()).hasFieldOrPropertyWithValue("rating", new CourseRating(3.2));
     }
 
     @Test
