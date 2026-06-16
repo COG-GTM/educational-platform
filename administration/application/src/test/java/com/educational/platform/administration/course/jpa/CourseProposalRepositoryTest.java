@@ -200,6 +200,36 @@ public class CourseProposalRepositoryTest {
 	}
 
 	@Test
+	void findByUuid_rowSeededViaRawSqlWithoutVersion_versionDefaultsToZeroAndUpdateSucceeds() {
+		// given - a row inserted via raw SQL (mirroring the web module's insert_data.sql seed)
+		// omits the version column, so it relies solely on the DB-level "default 0 not null"
+		// contributed by @Column(columnDefinition = "bigint default 0 not null"). Without that
+		// default the column would store NULL and the optimistic-lock UPDATE ... WHERE version = NULL
+		// would match 0 rows and fail.
+		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		entityManager.getEntityManager()
+				.createNativeQuery("insert into course_proposal (uuid, status) values (:uuid, :status)")
+				.setParameter("uuid", uuid)
+				.setParameter("status", CourseProposalStatus.WAITING_FOR_APPROVAL.name())
+				.executeUpdate();
+		entityManager.flush();
+		entityManager.clear();
+
+		// when - load the seeded row on the production read path used by the approve/decline handlers
+		final CourseProposal seeded = sut.findByUuid(uuid).orElseThrow();
+
+		// then - the DB default populated the version, so it is the initial 0 (never null)
+		assertThat(seeded).hasFieldOrPropertyWithValue("version", 0);
+
+		// and - a subsequent approve + save passes the optimistic-lock check and bumps the version
+		seeded.approve();
+		final CourseProposal updated = sut.saveAndFlush(seeded);
+		assertThat(updated)
+				.hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED)
+				.hasFieldOrPropertyWithValue("version", 1);
+	}
+
+	@Test
 	void save_reloadedProposalWithoutChanges_versionNotIncremented() {
 		// given
 		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
