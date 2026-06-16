@@ -106,6 +106,23 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void save_newUser_whenAnotherUsersVersionHasAdvanced_startsAtZero() {
+        // given an existing user whose version has already advanced to 1
+        repository.saveAndFlush(newUser());
+        forceIncrementVersion();
+
+        // when a brand-new user is subsequently persisted
+        final User other = repository.saveAndFlush(newUser("other", "other@gmail.com"));
+
+        // then version initialization is per-row: the new row starts at 0 regardless of the
+        // advanced version on the pre-existing row (distinct from write isolation, which only
+        // covers rows that were both already at 0 before one was written)
+        assertThat(other).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(((Number) versionOf("other")).longValue()).isZero();
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(1L);
+    }
+
+    @Test
     void write_managedUser_multipleTimes_incrementsVersionEachTime() {
         // given a freshly persisted user at version 0
         repository.saveAndFlush(newUser());

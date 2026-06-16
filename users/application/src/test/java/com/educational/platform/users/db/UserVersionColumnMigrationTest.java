@@ -258,6 +258,29 @@ class UserVersionColumnMigrationTest {
         assertThat(versionOf("legacy")).isEqualTo(beyondIntegerRange);
     }
 
+    @Test
+    void migration_isPurelyAdditive_leavesPreExistingColumnsNotNull() throws Exception {
+        givenLegacyCustomUserTable();
+
+        runUsersChangelog();
+
+        // the addColumn migration must only add the version column - it must not alter the schema of the
+        // pre-existing columns (preservesExistingRowData* asserts row values survive; this asserts the
+        // columns themselves remain present and NOT NULL after the upgrade)
+        assertThat(columnIsNotNullable("USERNAME")).as("username stays NOT NULL").isTrue();
+        assertThat(columnIsNotNullable("EMAIL")).as("email stays NOT NULL").isTrue();
+        assertThat(columnIsNotNullable("PASSWORD")).as("password stays NOT NULL").isTrue();
+        assertThat(columnIsNotNullable("ROLE")).as("role stays NOT NULL").isTrue();
+    }
+
+    private boolean columnIsNotNullable(final String column) throws SQLException {
+        try (Connection connection = openConnection();
+             ResultSet columns = connection.getMetaData().getColumns(null, null, "CUSTOM_USER", column)) {
+            assertThat(columns.next()).as("column %s exists on custom_user", column).isTrue();
+            return "NO".equals(columns.getString("IS_NULLABLE"));
+        }
+    }
+
     private int changeSetExecutionCount(final String id, final String author) throws SQLException {
         try (Connection connection = openConnection();
              PreparedStatement statement = connection.prepareStatement(

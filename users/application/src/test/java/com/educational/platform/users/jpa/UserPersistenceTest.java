@@ -127,6 +127,21 @@ public class UserPersistenceTest {
     }
 
     @Test
+    void existsByUsername_afterVersionIncrement_stillReportsTrue() {
+        // given a persisted user whose version has since been bumped to 1
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User loaded = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+        entityManager.clear();
+
+        // then the derived existence query keeps working once the version is non-zero
+        // (existsByUsername_reflectsPersistedAndAbsentUsers only exercises version 0)
+        assertThat(repository.existsByUsername(USERNAME)).isTrue();
+    }
+
+    @Test
     void persist_assignsGeneratedIdAlongsideVersion() {
         // given / when a transient user is persisted
         repository.saveAndFlush(newUser());
