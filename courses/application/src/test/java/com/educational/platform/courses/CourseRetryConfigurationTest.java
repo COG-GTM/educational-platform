@@ -197,6 +197,54 @@ class CourseRetryConfigurationTest {
         verify(repository, never()).save(any(Course.class));
     }
 
+    @Test
+    void enableRetry_updateCourseRatingHandler_persistentOptimisticLock_exhaustsConfiguredAttemptsThenRethrows() {
+        // given - every save clashes on the version under the real production configuration
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1));
+
+        // when
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 3.2);
+
+        // then - the production @EnableRetry honours maxAttempts=3 for this handler too, then surfaces the original failure
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> updateCourseRatingCommandHandler.handle(command));
+        verify(repository, times(3)).findByUuid(uuid);
+        verify(repository, times(3)).save(any(Course.class));
+    }
+
+    @Test
+    void enableRetry_increaseNumberOfStudentsHandler_nonRetryableException_isNotRetriedUnderProductionConfig() {
+        // given - save fails with an exception outside the configured retryFor
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class))).thenThrow(new IllegalStateException("boom"));
+
+        // when
+        final IncreaseNumberOfStudentsCommand command = new IncreaseNumberOfStudentsCommand(uuid);
+
+        // then - the production retry advisor only retries ObjectOptimisticLockingFailureException
+        assertThatExceptionOfType(IllegalStateException.class)
+                .isThrownBy(() -> increaseNumberOfStudentsCommandHandler.handle(command));
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, times(1)).save(any(Course.class));
+    }
+
+    @Test
+    void enableRetry_updateCourseRatingHandler_missingCourse_resourceNotFoundIsNotRetriedUnderProductionConfig() {
+        // given - the course does not exist
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 3.2);
+
+        // then - ResourceNotFoundException is outside retryFor, so the lookup runs once and no save happens
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+                .isThrownBy(() -> updateCourseRatingCommandHandler.handle(command));
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, never()).save(any(Course.class));
+    }
+
     private static Course newCourse() {
         final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
                 .name("name")
