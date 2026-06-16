@@ -154,6 +154,29 @@ class IncreaseNumberOfStudentsCommandHandlerRetryTest {
     }
 
     @Test
+    void handle_retryAfterConcurrentIncrement_incrementsOnTopOfLatestPersistedState() {
+        // given - the first attempt loads a course with 5 students and clashes on save; the retry
+        // reloads the course as a concurrent writer left it (6 students) and then succeeds
+        when(repository.findByUuid(uuid))
+                .thenReturn(Optional.of(courseWithStudents(5)))
+                .thenReturn(Optional.of(courseWithStudents(6)));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        sut.handle(command);
+
+        // then - the increment is re-derived from the freshly reloaded state each attempt, so the
+        // persisted value composes on top of the concurrent writer's commit (6 + 1) rather than the
+        // stale snapshot (5 + 1) or accumulating across attempts
+        verify(repository, times(2)).findByUuid(uuid);
+        final ArgumentCaptor<Course> saved = ArgumentCaptor.forClass(Course.class);
+        verify(repository, times(2)).save(saved.capture());
+        assertThat(saved.getValue()).hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(7));
+    }
+
+    @Test
     void handle_persistentOptimisticLock_exhaustsThreeAttemptsThenThrows() {
         // given - every save clashes on the version
         when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
@@ -204,5 +227,13 @@ class IncreaseNumberOfStudentsCommandHandlerRetryTest {
                 .description("description")
                 .build();
         return new Course(createCourseCommand, 15);
+    }
+
+    private static Course courseWithStudents(int count) {
+        final Course course = newCourse();
+        for (int i = 0; i < count; i++) {
+            course.increaseNumberOfStudents();
+        }
+        return course;
     }
 }
