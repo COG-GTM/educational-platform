@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import javax.sql.DataSource;
 
+import org.hibernate.StaleObjectStateException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -19,6 +20,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.educational.platform.course.reviews.Comment;
@@ -255,6 +257,136 @@ public class OptimisticLockingMigratedSchemaTest {
 		entityManager.clear();
 		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
 		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo((int) (largeVersion + 1));
+	}
+
+	@Test
+	void reviewer_concurrentUpdateAgainstBigintColumn_failureIdentifiesEntityAndIsRootedInStaleVersion() {
+		// given - two instances reading the same migrated row at version 0
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("migrated-reviewer"))).getId();
+		entityManager.clear();
+		final Reviewer stale = reviewerRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+		final Reviewer fresh = reviewerRepository.findById(id).orElseThrow();
+
+		// and - the first writer wins, bumping the BIGINT version to 1
+		ReflectionTestUtils.setField(fresh, "username", "first-wins");
+		reviewerRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// when - the stale instance (still version 0) tries to update
+		ReflectionTestUtils.setField(stale, "username", "stale-loses");
+
+		// then - on the production-shaped BIGINT column the conflict still surfaces as the version-specific
+		// subtype that names the conflicting entity/row and is rooted in Hibernate's stale-version detection,
+		// so callers can tell a version conflict apart from other data-access failures. OptimisticLockingTest
+		// asserts this diagnostic contract on the Hibernate-generated INTEGER column; here it is pinned to the
+		// migrated BIGINT column the existing migrated tests only checked the generic supertype against.
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> reviewerRepository.saveAndFlush(stale))
+				.satisfies(ex -> {
+					assertThat(ex.getPersistentClassName()).isEqualTo(Reviewer.class.getName());
+					assertThat(ex.getIdentifier()).isEqualTo(id);
+				})
+				.withRootCauseInstanceOf(StaleObjectStateException.class);
+	}
+
+	@Test
+	void reviewer_concurrentUpdateAgainstBigintColumn_winnerPersistedAndStaleRejected() {
+		// given - two instances reading the same migrated row at version 0
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("migrated-reviewer"))).getId();
+		entityManager.clear();
+		final Reviewer stale = reviewerRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+		final Reviewer fresh = reviewerRepository.findById(id).orElseThrow();
+
+		// and - the first writer wins, persisting its username against the BIGINT-versioned row
+		ReflectionTestUtils.setField(fresh, "username", "first-wins");
+		reviewerRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// then - the winner's value is the one actually stored (the reviewer counterpart of
+		// courseReview_concurrentUpdateAgainstBigintColumn_winnerPersistedAndStaleRejected, which had no
+		// reviewer equivalent on the migrated schema)
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "username")).isEqualTo("first-wins");
+		entityManager.clear();
+
+		// when - the stale instance (still version 0) tries to overwrite with its own value
+		ReflectionTestUtils.setField(stale, "username", "stale-loses");
+
+		// then - it is rejected instead of silently overwriting the winner on the production-shaped column
+		assertThatExceptionOfType(OptimisticLockingFailureException.class)
+				.isThrownBy(() -> reviewerRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void reviewer_concurrentUpdateAfterRefreshAgainstBigintColumn_succeedsAndVersionIncrements() {
+		// given - the first writer wins, bumping the BIGINT version to 1
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("migrated-reviewer"))).getId();
+		entityManager.clear();
+		final Reviewer first = reviewerRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(first, "username", "first-wins");
+		reviewerRepository.saveAndFlush(first);
+		entityManager.clear();
+
+		// when - a second writer re-reads the current state (version 1) before updating, so it is not stale
+		// and its update is accepted - the success counterpart to the stale-update rejection, here on the
+		// migrated BIGINT column rather than the Hibernate-generated one
+		final Reviewer second = reviewerRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(second, "username", "second-also-wins");
+		reviewerRepository.saveAndFlush(second);
+
+		// then - the version advanced to 2 and the second writer's value round-trips through the BIGINT column
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
+		assertThat(ReflectionTestUtils.getField(reloaded, "username")).isEqualTo("second-also-wins");
+	}
+
+	@Test
+	void reviewer_staleUpdateAfterConcurrentDeleteAgainstBigintColumn_throwsOptimisticLockingFailure() {
+		// given - two instances reading the same migrated row at version 0
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("migrated-reviewer"))).getId();
+		entityManager.clear();
+		final Reviewer stale = reviewerRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+		final Reviewer fresh = reviewerRepository.findById(id).orElseThrow();
+
+		// and - the other writer deletes the row out from under the stale instance
+		reviewerRepository.delete(fresh);
+		reviewerRepository.flush();
+		entityManager.clear();
+
+		// when - the stale instance (still version 0) tries to update the now-deleted row
+		ReflectionTestUtils.setField(stale, "username", "stale-loses");
+
+		// then - the version guard rejects the update instead of resurrecting the deleted row on the BIGINT
+		// column (the migrated slice previously covered stale-update-after-concurrent-update, not after-delete)
+		assertThatExceptionOfType(OptimisticLockingFailureException.class)
+				.isThrownBy(() -> reviewerRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void reviewer_savedWithoutModificationAgainstBigintColumn_versionNotIncremented() {
+		// given - a reviewer persisted at version 0 on the migrated schema
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("migrated-reviewer"))).getId();
+		entityManager.clear();
+
+		// when - it is re-saved and flushed without changing any field
+		final Reviewer reviewer = reviewerRepository.findById(id).orElseThrow();
+		reviewerRepository.saveAndFlush(reviewer);
+
+		// then - with nothing dirty Hibernate issues no UPDATE, so the BIGINT version stays 0. Every migrated
+		// update test flushes a real change; this pins the no-op path on the production-shaped column.
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
 	}
 
 	// --- CourseReview (the headline aggregate, against its real FK-constrained table) --------------------
@@ -521,6 +653,130 @@ public class OptimisticLockingMigratedSchemaTest {
 		// version into the Integer @Version field, the headline-aggregate counterpart of the reviewer boundary
 		assertThatExceptionOfType(DataIntegrityViolationException.class)
 				.isThrownBy(() -> courseReviewRepository.findByUuid(uuid));
+	}
+
+	@Test
+	void courseReview_concurrentUpdateAgainstBigintColumn_failureIdentifiesEntityAndIsRootedInStaleVersion() throws Exception {
+		// given - two instances reading the same migrated row at version 0
+		final CourseReview seed = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = seed.toIdentifier();
+		courseReviewRepository.saveAndFlush(seed);
+		entityManager.clear();
+		final CourseReview stale = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		final Object reviewId = ReflectionTestUtils.getField(stale, "id");
+		entityManager.detach(stale);
+		final CourseReview fresh = courseReviewRepository.findByUuid(uuid).orElseThrow();
+
+		// and - the first writer wins, bumping the BIGINT version to 1
+		fresh.update(new UpdateCourseReviewCommand(uuid, 5.0, "first wins"));
+		courseReviewRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// when - the stale instance (still version 0) tries to update
+		stale.update(new UpdateCourseReviewCommand(uuid, 1.0, "stale loses"));
+
+		// then - the conflict surfaces as the version-specific subtype, names the conflicting entity/row, and is
+		// rooted in Hibernate's stale-version detection on the production-shaped BIGINT column (the headline
+		// aggregate's counterpart of the reviewer diagnostic test; the existing migrated concurrent-update test
+		// only asserts the generic OptimisticLockingFailureException supertype)
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> courseReviewRepository.saveAndFlush(stale))
+				.satisfies(ex -> {
+					assertThat(ex.getPersistentClassName()).isEqualTo(CourseReview.class.getName());
+					assertThat(ex.getIdentifier()).isEqualTo(reviewId);
+				})
+				.withRootCauseInstanceOf(StaleObjectStateException.class);
+	}
+
+	@Test
+	void courseReview_concurrentUpdateAfterRefreshAgainstBigintColumn_succeedsAndVersionIncrements() throws Exception {
+		// given - the first writer wins, bumping the BIGINT version to 1
+		final CourseReview seed = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = seed.toIdentifier();
+		courseReviewRepository.saveAndFlush(seed);
+		entityManager.clear();
+		final CourseReview first = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		first.update(new UpdateCourseReviewCommand(uuid, 5.0, "first wins"));
+		courseReviewRepository.saveAndFlush(first);
+		entityManager.clear();
+
+		// when - a second writer re-reads the current state (version 1) before updating, so it is not stale and
+		// its update is accepted - the success counterpart to the stale-update rejection on the migrated column
+		final CourseReview second = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		second.update(new UpdateCourseReviewCommand(uuid, 2.0, "second also wins"));
+		courseReviewRepository.saveAndFlush(second);
+
+		// then - the version advanced to 2 and the second writer's values round-trip through the BIGINT column.
+		// The row is reloaded through the entity because listCourseReviews selects reviewable_course.original_course_id,
+		// which the migrated reviewable_course table does not expose.
+		entityManager.clear();
+		final CourseReview reloaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
+		assertThat(((CourseRating) ReflectionTestUtils.getField(reloaded, "rating")).rating()).isEqualTo(2.0);
+		assertThat(((Comment) ReflectionTestUtils.getField(reloaded, "comment")).comment()).isEqualTo("second also wins");
+	}
+
+	@Test
+	void courseReview_staleUpdateAfterConcurrentDeleteAgainstBigintColumn_throwsOptimisticLockingFailure() throws Exception {
+		// given - two instances reading the same migrated row at version 0
+		final CourseReview seed = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = seed.toIdentifier();
+		courseReviewRepository.saveAndFlush(seed);
+		entityManager.clear();
+		final CourseReview stale = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		entityManager.detach(stale);
+		final CourseReview fresh = courseReviewRepository.findByUuid(uuid).orElseThrow();
+
+		// and - the other writer deletes the row out from under the stale instance
+		courseReviewRepository.delete(fresh);
+		courseReviewRepository.flush();
+		entityManager.clear();
+
+		// when - the stale instance (still version 0) tries to update the now-deleted row
+		stale.update(new UpdateCourseReviewCommand(uuid, 1.0, "stale loses"));
+
+		// then - the version guard rejects the update instead of resurrecting the deleted row on the BIGINT
+		// column for the headline aggregate too
+		assertThatExceptionOfType(OptimisticLockingFailureException.class)
+				.isThrownBy(() -> courseReviewRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void courseReview_savedWithoutModificationAgainstBigintColumn_versionNotIncremented() throws Exception {
+		// given - a course review persisted at version 0 on the migrated schema
+		final CourseReview review = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = review.toIdentifier();
+		courseReviewRepository.saveAndFlush(review);
+		entityManager.clear();
+
+		// when - it is re-saved and flushed without changing any field
+		final CourseReview reloaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		courseReviewRepository.saveAndFlush(reloaded);
+
+		// then - with nothing dirty Hibernate issues no UPDATE, so the BIGINT version stays 0
+		entityManager.clear();
+		final CourseReview afterReload = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(afterReload, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void courseReview_updatedWithSameValuesAgainstBigintColumn_versionNotIncremented() throws Exception {
+		// given - a course review persisted at version 0 (rating 4.0, comment "comment")
+		final CourseReview review = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = review.toIdentifier();
+		courseReviewRepository.saveAndFlush(review);
+		entityManager.clear();
+
+		// when - it is "updated" with the values it already has and flushed
+		final CourseReview reloaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		reloaded.update(new UpdateCourseReviewCommand(uuid, 4.0, "comment"));
+		courseReviewRepository.saveAndFlush(reloaded);
+
+		// then - the embeddable rating/comment are equal by value, so Hibernate issues no UPDATE and the BIGINT
+		// version stays 0 (the migrated counterpart of courseReview_updatedWithSameValues on the Hibernate schema)
+		entityManager.clear();
+		final CourseReview afterReload = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(afterReload, "version")).isEqualTo(0);
 	}
 
 	/**
