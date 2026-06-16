@@ -6,6 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import java.lang.reflect.Constructor;
 import java.util.UUID;
 
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -22,6 +25,7 @@ import com.educational.platform.course.reviews.course.ReviewableCourseRepository
 import com.educational.platform.course.reviews.course.create.CreateReviewableCourseCommand;
 import com.educational.platform.course.reviews.create.ReviewCourseCommand;
 import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommand;
+import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommandHandler;
 import com.educational.platform.course.reviews.reviewer.Reviewer;
 import com.educational.platform.course.reviews.reviewer.ReviewerRepository;
 import com.educational.platform.course.reviews.reviewer.create.CreateReviewerCommand;
@@ -213,6 +217,49 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void courseReview_updatedViaCommandHandler_versionIncrementedAndChangesPersisted() {
+		// given - the production update path: the real command handler wired with the real repository
+		final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+		final UpdateCourseReviewCommandHandler handler = new UpdateCourseReviewCommandHandler(validator, courseReviewRepository);
+
+		// when - the seeded review is updated through the handler (which saves the managed entity)
+		handler.handle(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "via handler"));
+		entityManager.flush();
+		entityManager.clear();
+
+		// then - @Version integrates transparently with the existing update flow: the version bumped
+		// and the new field values were persisted, confirming no handler/service change was required
+		final CourseReview reloaded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
+		final CourseReviewDTO dto = courseReviewRepository.listCourseReviews(COURSE_UUID).get(0);
+		assertThat(dto.rating()).isEqualTo(5.0);
+		assertThat(dto.comment()).isEqualTo("via handler");
+	}
+
+	@Test
+	void courseReview_concurrentUpdateAfterRefresh_succeedsAndVersionIncrements() {
+		// given - the first writer wins, bumping the persisted version to 1
+		final CourseReview first = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		first.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "first wins"));
+		courseReviewRepository.saveAndFlush(first);
+		entityManager.clear();
+
+		// when - a second writer re-reads the current state (version 1) before updating, so it is not
+		// stale and its update is accepted - the success counterpart to the stale-update rejection
+		final CourseReview second = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		second.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 2.0, "second also wins"));
+		courseReviewRepository.saveAndFlush(second);
+
+		// then - the version advanced to 2 and the second writer's values are the ones persisted
+		entityManager.clear();
+		final CourseReview reloaded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
+		final CourseReviewDTO dto = courseReviewRepository.listCourseReviews(COURSE_UUID).get(0);
+		assertThat(dto.rating()).isEqualTo(2.0);
+		assertThat(dto.comment()).isEqualTo("second also wins");
+	}
+
+	@Test
 	void courseReview_updatedWithSameValues_versionNotIncremented() {
 		// given - the seeded review (version 0, rating 4.0, comment "comment")
 		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
@@ -380,6 +427,26 @@ public class OptimisticLockingTest {
 					reviewerRepository.delete(stale);
 					reviewerRepository.flush();
 				});
+	}
+
+	@Test
+	void reviewer_updatingOneRow_otherRowsVersionUnchanged() {
+		// given - two independently persisted reviewers, both starting at version 0
+		final Integer firstId = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("reviewer-one"))).getId();
+		final Integer secondId = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("reviewer-two"))).getId();
+		entityManager.clear();
+
+		// when - only the first reviewer is updated
+		final Reviewer first = reviewerRepository.findById(firstId).orElseThrow();
+		ReflectionTestUtils.setField(first, "username", "reviewer-one-renamed");
+		reviewerRepository.saveAndFlush(first);
+		entityManager.clear();
+
+		// then - the version bump is isolated to the updated row; the untouched row stays at version 0
+		final Reviewer reloadedFirst = reviewerRepository.findById(firstId).orElseThrow();
+		final Reviewer reloadedSecond = reviewerRepository.findById(secondId).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloadedFirst, "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(reloadedSecond, "version")).isEqualTo(0);
 	}
 
 	@Test
