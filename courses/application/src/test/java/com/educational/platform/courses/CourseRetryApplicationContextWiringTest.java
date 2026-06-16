@@ -78,6 +78,38 @@ class CourseRetryApplicationContextWiringTest {
     }
 
     @Test
+    void productionContext_increaseNumberOfStudentsHandler_conflictFreeSave_runsExactlyOnceAndIncrements() {
+        // given - the save persists immediately through the production-scanned proxy, no version clash
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when - invoking the real component-scanned bean
+        increaseNumberOfStudentsCommandHandler.handle(new IncreaseNumberOfStudentsCommand(uuid));
+
+        // then - the production retry advisor must not re-invoke the happy path; the increment is persisted once
+        final ArgumentCaptor<Course> saved = ArgumentCaptor.forClass(Course.class);
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, times(1)).save(saved.capture());
+        assertThat(saved.getValue()).hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(1));
+    }
+
+    @Test
+    void productionContext_updateCourseRatingHandler_conflictFreeSave_runsExactlyOnceAndUpdatesRating() {
+        // given - the save persists immediately through the production-scanned proxy, no version clash
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when - invoking the real component-scanned bean
+        updateCourseRatingCommandHandler.handle(new UpdateCourseRatingCommand(uuid, 3.2));
+
+        // then - the production retry advisor must not re-invoke the happy path; the new rating is persisted once
+        final ArgumentCaptor<Course> saved = ArgumentCaptor.forClass(Course.class);
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, times(1)).save(saved.capture());
+        assertThat(saved.getValue()).hasFieldOrPropertyWithValue("rating", new CourseRating(3.2));
+    }
+
+    @Test
     void productionContext_increaseNumberOfStudentsHandler_retriesOnOptimisticLockFailure() {
         // given - the first save clashes on the version, the retry succeeds
         when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));

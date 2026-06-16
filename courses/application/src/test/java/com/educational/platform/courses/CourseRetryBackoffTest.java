@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
@@ -49,6 +50,9 @@ class CourseRetryBackoffTest {
     private static final long CONFIGURED_BACKOFF_MILLIS = 100L;
     // lower bound only: catches a missing/zero backoff (~0ms) while tolerating clock granularity
     private static final long MIN_OBSERVED_BACKOFF_MILLIS = 50L;
+    // lower bound for an exhausted (maxAttempts=3) run: strictly above a single backoff so it proves
+    // the delay is applied before *each* of the two re-attempts (~200ms expected), not just once
+    private static final long MIN_OBSERVED_CUMULATIVE_BACKOFF_MILLIS = 150L;
 
     @Configuration
     static class HandlersConfig {
@@ -125,9 +129,53 @@ class CourseRetryBackoffTest {
                 .isGreaterThanOrEqualTo(MIN_OBSERVED_BACKOFF_MILLIS);
     }
 
+    @Test
+    void increaseNumberOfStudentsHandler_exhaustedRetries_waitsBackoffBeforeEachReattempt() {
+        // given - every save clashes on the version, so the full maxAttempts=3 sequence runs
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1));
+
+        // when - the fully-exhausted sequence re-attempts twice before rethrowing
+        final long elapsed = timeExhaustedHandle(() ->
+                increaseNumberOfStudentsCommandHandler.handle(new IncreaseNumberOfStudentsCommand(uuid)));
+
+        // then - both re-attempts were spaced by the @Backoff, so the delay applies per retry (not one-shot)
+        verify(repository, times(3)).save(any(Course.class));
+        assertThat(elapsed)
+                .as("both re-attempts must each wait the configured ~%dms backoff (>= ~%dms total)",
+                        CONFIGURED_BACKOFF_MILLIS, 2 * CONFIGURED_BACKOFF_MILLIS)
+                .isGreaterThanOrEqualTo(MIN_OBSERVED_CUMULATIVE_BACKOFF_MILLIS);
+    }
+
+    @Test
+    void updateCourseRatingHandler_exhaustedRetries_waitsBackoffBeforeEachReattempt() {
+        // given - every save clashes on the version, so the full maxAttempts=3 sequence runs
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1));
+
+        // when - the fully-exhausted sequence re-attempts twice before rethrowing
+        final long elapsed = timeExhaustedHandle(() ->
+                updateCourseRatingCommandHandler.handle(new UpdateCourseRatingCommand(uuid, 3.2)));
+
+        // then - both re-attempts were spaced by the @Backoff, so the delay applies per retry (not one-shot)
+        verify(repository, times(3)).save(any(Course.class));
+        assertThat(elapsed)
+                .as("both re-attempts must each wait the configured ~%dms backoff (>= ~%dms total)",
+                        CONFIGURED_BACKOFF_MILLIS, 2 * CONFIGURED_BACKOFF_MILLIS)
+                .isGreaterThanOrEqualTo(MIN_OBSERVED_CUMULATIVE_BACKOFF_MILLIS);
+    }
+
     private static long timeHandle(Runnable handle) {
         final long start = System.nanoTime();
         handle.run();
+        return (System.nanoTime() - start) / 1_000_000L;
+    }
+
+    private static long timeExhaustedHandle(Runnable handle) {
+        final long start = System.nanoTime();
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class).isThrownBy(handle::run);
         return (System.nanoTime() - start) / 1_000_000L;
     }
 
