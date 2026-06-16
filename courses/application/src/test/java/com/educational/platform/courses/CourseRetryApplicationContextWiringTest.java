@@ -148,6 +148,56 @@ class CourseRetryApplicationContextWiringTest {
     }
 
     @Test
+    void productionContext_increaseNumberOfStudentsHandler_retryReloadsConcurrentState_incrementsOnTopOfReloadedValue() {
+        // given - the first attempt loads a course with 5 students and clashes on save; before the
+        // retry reloads, a concurrent writer commits a 6th student, so the second findByUuid returns
+        // the updated state
+        when(repository.findByUuid(uuid))
+                .thenReturn(Optional.of(courseWithStudents(5)))
+                .thenReturn(Optional.of(courseWithStudents(6)));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when - invoking the real component-scanned bean
+        increaseNumberOfStudentsCommandHandler.handle(new IncreaseNumberOfStudentsCommand(uuid));
+
+        // then - through the production-scanned proxy each attempt re-derives the increment from its own
+        // fresh reload, so the persisted value composes on top of the concurrent writer's commit (6 + 1)
+        // rather than the stale snapshot (5 + 1) or accumulating across attempts. The existing
+        // full-context retry tests reload an identical fresh course on every attempt, so they cannot
+        // catch a wiring bug that reuses the stale first-attempt state instead of the second reload.
+        final ArgumentCaptor<Course> saved = ArgumentCaptor.forClass(Course.class);
+        verify(repository, times(2)).findByUuid(uuid);
+        verify(repository, times(2)).save(saved.capture());
+        assertThat(saved.getValue()).hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(7));
+    }
+
+    @Test
+    void productionContext_updateCourseRatingHandler_retryReloadsConcurrentState_appliesCommandRatingNotReloadedValue() {
+        // given - the first attempt loads a course rated 1.0 and clashes on save; the retry reloads the
+        // course as a concurrent writer left it (rated 4.5) and then succeeds
+        when(repository.findByUuid(uuid))
+                .thenReturn(Optional.of(courseWithRating(1.0)))
+                .thenReturn(Optional.of(courseWithRating(4.5)));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when - invoking the real component-scanned bean
+        updateCourseRatingCommandHandler.handle(new UpdateCourseRatingCommand(uuid, 3.2));
+
+        // then - the rating is an idempotent overwrite taken from the command, so through the production
+        // proxy the persisted value is the command's 3.2 on every attempt - never the stale snapshot (1.0)
+        // nor the concurrent writer's value (4.5). The existing full-context tests reload an identical
+        // rating-0 course on every attempt, so they cannot prove the per-attempt re-application.
+        final ArgumentCaptor<Course> saved = ArgumentCaptor.forClass(Course.class);
+        verify(repository, times(2)).findByUuid(uuid);
+        verify(repository, times(2)).save(saved.capture());
+        assertThat(saved.getValue()).hasFieldOrPropertyWithValue("rating", new CourseRating(3.2));
+    }
+
+    @Test
     void productionContext_updateCourseRatingHandler_persistentOptimisticLock_exhaustsConfiguredAttemptsThenRethrows() {
         // given - every save clashes on the version
         when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
@@ -253,5 +303,19 @@ class CourseRetryApplicationContextWiringTest {
                 .description("description")
                 .build();
         return new Course(createCourseCommand, 15);
+    }
+
+    private static Course courseWithStudents(int count) {
+        final Course course = newCourse();
+        for (int i = 0; i < count; i++) {
+            course.increaseNumberOfStudents();
+        }
+        return course;
+    }
+
+    private static Course courseWithRating(double rating) {
+        final Course course = newCourse();
+        course.updateRating(rating);
+        return course;
     }
 }
