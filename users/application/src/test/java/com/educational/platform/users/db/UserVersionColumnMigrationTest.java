@@ -311,6 +311,24 @@ class UserVersionColumnMigrationTest {
     }
 
     @Test
+    void migration_freshInstall_versionColumn_storesValuesBeyondIntegerRange() throws Exception {
+        // given no pre-existing table: createTable + addColumn both run, so the version column is defined by the
+        // full changelog rather than the legacy/upgrade addColumn path
+        runUsersChangelog();
+        insertUserWithoutVersion("fresh");
+
+        // a value past Integer.MAX_VALUE round-trips intact on the fresh-install path too, proving the column is
+        // genuinely BIGINT - not just that its metadata reports BIGINT (migration_freshInstall_createsTableWithVersionColumn).
+        // storesValuesBeyondIntegerRange pins this behaviour on the legacy/upgrade path; this is its fresh-install
+        // counterpart, mirroring the legacy vs freshInstall pairing the rest of the suite establishes
+        // (e.g. migration_newRowWithoutVersion_defaultsToZero vs migration_freshInstall_newRowWithoutVersion_defaultsToZero).
+        final long beyondIntegerRange = (long) Integer.MAX_VALUE + 1L;
+        setVersion("fresh", beyondIntegerRange);
+
+        assertThat(versionOf("fresh")).isEqualTo(beyondIntegerRange);
+    }
+
+    @Test
     void migration_isPurelyAdditive_leavesPreExistingColumnsNotNull() throws Exception {
         givenLegacyCustomUserTable();
 

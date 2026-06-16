@@ -117,6 +117,31 @@ public class UserPersistenceTest {
     }
 
     @Test
+    void projections_afterTeacherVersionIncrement_areUnaffected() {
+        // given a teacher whose version has since been bumped to 1
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        entityManager.clear();
+        final User loaded = repository.findByUsername("teacher").orElseThrow();
+        entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+        entityManager.clear();
+
+        // when the teacher is read back at its incremented version and projected
+        final User reloaded = repository.findByUsername("teacher").orElseThrow();
+
+        // then a changed version never leaks into either read projection for the non-default role: completes the
+        // role x version matrix of the direct projection path (projections_afterVersionIncrement_areUnaffected only
+        // covers the student role, and persistAndReload_preservesTeacherRoleProjection only covers version 0)
+        assertThat(reloaded.toDTO().role()).isEqualTo(RoleDTO.ROLE_TEACHER);
+        final UserDetails userDetails = reloaded.toUserDetails();
+        assertThat(userDetails.getUsername()).isEqualTo("teacher");
+        assertThat(passwordEncoder.matches(RAW_PASSWORD, userDetails.getPassword())).isTrue();
+        assertThat(userDetails.getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactly(Role.ROLE_TEACHER.getAuthority());
+    }
+
+    @Test
     void existsByUsername_reflectsPersistedAndAbsentUsers() {
         // given a single persisted user
         repository.saveAndFlush(newUser());

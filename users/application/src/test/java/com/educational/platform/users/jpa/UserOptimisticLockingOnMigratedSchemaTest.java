@@ -195,6 +195,32 @@ class UserOptimisticLockingOnMigratedSchemaTest {
     }
 
     @Test
+    void deleteStaleUserAfterRealJpaWrite_onMigratedSchema_throwsObjectOptimisticLockingFailureException() {
+        // given a user detached at version 0 (a request's view captured before a concurrent write)
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.detach(stale);
+
+        // a concurrent flow performs a real JPA write (forced increment, not a native UPDATE) that bumps the row to 1
+        forceIncrementVersion();
+        entityManager.clear();
+
+        // when the stale instance is deleted on the migrated schema, the version check finds no row at the loaded
+        // version. then a lost delete produced by a genuine application write is rejected on the real BIGINT column
+        // too, not just one forged via raw SQL: staleDelete_onMigratedSchema_... and
+        // delete_staleUserMultipleVersionsBehind_onMigratedSchema only simulate the conflict with a native UPDATE,
+        // and concurrentWriters_firstCommitWins_onMigratedSchema pins the real-write conflict for the merge path
+        // only. This is the production-schema, delete-path counterpart to
+        // UserOptimisticLockingTest.delete_staleUserAfterRealJpaWrite (Hibernate-generated INTEGER schema).
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> {
+                    repository.delete(stale);
+                    repository.flush();
+                });
+    }
+
+    @Test
     void deleteCurrentUser_onMigratedSchema_succeeds() {
         // given an up-to-date user loaded from the migrated schema
         repository.saveAndFlush(newUser());
