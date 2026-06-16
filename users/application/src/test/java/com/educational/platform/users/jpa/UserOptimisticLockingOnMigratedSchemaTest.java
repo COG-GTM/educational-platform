@@ -389,6 +389,56 @@ class UserOptimisticLockingOnMigratedSchemaTest {
                 .isThrownBy(repository::flush);
     }
 
+    @Test
+    void versionAtIntegerMaxValue_onMigratedSchema_materializesOntoIntegerField() {
+        // given a user whose BIGINT row version has been advanced to the top of the Integer range. The migration
+        // test proves the column stores values *beyond* Integer.MAX_VALUE at the JDBC level (with no entity in
+        // play); this pins the entity-side other half on the production schema - a value at the boundary of the
+        // Integer-typed field still materialises intact onto it, rather than truncating the Integer<->BIGINT mapping.
+        repository.saveAndFlush(newUser());
+        entityManager.createNativeQuery("UPDATE custom_user SET version = :version WHERE username = :username")
+                .setParameter("version", Integer.MAX_VALUE)
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+        entityManager.clear();
+
+        // when the entity is read back from the migrated BIGINT column
+        final User reloaded = repository.findByUsername(USERNAME).orElseThrow();
+
+        // then the maximum representable Integer version round-trips onto the Integer-typed @Version field
+        assertThat(reloaded).extracting("version").isInstanceOf(Integer.class);
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", Integer.MAX_VALUE);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo((long) Integer.MAX_VALUE);
+    }
+
+    @Test
+    void staleWriteFromIntegerMaxValueBaseline_onMigratedSchema_throwsOptimisticLockException() {
+        // given a user loaded at the top of the Integer range from the migrated BIGINT column - every other
+        // stale test here loads a small (0/2) baseline
+        repository.saveAndFlush(newUser());
+        entityManager.createNativeQuery("UPDATE custom_user SET version = :version WHERE username = :username")
+                .setParameter("version", Integer.MAX_VALUE)
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        assertThat(stale).hasFieldOrPropertyWithValue("version", Integer.MAX_VALUE);
+
+        // and a concurrent transaction that advances the row one past Integer.MAX_VALUE - a value only the BIGINT
+        // column can hold, so the conflict is detected across the Integer/BIGINT boundary
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back, the version check still fires from a max-Integer baseline:
+        // detection compares the loaded version against the row and is not limited to small versions
+        assertThatExceptionOfType(OptimisticLockException.class)
+                .isThrownBy(() -> {
+                    entityManager.lock(stale, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+                    repository.flush();
+                });
+    }
+
     private void forceIncrementVersion() {
         entityManager.clear();
         final User loaded = repository.findByUsername(USERNAME).orElseThrow();

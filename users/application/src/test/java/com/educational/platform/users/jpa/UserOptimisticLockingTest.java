@@ -639,6 +639,26 @@ public class UserOptimisticLockingTest {
                 .isThrownBy(() -> repository.saveAndFlush(stale));
     }
 
+    @Test
+    void reloadedUser_atIntegerMaxValueVersion_materializesOntoIntegerField() {
+        // given a persisted user whose row version has been advanced to the top of the Integer range. Every
+        // other test here exercises only small versions (0/1/2); this pins that the column -> field read holds
+        // at the boundary of the @Version field's own type, guarding against a narrowing/truncation regression.
+        repository.saveAndFlush(newUser());
+        entityManager.createNativeQuery("UPDATE custom_user SET version = :version WHERE username = :username")
+                .setParameter("version", Integer.MAX_VALUE)
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+        entityManager.clear();
+
+        // when the entity is read back from the database
+        final User reloaded = repository.findByUsername(USERNAME).orElseThrow();
+
+        // then the maximum representable Integer version materialises intact onto the Integer-typed @Version field
+        assertThat(reloaded).extracting("version").isInstanceOf(Integer.class);
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", Integer.MAX_VALUE);
+    }
+
     private int idOf(final String username) {
         return ((Number) entityManager
                 .createNativeQuery("SELECT id FROM custom_user WHERE username = :username")
