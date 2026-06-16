@@ -3,6 +3,7 @@ package com.educational.platform.courses.course.jpa;
 import com.educational.platform.courses.course.Course;
 import com.educational.platform.courses.course.CourseRepository;
 import com.educational.platform.courses.course.CurriculumItem;
+import com.educational.platform.courses.course.NumberOfStudents;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
 import com.educational.platform.courses.teacher.Teacher;
 import com.educational.platform.courses.teacher.TeacherRepository;
@@ -77,6 +78,52 @@ class CourseOptimisticLockingTest {
 
         // then
         assertThat(ReflectionTestUtils.getField(loaded, "version")).isEqualTo(1);
+    }
+
+    @Test
+    void update_persistedCourseRepeatedly_versionIncrementsOncePerFlush() {
+        // given - a persisted course at version 0
+        final Course course = newCourse(persistTeacher().getId());
+        final UUID uuid = course.toIdentity();
+        courseRepository.saveAndFlush(course);
+
+        // when - three independent reload -> mutate -> flush cycles (one per "retry attempt")
+        for (int i = 0; i < 3; i++) {
+            entityManager.clear();
+            final Course loaded = courseRepository.findByUuid(uuid).orElseThrow();
+            loaded.increaseNumberOfStudents();
+            courseRepository.saveAndFlush(loaded);
+        }
+
+        // then - the version advances exactly once per flush and the mutations accumulate
+        entityManager.clear();
+        final Course reloaded = courseRepository.findByUuid(uuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(3);
+        assertThat(reloaded).hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(3));
+    }
+
+    @Test
+    void saveAndFlush_reloadAfterConcurrentUpdate_succeedsWithIncrementedVersion() {
+        // given - a persisted course at version 0
+        final Course course = newCourse(persistTeacher().getId());
+        final UUID uuid = course.toIdentity();
+        courseRepository.saveAndFlush(course);
+        entityManager.clear();
+
+        // and - a concurrent writer bumps the persisted version to 1
+        final Course concurrent = courseRepository.findByUuid(uuid).orElseThrow();
+        concurrent.increaseNumberOfStudents();
+        courseRepository.saveAndFlush(concurrent);
+        entityManager.clear();
+
+        // when - reloading a fresh copy (what a retry attempt does) and saving it
+        final Course reloaded = courseRepository.findByUuid(uuid).orElseThrow();
+        reloaded.increaseNumberOfStudents();
+        courseRepository.saveAndFlush(reloaded);
+
+        // then - the reload sees version 1 and the save succeeds, advancing it to 2
+        assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
+        assertThat(reloaded).hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(2));
     }
 
     @Test
