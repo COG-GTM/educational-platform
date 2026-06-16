@@ -214,6 +214,38 @@ public class OptimisticLockingMigratedSchemaTest {
 	}
 
 	@Test
+	void reviewer_staleDeleteAgainstBigintColumn_failureIdentifiesEntityAndIsRootedInStaleVersion() {
+		// given - two instances reading the same migrated row at version 0
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("migrated-reviewer"))).getId();
+		entityManager.clear();
+		final Reviewer stale = reviewerRepository.findById(id).orElseThrow();
+		entityManager.detach(stale);
+		final Reviewer fresh = reviewerRepository.findById(id).orElseThrow();
+
+		// and - the first writer wins, bumping the BIGINT version to 1
+		ReflectionTestUtils.setField(fresh, "username", "first-wins");
+		reviewerRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// when - the stale instance (still version 0) tries to delete the row
+		// then - on the production-shaped BIGINT column the delete guard surfaces the full diagnostic contract
+		// (version-specific subtype, conflicting entity/row, StaleObjectStateException root cause), the delete-guard
+		// counterpart of reviewer_concurrentUpdateAgainstBigintColumn_failureIdentifies... The existing migrated
+		// stale-delete test only asserts the generic OptimisticLockingFailureException supertype.
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> {
+					reviewerRepository.delete(stale);
+					reviewerRepository.flush();
+				})
+				.satisfies(ex -> {
+					assertThat(ex.getPersistentClassName()).isEqualTo(Reviewer.class.getName());
+					assertThat(ex.getIdentifier()).isEqualTo(id);
+				})
+				.withRootCauseInstanceOf(StaleObjectStateException.class);
+	}
+
+	@Test
 	void reviewer_currentDeleteAgainstBigintColumn_succeeds() {
 		// given - a reviewer read at its current persisted version on the migrated schema
 		final Integer id = reviewerRepository
@@ -526,6 +558,40 @@ public class OptimisticLockingMigratedSchemaTest {
 					courseReviewRepository.delete(stale);
 					courseReviewRepository.flush();
 				});
+	}
+
+	@Test
+	void courseReview_staleDeleteAgainstBigintColumn_failureIdentifiesEntityAndIsRootedInStaleVersion() throws Exception {
+		// given - two instances reading the same migrated row at version 0
+		final CourseReview seed = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = seed.toIdentifier();
+		courseReviewRepository.saveAndFlush(seed);
+		entityManager.clear();
+		final CourseReview stale = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		final Object reviewId = ReflectionTestUtils.getField(stale, "id");
+		entityManager.detach(stale);
+		final CourseReview fresh = courseReviewRepository.findByUuid(uuid).orElseThrow();
+
+		// and - the first writer wins, bumping the BIGINT version to 1
+		fresh.update(new UpdateCourseReviewCommand(uuid, 5.0, "first wins"));
+		courseReviewRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// when - the stale instance (still version 0) tries to delete the row
+		// then - the delete guard surfaces the full diagnostic contract for the headline aggregate on the
+		// production-shaped BIGINT column (version-specific subtype, conflicting entity/row, StaleObjectStateException
+		// root cause), the delete-guard counterpart of courseReview_concurrentUpdateAgainstBigintColumn_failureIdentifies...
+		// courseReview_staleDeleteAgainstBigintColumn_throwsOptimisticLockingFailure only asserts the generic supertype.
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> {
+					courseReviewRepository.delete(stale);
+					courseReviewRepository.flush();
+				})
+				.satisfies(ex -> {
+					assertThat(ex.getPersistentClassName()).isEqualTo(CourseReview.class.getName());
+					assertThat(ex.getIdentifier()).isEqualTo(reviewId);
+				})
+				.withRootCauseInstanceOf(StaleObjectStateException.class);
 	}
 
 	@Test
