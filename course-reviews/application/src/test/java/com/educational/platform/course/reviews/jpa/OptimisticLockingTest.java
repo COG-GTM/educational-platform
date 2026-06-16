@@ -317,6 +317,41 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void courseReview_winnerCommittedViaUpdateHandler_staleRepositorySaveRejected() {
+		// given - a stale instance captured at version 0, detached before the winning write
+		final CourseReview stale = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		final Object reviewId = ReflectionTestUtils.getField(stale, "id");
+		entityManager.detach(stale);
+
+		// and - the winning update is committed through the production update handler (read-modify-save),
+		// bumping the persisted version to 1 and storing its new values. The existing winner-persisted test
+		// commits the winner straight through the repository; here the winner goes through the real use case.
+		final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+		final UpdateCourseReviewCommandHandler handler = new UpdateCourseReviewCommandHandler(validator, courseReviewRepository);
+		handler.handle(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "handler wins"));
+		entityManager.flush();
+		entityManager.clear();
+
+		// then - the handler's values are the ones actually stored
+		final CourseReviewDTO reloaded = courseReviewRepository.listCourseReviews(COURSE_UUID).get(0);
+		assertThat(reloaded.rating()).isEqualTo(5.0);
+		assertThat(reloaded.comment()).isEqualTo("handler wins");
+
+		// when - the stale instance (still version 0) tries to overwrite the handler's committed change
+		stale.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 1.0, "stale loses"));
+
+		// then - the loser is rejected with the version-specific failure (entity + row identified, rooted in
+		// stale-version detection) instead of silently overwriting the value the production handler committed
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> courseReviewRepository.saveAndFlush(stale))
+				.satisfies(ex -> {
+					assertThat(ex.getPersistentClassName()).isEqualTo(CourseReview.class.getName());
+					assertThat(ex.getIdentifier()).isEqualTo(reviewId);
+				})
+				.withRootCauseInstanceOf(StaleObjectStateException.class);
+	}
+
+	@Test
 	void courseReview_updatedViaCommandHandler_versionIncrementedAndChangesPersisted() {
 		// given - the production update path: the real command handler wired with the real repository
 		final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();

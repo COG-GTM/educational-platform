@@ -15,6 +15,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import jakarta.validation.ConstraintViolationException;
@@ -25,6 +27,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -67,6 +70,25 @@ public class UpdateCourseReviewCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("uuid", uuid)
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(3))
                 .hasFieldOrPropertyWithValue("comment", new Comment("updated comment"));
+    }
+
+    @Test
+    void handle_concurrentModificationOnSave_optimisticLockingFailurePropagated() {
+        // given - an existing review whose save loses an optimistic-lock race: another writer already
+        // bumped the @Version added in this PR, so persisting the stale state raises the optimistic-lock
+        // failure Hibernate maps an OptimisticLockException to
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, "updated comment");
+        when(courseReviewRepository.save(any(CourseReview.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(CourseReview.class, uuid));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - the update use case surfaces the conflict to the caller instead of swallowing it or
+        // reporting a successful update, so a write that lost the race fails fast as the PR intends
+        assertThatExceptionOfType(OptimisticLockingFailureException.class).isThrownBy(handle);
+        verify(courseReviewRepository).save(any(CourseReview.class));
     }
 
     @Test
