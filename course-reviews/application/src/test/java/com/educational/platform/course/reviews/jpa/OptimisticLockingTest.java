@@ -333,6 +333,41 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void courseReview_createdThenUpdatedViaCommandHandlers_versionProgressesZeroToOne() {
+		// given - both production paths wired with the real repositories: the create factory/handler and the
+		// update handler. Only the security-dependent reviewer lookup is mocked, as in CourseReviewFactoryTest.
+		final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+		final CurrentUserAsReviewer currentUserAsReviewer = mock(CurrentUserAsReviewer.class);
+		when(currentUserAsReviewer.userAsReviewer()).thenReturn(reviewerRepository.findByUsername("reviewer"));
+		final CourseReviewFactory factory = new CourseReviewFactory(validator, currentUserAsReviewer, reviewableCourseRepository);
+		final ReviewCourseCommandHandler createHandler = new ReviewCourseCommandHandler(courseReviewRepository, factory);
+		final UpdateCourseReviewCommandHandler updateHandler = new UpdateCourseReviewCommandHandler(validator, courseReviewRepository);
+
+		// when - a brand new review is created through the handler. Unlike the seeded review (whose version 0
+		// comes from the SQL seed), here @Version owns the value end to end, so the fresh row must start at 0.
+		final UUID createdUuid = createHandler.handle(new ReviewCourseCommand(COURSE_UUID, 3.0, "created via handler"));
+		entityManager.flush();
+		entityManager.clear();
+		final CourseReview afterCreate = courseReviewRepository.findByUuid(createdUuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(afterCreate, "version")).isEqualTo(0);
+
+		// and - the same review is then updated through the production update handler
+		updateHandler.handle(new UpdateCourseReviewCommand(createdUuid, 5.0, "updated via handler"));
+		entityManager.flush();
+		entityManager.clear();
+
+		// then - the version progresses 0 -> 1 across the two handler paths with no manual version handling,
+		// and the update's field values are the ones persisted
+		final CourseReview afterUpdate = courseReviewRepository.findByUuid(createdUuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(afterUpdate, "version")).isEqualTo(1);
+		final CourseReviewDTO dto = courseReviewRepository.listCourseReviews(COURSE_UUID).stream()
+				.filter(review -> review.uuid().equals(createdUuid))
+				.findFirst().orElseThrow();
+		assertThat(dto.rating()).isEqualTo(5.0);
+		assertThat(dto.comment()).isEqualTo("updated via handler");
+	}
+
+	@Test
 	void courseReview_concurrentUpdateAfterRefresh_succeedsAndVersionIncrements() {
 		// given - the first writer wins, bumping the persisted version to 1
 		final CourseReview first = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();

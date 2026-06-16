@@ -1,6 +1,7 @@
 package com.educational.platform.course.reviews.jpa;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.io.DefaultResourceLoader;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
@@ -106,6 +108,37 @@ class CourseReviewsLiquibaseMigrationTest {
 		// mirrored by the test seed SQL so updating a row does not increment a null version)
 		final Long version = jdbcTemplate.queryForObject("SELECT version FROM course_review", Long.class);
 		assertThat(version).isZero();
+	}
+
+	@Test
+	void migration_reviewerInsertedWithExplicitNullVersion_isRejected() {
+		// when/then - inserting a row that explicitly sets version to NULL is rejected. The metadata test
+		// only proves the column is *declared* NOT NULL; this proves the constraint is actually enforced at
+		// runtime (the default fills an omitted column, but it does not rescue an explicit NULL), so a row
+		// can never persist without the comparable version Hibernate's @Version guard relies on.
+		assertThatExceptionOfType(DataIntegrityViolationException.class).isThrownBy(() ->
+				jdbcTemplate.update("INSERT INTO reviewer (username, version) VALUES ('null-version-reviewer', NULL)"));
+	}
+
+	@Test
+	void migration_reviewableCourseInsertedWithExplicitNullVersion_isRejected() {
+		// when/then - the nullable:false constraint is enforced for the reviewable_course version column too
+		assertThatExceptionOfType(DataIntegrityViolationException.class).isThrownBy(() ->
+				jdbcTemplate.update("INSERT INTO reviewable_course (uuid, version) VALUES (?, NULL)", UUID.randomUUID()));
+	}
+
+	@Test
+	void migration_courseReviewInsertedWithExplicitNullVersion_isRejected() {
+		// given - the foreign-key parents required by the course_review NOT NULL/FK constraints
+		jdbcTemplate.update("INSERT INTO reviewer (username) VALUES ('null-version-cr-reviewer')");
+		jdbcTemplate.update("INSERT INTO reviewable_course (uuid) VALUES (?)", UUID.randomUUID());
+
+		// when/then - inserting a course_review with an explicit NULL version is rejected, so the headline
+		// aggregate can never be persisted in a versionless state on the production-shaped schema
+		assertThatExceptionOfType(DataIntegrityViolationException.class).isThrownBy(() ->
+				jdbcTemplate.update("INSERT INTO course_review (uuid, reviewer, course, rating, comment, version) VALUES (?, "
+						+ "(SELECT id FROM reviewer WHERE username = 'null-version-cr-reviewer'), "
+						+ "(SELECT MAX(id) FROM reviewable_course), 4.0, 'comment', NULL)", UUID.randomUUID()));
 	}
 
 	@Test
