@@ -293,4 +293,40 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(0));
     }
 
+    @Test
+    void increaseNumberOfStudents_leavesVersionNullForJpaToManage() {
+        // given - a freshly constructed, not-yet-persisted course (its @Version is still null)
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when - the number-of-students write path (the @Retryable handler's mutation) runs
+        course.increaseNumberOfStudents();
+
+        // then - the mutator must not touch the JPA-managed @Version: it stays null so Hibernate still
+        // initialises it on INSERT. Manually managing the version here would break optimistic locking,
+        // and the existing version-null test only pins the construction-time state, not post-mutation
+        assertThat(ReflectionTestUtils.getField(course, "version")).isNull();
+    }
+
+    @Test
+    void updateRating_leavesVersionNullForJpaToManage() {
+        // given - a freshly constructed, not-yet-persisted course (its @Version is still null)
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when - the rating write path (the @Retryable handler's mutation) runs
+        course.updateRating(3.2);
+
+        // then - the mutator must not touch the JPA-managed @Version: it stays null so Hibernate still
+        // initialises it on INSERT. Manually managing the version here would break optimistic locking,
+        // and the existing version-null test only pins the construction-time state, not post-mutation
+        assertThat(ReflectionTestUtils.getField(course, "version")).isNull();
+    }
+
 }
