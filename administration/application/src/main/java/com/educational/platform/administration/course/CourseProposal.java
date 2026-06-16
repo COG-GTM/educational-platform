@@ -5,12 +5,14 @@ import com.educational.platform.common.domain.AggregateRoot;
 
 import java.util.UUID;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Version;
 
 /**
  * Represents Course Proposal domain model.
@@ -21,6 +23,10 @@ public class CourseProposal implements AggregateRoot {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
+
+    @Version
+    @Column(columnDefinition = "bigint default 0 not null")
+    private Integer version;
 
     private UUID uuid;
 
