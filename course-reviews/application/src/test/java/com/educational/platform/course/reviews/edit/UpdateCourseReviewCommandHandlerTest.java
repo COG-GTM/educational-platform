@@ -179,6 +179,39 @@ public class UpdateCourseReviewCommandHandlerTest {
         verify(courseReviewRepository, never()).save(any(CourseReview.class));
     }
 
+    @Test
+    void handle_ratingAboveMax_noVersionBumpingSavePerformed() {
+        // given - an existing review and a command whose rating violates @Max(5)
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 6.0, "updated comment");
+
+        // when - the out-of-range update is handled
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - the @Max(5) violation is rejected before save, so this rejection path also never reaches the
+        // version-bumping persist. handle_invalidRating_noVersionBumpingSavePerformed only proves it for the
+        // @NotNull (null rating) path; this extends the no-save guarantee to the upper-bound validation, so a
+        // rating above the allowed maximum can never spuriously bump the @Version added by this PR.
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verify(courseReviewRepository, never()).save(any(CourseReview.class));
+    }
+
+    @Test
+    void handle_negativeRating_noVersionBumpingSavePerformed() {
+        // given - an existing review and a command whose rating violates @PositiveOrZero
+        final UUID uuid = configureCourseReview();
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, -1.0, "updated comment");
+
+        // when - the negative-rating update is handled
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - the @PositiveOrZero violation is rejected before save, closing the last rating-validation
+        // rejection path: none of @NotNull/@Max/@PositiveOrZero reaches the version-bumping persist, so no
+        // invalid rating can consume an optimistic-lock version.
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verify(courseReviewRepository, never()).save(any(CourseReview.class));
+    }
+
     private UUID configureCourseReview() {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(courseId));
