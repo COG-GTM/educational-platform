@@ -72,6 +72,22 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void write_managedUser_multipleTimes_incrementsVersionEachTime() {
+        // given a freshly persisted user at version 0
+        repository.saveAndFlush(newUser());
+
+        // when the row is written in two successive write cycles (each reloads a managed instance)
+        forceIncrementVersion();
+        forceIncrementVersion();
+
+        // then the version advances monotonically (0 -> 1 -> 2) rather than capping at the first bump
+        entityManager.clear();
+        final User reloaded = repository.findByUsername(USERNAME).orElseThrow();
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 2);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(2L);
+    }
+
+    @Test
     void incrementedVersion_isVisibleAfterReload() {
         // given a persisted user whose version has been bumped to 1
         repository.saveAndFlush(newUser());
@@ -125,6 +141,25 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void update_afterReloadingConcurrentlyModifiedUser_succeeds() {
+        // given a persisted user that a concurrent transaction has since modified (version 0 -> 1)
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the entity is re-read (picking up the current version) and then written back
+        final User reloaded = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.lock(reloaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+
+        // then the conflict is recoverable: the write succeeds and advances from the reloaded version (1 -> 2)
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 2);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(2L);
+    }
+
+    @Test
     void delete_currentUser_succeeds() {
         // given
         repository.saveAndFlush(newUser());
@@ -157,6 +192,13 @@ public class UserOptimisticLockingTest {
         // then
         assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
                 .isThrownBy(repository::flush);
+    }
+
+    private void forceIncrementVersion() {
+        entityManager.clear();
+        final User loaded = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
     }
 
     private Object versionOf(final String username) {
