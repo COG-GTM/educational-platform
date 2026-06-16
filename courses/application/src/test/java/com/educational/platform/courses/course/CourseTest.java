@@ -206,4 +206,22 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(3.2));
     }
 
+    @Test
+    void updateRating_calledMultipleTimes_lastValueWins() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when - the rating is recomputed on every save, so a retry replaces (not accumulates) the value
+        course.updateRating(3.2);
+        course.updateRating(4.5);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(4.5));
+    }
+
 }

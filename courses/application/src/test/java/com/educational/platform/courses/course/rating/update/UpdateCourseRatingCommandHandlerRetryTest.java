@@ -13,6 +13,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
@@ -109,6 +110,21 @@ class UpdateCourseRatingCommandHandlerRetryTest {
 
         // then - only ObjectOptimisticLockingFailureException is retried, so this propagates on the first attempt
         assertThatExceptionOfType(IllegalStateException.class).isThrownBy(handle);
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, times(1)).save(any(Course.class));
+    }
+
+    @Test
+    void handle_parentOptimisticLockingFailure_isNotRetried() {
+        // given - the broader supertype is thrown, not the configured ObjectOptimisticLockingFailureException
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class))).thenThrow(new OptimisticLockingFailureException("stale"));
+
+        // when
+        final ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - retryFor targets the ObjectOptimisticLockingFailureException subtype only, so the parent propagates immediately
+        assertThatExceptionOfType(OptimisticLockingFailureException.class).isThrownBy(handle);
         verify(repository, times(1)).findByUuid(uuid);
         verify(repository, times(1)).save(any(Course.class));
     }
