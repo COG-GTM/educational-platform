@@ -171,6 +171,105 @@ class UserOptimisticLockingOnMigratedSchemaTest {
                 .isThrownBy(() -> repository.saveAndFlush(stale));
     }
 
+    @Test
+    void staleDelete_onMigratedSchema_throwsObjectOptimisticLockingFailureException() {
+        // given a user loaded at version 0 from the migrated schema
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+
+        // and a concurrent transaction that advanced the row's version
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is deleted on the migrated schema
+        repository.delete(stale);
+
+        // then the delete path is guarded on the real BIGINT column too: the version check finds no row at the
+        // loaded version and the lost delete is rejected, not silently dropped. The other production write paths
+        // (raw EntityManager update, repository.save merge) are pinned on the migrated schema above; this completes
+        // the matrix with the delete path, which is only otherwise covered on the Hibernate-generated INTEGER schema.
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(repository::flush);
+    }
+
+    @Test
+    void deleteCurrentUser_onMigratedSchema_succeeds() {
+        // given an up-to-date user loaded from the migrated schema
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User loaded = repository.findByUsername(USERNAME).orElseThrow();
+
+        // when a current (non-stale) entity is deleted
+        repository.delete(loaded);
+        repository.flush();
+
+        // then optimistic locking does not blanket-reject deletes on the BIGINT column: deleting an entity at the
+        // row's current version removes the row. This is the delete-path false-positive guard - the counterpart to
+        // staleDelete_onMigratedSchema_..., proving the version check only fires on a genuine conflict.
+        assertThat(repository.findByUsername(USERNAME)).isEmpty();
+    }
+
+    @Test
+    void write_afterReReadingConcurrentlyModifiedUser_onMigratedSchema_succeeds() {
+        // given a user that a concurrent transaction has since advanced on the migrated schema (version 0 -> 1)
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the conflict is resolved by re-reading the now-current version and writing back
+        final User reloaded = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.lock(reloaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+
+        // then the conflict is recoverable on the real BIGINT column: locking rejects only a behind version, it does
+        // not blanket-reject every write. This is the update-path false-positive guard - the recovery counterpart to
+        // staleWrite_onMigratedSchema_..., advancing from the reloaded version (1 -> 2) rather than failing.
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 2);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(2L);
+    }
+
+    @Test
+    void repeatedWrites_onMigratedSchema_incrementVersionMonotonically() {
+        // given a freshly persisted user at version 0 on the migrated schema
+        repository.saveAndFlush(newUser());
+
+        // when the row is written in two successive write cycles (each reloads a managed instance)
+        forceIncrementVersion();
+        forceIncrementVersion();
+
+        // then the BIGINT column persists each bump and the version advances monotonically (0 -> 1 -> 2) rather
+        // than capping at the first increment - write_onMigratedSchema_... only proves the initial 0 -> 1 bump
+        entityManager.clear();
+        final User reloaded = repository.findByUsername(USERNAME).orElseThrow();
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 2);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(2L);
+    }
+
+    @Test
+    void write_onMigratedSchema_leavesOtherUsersVersionUnchanged() {
+        // given two independently persisted users on the migrated schema, each starting at version 0
+        repository.saveAndFlush(newUser());
+        repository.saveAndFlush(newUser("other", "other@gmail.com"));
+
+        // when only the first user is written
+        forceIncrementVersion();
+
+        // then optimistic locking is scoped per row on the BIGINT column: the untouched user keeps version 0
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(1L);
+        assertThat(((Number) versionOf("other")).longValue()).isZero();
+    }
+
+    private void forceIncrementVersion() {
+        entityManager.clear();
+        final User loaded = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+    }
+
     private Object versionOf(final String username) {
         return entityManager
                 .createNativeQuery("SELECT version FROM custom_user WHERE username = :username")
@@ -179,9 +278,13 @@ class UserOptimisticLockingOnMigratedSchemaTest {
     }
 
     private User newUser() {
+        return newUser(USERNAME, "email@gmail.com");
+    }
+
+    private User newUser(final String username, final String email) {
         final UserRegistrationCommand command = UserRegistrationCommand.builder()
-                .username(USERNAME)
-                .email("email@gmail.com")
+                .username(username)
+                .email(email)
                 .password("password")
                 .role(RoleDTO.ROLE_STUDENT)
                 .build();
