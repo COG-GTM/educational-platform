@@ -166,6 +166,32 @@ class CurriculumItemOptimisticLockingTest {
                 .isThrownBy(() -> courseRepository.saveAndFlush(course));
     }
 
+    @Test
+    void saveAndFlush_reloadCurriculumItemAfterConcurrentUpdate_succeedsWithIncrementedVersion() {
+        // given - a persisted course whose single curriculum item is at version 0
+        final UUID courseUuid = persistCourseWithLecture();
+        entityManager.clear();
+
+        // and - a concurrent writer bumps the persisted curriculum_item version to 1 through the
+        // aggregate root (the production write path) and commits
+        final Course concurrent = courseRepository.findByUuid(courseUuid).orElseThrow();
+        ReflectionTestUtils.setField(singleCurriculumItem(concurrent), "title", "concurrent");
+        courseRepository.saveAndFlush(concurrent);
+        entityManager.clear();
+
+        // when - reloading a fresh copy (what a retry attempt does) and saving it
+        final Course reloaded = courseRepository.findByUuid(courseUuid).orElseThrow();
+        final CurriculumItem item = singleCurriculumItem(reloaded);
+        ReflectionTestUtils.setField(item, "title", "retried");
+        courseRepository.saveAndFlush(reloaded);
+
+        // then - the reload observes version 1 (not the stale 0), so the cascaded versioned UPDATE
+        // matches and succeeds, advancing the version to 2 - the recovery path the retrying command
+        // handlers depend on, mirrored here for CurriculumItem as for Course and Teacher
+        assertThat(ReflectionTestUtils.getField(item, "version")).isEqualTo(2);
+        assertThat(ReflectionTestUtils.getField(item, "title")).isEqualTo("retried");
+    }
+
     private UUID persistCourseWithLecture() {
         final Teacher teacher = teacherRepository.saveAndFlush(new Teacher(new CreateTeacherCommand(TEACHER)));
         final CreateCurriculumItemCommand lecture = CreateLectureCommand.builder()
