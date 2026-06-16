@@ -209,3 +209,42 @@ databaseChangeLog:
             referencedColumnNames: id
             referencedTableName: curriculum_item
             validate: true
+  - changeSet:
+      id: add-version-column-to-course
+      author: devin
+      changes:
+        - addColumn:
+            tableName: course
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: add-version-column-to-curriculum_item
+      author: devin
+      changes:
+        - addColumn:
+            tableName: curriculum_item
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: add-version-column-to-teacher
+      author: devin
+      changes:
+        - addColumn:
+            tableName: teacher
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
