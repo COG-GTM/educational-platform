@@ -121,3 +121,42 @@ databaseChangeLog:
             referencedColumnNames: id
             referencedTableName: reviewer
             validate: true
+  - changeSet:
+      id: add-version-column-to-course_review
+      author: devin
+      changes:
+        - addColumn:
+            tableName: course_review
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: add-version-column-to-reviewable_course
+      author: devin
+      changes:
+        - addColumn:
+            tableName: reviewable_course
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: add-version-column-to-reviewer
+      author: devin
+      changes:
+        - addColumn:
+            tableName: reviewer
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
