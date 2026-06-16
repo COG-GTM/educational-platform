@@ -144,4 +144,23 @@ public class CourseProposalTest {
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
     }
 
+    @Test
+    void toDTO_versionPopulated_versionExcludedFromReadModel() {
+        // given - a proposal whose @Version has been populated by the persistence provider
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal versioned = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        ReflectionTestUtils.setField(versioned, "version", 7);
+
+        // when
+        final CourseProposalDTO dto = versioned.toDTO();
+
+        // then - the @Version field is a persistence concern and must not leak into the read model;
+        // the DTO is identical to the one produced from an unversioned proposal with the same state
+        final CourseProposalDTO unversionedDto = new CourseProposal(new CreateCourseProposalCommand(uuid)).toDTO();
+        assertThat(dto)
+                .isEqualTo(unversionedDto)
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
+    }
+
 }

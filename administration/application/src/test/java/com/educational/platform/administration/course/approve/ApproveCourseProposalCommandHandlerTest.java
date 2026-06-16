@@ -97,6 +97,23 @@ class ApproveCourseProposalCommandHandlerTest {
     }
 
     @Test
+    void handle_invalidId_nothingSavedAndNoEventPublished() {
+        // given - the proposal does not exist, so the command fails before any mutation
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - completes the failure-mode contract alongside the optimistic-lock and domain-guard
+        // cases: a failed command must neither persist the aggregate nor emit an integration event
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verify(repository, never()).save(any());
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
     void handle_optimisticLockingConflictOnSave_exceptionPropagatedAndNoEventPublished() {
         // given - the proposal is loaded but a concurrent admin already bumped the @Version,
         // so the save inside the transaction fails the optimistic-lock check
