@@ -119,6 +119,57 @@ public class ReviewCourseCommandHandlerTest {
         verify(courseReviewRepository, never()).save(any(CourseReview.class));
     }
 
+    @Test
+    void handle_nullRating_noReviewPersisted() {
+        // given - an otherwise valid create whose rating is null, violating @NotNull
+        final ReviewCourseCommand command = new ReviewCourseCommand(COURSE_ID, null, "comment");
+
+        // when - the invalid create is handled
+        final ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - the @NotNull violation is rejected before the handler reaches save, so the rejected create
+        // never persists a row and never starts a stray version-0 lifecycle. handle_invalidRating_noReviewPersisted
+        // only proves this for the @Max(5) path; this extends the create-path no-save guarantee to the @NotNull path,
+        // matching the update handler's handle_invalidRating_noVersionBumpingSavePerformed.
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verify(courseReviewRepository, never()).save(any(CourseReview.class));
+    }
+
+    @Test
+    void handle_negativeRating_noReviewPersisted() {
+        // given - an otherwise valid create whose rating is negative, violating @PositiveOrZero
+        final ReviewCourseCommand command = new ReviewCourseCommand(COURSE_ID, -1.0, "comment");
+
+        // when - the negative-rating create is handled
+        final ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - the @PositiveOrZero violation is rejected before save, closing the last rating-validation
+        // rejection path on the create side: none of @NotNull/@Max/@PositiveOrZero reaches the persist that would
+        // materialise a version-0 row. This is the create-path counterpart of the update handler's
+        // handle_negativeRating_noVersionBumpingSavePerformed.
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verify(courseReviewRepository, never()).save(any(CourseReview.class));
+    }
+
+    @Test
+    void handle_invalidRatingAndCourseNotResolved_validationWinsAndNoReviewPersisted() {
+        // given - a create that would fail both guards at once: the rating violates @NotNull AND the related
+        // course would not resolve. The factory validates the command before it resolves any relation, so the
+        // course lookup is never even reached.
+        final ReviewCourseCommand command = new ReviewCourseCommand(COURSE_ID, null, "comment");
+
+        // when - the missing-and-invalid create is handled
+        final ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - validation short-circuits first (ConstraintViolationException, not RelatedResourceIsNotResolvedException),
+        // the course is never resolved, and save is never reached. This pins the factory's validate-before-resolve
+        // order-of-operations that guarantees no rejection path can reach the version-starting persist - the create-path
+        // counterpart of the update handler's handle_notFoundWithInvalidRating_notFoundWinsAndNoVersionBumpingSavePerformed.
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verify(reviewableCourseRepository, never()).findByOriginalCourseId(any(UUID.class));
+        verify(courseReviewRepository, never()).save(any(CourseReview.class));
+    }
+
     private void configureRelatedResources() {
         final ReviewableCourse reviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(COURSE_ID));
         when(reviewableCourseRepository.findByOriginalCourseId(COURSE_ID)).thenReturn(Optional.of(reviewableCourse));
