@@ -106,6 +106,44 @@ class AdministrationLiquibaseMigrationTest {
         }
     }
 
+    @Test
+    void migration_appliedTwice_isIdempotent() throws Exception {
+        // the booted monolith runs this changelog on every startup with ddl-auto=none, so re-applying
+        // it must be a no-op. Liquibase tracks the changeSet by id; a second run must NOT try to add
+        // the version column again (which would fail), and must leave a single version column intact.
+        final String url = migratedDatabaseUrl();
+
+        // when - the changelog is applied a second time to the already-migrated database
+        applyChangelog(url);
+
+        // then - the version column still exists exactly once and keeps its non-null BIGINT mapping
+        try (Connection connection = DriverManager.getConnection(url, "sa", "");
+                ResultSet columns = connection.getMetaData()
+                        .getColumns(null, null, "COURSE_PROPOSAL", "VERSION")) {
+
+            assertThat(columns.next()).as("version column exists after re-applying the changelog").isTrue();
+            assertThat(columns.getInt("DATA_TYPE")).isEqualTo(Types.BIGINT);
+            assertThat(columns.getString("IS_NULLABLE")).isEqualTo("NO");
+            assertThat(columns.next()).as("version column is not duplicated by the second migration").isFalse();
+        }
+    }
+
+    @Test
+    void migration_versionChangeSet_recordedInDatabaseChangeLog() throws Exception {
+        // the addColumn changeSet must be tracked under its stable id. Renaming the id would make the
+        // migration re-run against existing production databases (ddl-auto=none) and fail by re-adding
+        // an already-present column, so this pins the exact id the running monolith relies on.
+        final String url = migratedDatabaseUrl();
+
+        try (Connection connection = DriverManager.getConnection(url, "sa", "");
+                Statement statement = connection.createStatement();
+                ResultSet rows = statement.executeQuery(
+                        "select id from databasechangelog where id = 'add-version-column-to-course_proposal'")) {
+
+            assertThat(rows.next()).as("version changeSet recorded in DATABASECHANGELOG").isTrue();
+        }
+    }
+
     /**
      * Creates a uniquely named in-memory H2 database, applies the administration changelog to it and
      * returns the JDBC url. {@code DB_CLOSE_DELAY=-1} keeps the schema alive after the migration
@@ -113,17 +151,21 @@ class AdministrationLiquibaseMigrationTest {
      */
     private static String migratedDatabaseUrl() throws Exception {
         final String url = "jdbc:h2:mem:administration_liquibase_" + System.nanoTime() + ";DB_CLOSE_DELAY=-1";
+        applyChangelog(url);
+        return url;
+    }
 
+    /**
+     * Applies the administration changelog to the database identified by {@code url}. Extracted so the
+     * idempotency test can run the migration twice against the same in-memory database.
+     */
+    private static void applyChangelog(String url) throws Exception {
         try (Connection connection = DriverManager.getConnection(url, "sa", "")) {
             final Database database = DatabaseFactory.getInstance()
                     .findCorrectDatabaseImplementation(new JdbcConnection(connection));
             try (Liquibase liquibase = new Liquibase(CHANGELOG, new ClassLoaderResourceAccessor(), database)) {
                 liquibase.update(new Contexts(), new LabelExpression());
             }
-        } catch (SQLException e) {
-            throw new IllegalStateException("Failed to apply administration changelog", e);
         }
-
-        return url;
     }
 }

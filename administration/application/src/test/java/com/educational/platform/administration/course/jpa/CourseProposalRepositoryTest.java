@@ -60,6 +60,22 @@ public class CourseProposalRepositoryTest {
 	}
 
 	@Test
+	void save_transientProposalMutatedBeforeFirstPersist_versionInitializedToZero() {
+		// given - a brand new (never persisted) proposal that is mutated while still transient
+		final CourseProposal courseProposal = new CourseProposal(new CreateCourseProposalCommand(UUID.fromString("123e4567-e89b-12d3-a456-426655440001")));
+		courseProposal.approve();
+
+		// when - the first write is an INSERT, not an UPDATE
+		final CourseProposal saved = sut.saveAndFlush(courseProposal);
+
+		// then - the @Version seed for the initial INSERT is 0; the version only advances on a later
+		// UPDATE, so mutating a transient aggregate before its first persist must not pre-bump it
+		assertThat(saved)
+				.hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED)
+				.hasFieldOrPropertyWithValue("version", 0);
+	}
+
+	@Test
 	void save_updatedCourseProposal_versionIncremented() {
 		// given
 		final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
