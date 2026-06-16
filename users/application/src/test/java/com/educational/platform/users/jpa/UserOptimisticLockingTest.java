@@ -223,6 +223,41 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void save_staleUserThroughRepository_throwsObjectOptimisticLockingFailureException() {
+        // given a user detached at version 0 (the state a request holds between read and write)
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.detach(stale);
+
+        // simulate a concurrent transaction that updated the row and bumped its version
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back through the Spring Data merge path (repository.save)
+        // then the version check fails with Spring's translated optimistic-locking exception, not a silent overwrite
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> repository.saveAndFlush(stale));
+    }
+
+    @Test
+    void save_unchangedUpToDateUserThroughRepository_succeedsWithoutChangingVersion() {
+        // given an up-to-date user detached at version 0
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User detached = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.clear();
+
+        // when the unchanged instance is re-saved through the Spring Data merge path
+        repository.save(detached);
+        repository.flush();
+
+        // then the no-op merge neither trips the version check nor spuriously bumps the version
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isZero();
+    }
+
+    @Test
     void delete_currentUser_succeeds() {
         // given
         repository.saveAndFlush(newUser());
