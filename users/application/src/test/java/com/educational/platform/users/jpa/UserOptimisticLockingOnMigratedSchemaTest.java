@@ -297,6 +297,98 @@ class UserOptimisticLockingOnMigratedSchemaTest {
         assertThat(((Number) versionOf(USERNAME)).longValue()).isZero();
     }
 
+    @Test
+    void staleWriteFromNonZeroBaseline_onMigratedSchema_throwsOptimisticLockException() {
+        // given a row on the migrated schema whose version has already advanced to 2 before any conflict -
+        // every other stale test here loads a freshly persisted version-0 entity
+        repository.saveAndFlush(newUser());
+        forceIncrementVersion();
+        forceIncrementVersion();
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        assertThat(stale).hasFieldOrPropertyWithValue("version", 2);
+
+        // and a concurrent transaction that advances the row past the loaded baseline (2 -> 3)
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back through the raw EntityManager path
+        // then the lock check still fires from a non-zero baseline on the BIGINT column: detection compares the
+        // loaded version against the row, it is not special-cased to the initial 0 -> 1 transition every other
+        // migrated-schema stale test starts from (the production-schema counterpart to
+        // UserOptimisticLockingTest.update_staleUserFromNonZeroBaseline_...)
+        assertThatExceptionOfType(OptimisticLockException.class)
+                .isThrownBy(() -> {
+                    entityManager.lock(stale, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+                    repository.flush();
+                });
+    }
+
+    @Test
+    void staleWriteMultipleVersionsBehind_onMigratedSchema_throwsOptimisticLockException() {
+        // given a user loaded at version 0 from the migrated schema
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+
+        // and two successive concurrent transactions advancing the row two versions ahead (0 -> 2)
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 2 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back, any divergence (not just an off-by-one) is detected on the
+        // BIGINT column too - staleWrite_onMigratedSchema_... only covers the +1 case
+        assertThatExceptionOfType(OptimisticLockException.class)
+                .isThrownBy(() -> {
+                    entityManager.lock(stale, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+                    repository.flush();
+                });
+    }
+
+    @Test
+    void update_afterConcurrentDelete_onMigratedSchema_throwsOptimisticLockException() {
+        // given a user loaded at version 0 from the migrated schema
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+
+        // and a concurrent transaction that deleted the row out from under us
+        entityManager.createNativeQuery("DELETE FROM custom_user WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the now-orphaned instance is written back through the raw EntityManager path the version check finds
+        // no matching row. then it surfaces as the JPA-standard exception on the BIGINT column - the lost update is
+        // rejected, not silently re-applied. The migrated slice otherwise only covers a version *mismatch*; this
+        // pins the distinct no-matching-row path on the production schema.
+        assertThatExceptionOfType(OptimisticLockException.class)
+                .isThrownBy(() -> {
+                    entityManager.lock(stale, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+                    repository.flush();
+                });
+    }
+
+    @Test
+    void delete_afterConcurrentDelete_onMigratedSchema_throwsObjectOptimisticLockingFailureException() {
+        // given a user loaded at version 0 from the migrated schema
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+
+        // and a concurrent transaction that already deleted the row
+        entityManager.createNativeQuery("DELETE FROM custom_user WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when this transaction deletes the same (already removed) row through the Spring Data path the version
+        // check matches nothing. then the lost delete is reported as Spring's translated optimistic-locking
+        // exception on the BIGINT column, completing the concurrent-delete matrix the migrated slice otherwise omits.
+        repository.delete(stale);
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(repository::flush);
+    }
+
     private void forceIncrementVersion() {
         entityManager.clear();
         final User loaded = repository.findByUsername(USERNAME).orElseThrow();
