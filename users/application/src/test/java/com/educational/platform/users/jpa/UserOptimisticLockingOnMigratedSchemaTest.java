@@ -263,6 +263,40 @@ class UserOptimisticLockingOnMigratedSchemaTest {
         assertThat(((Number) versionOf("other")).longValue()).isZero();
     }
 
+    @Test
+    void read_withoutModification_onMigratedSchema_doesNotChangeVersion() {
+        // given a user persisted on the migrated BIGINT column
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User loaded = repository.findByUsername(USERNAME).orElseThrow();
+
+        // when an unmodified entity is flushed
+        repository.flush();
+
+        // then no spurious increment is issued against the BIGINT column: a pure read must not bump the version.
+        // UserOptimisticLockingTest.read_withoutModification_doesNotChangeVersion proves this on the Hibernate
+        // INTEGER column; this is the false-positive guard's missing counterpart on the production schema, where
+        // a mistyped/misbound column could otherwise make Hibernate consider the row dirty on every flush.
+        assertThat(loaded).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isZero();
+    }
+
+    @Test
+    void save_unchangedUpToDateUserThroughRepository_onMigratedSchema_succeedsWithoutChangingVersion() {
+        // given an up-to-date user detached at version 0 on the migrated schema
+        final User detached = repository.saveAndFlush(newUser());
+        entityManager.clear();
+
+        // when the unchanged instance is re-saved through the Spring Data merge path
+        repository.save(detached);
+        repository.flush();
+
+        // then the no-op merge against the BIGINT column neither trips the version check nor spuriously bumps the
+        // version - the merge-path false-positive guard on the production schema (the Hibernate-schema counterpart
+        // is save_unchangedUpToDateUserThroughRepository_succeedsWithoutChangingVersion)
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isZero();
+    }
+
     private void forceIncrementVersion() {
         entityManager.clear();
         final User loaded = repository.findByUsername(USERNAME).orElseThrow();

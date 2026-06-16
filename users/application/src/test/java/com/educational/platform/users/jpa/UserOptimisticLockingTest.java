@@ -293,6 +293,32 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void update_afterRefreshingConcurrentlyModifiedUser_succeeds() {
+        // given a stale managed instance: loaded at version 0, then a concurrent transaction advances the row (0 -> 1)
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the conflict is resolved by refreshing the *same* managed instance in place (re-syncing its
+        // version from the row) rather than re-reading a new instance via the finder, then writing it back.
+        // This is the recovery counterpart to update_afterReloadingConcurrentlyModifiedUser_succeeds, which
+        // discards the stale instance and loads a fresh one; refresh re-attaches the existing one.
+        entityManager.refresh(stale);
+        assertThat(stale).as("refresh re-syncs the stale instance's version from the row")
+                .hasFieldOrPropertyWithValue("version", 1);
+        entityManager.lock(stale, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+
+        // then the refreshed instance is no longer treated as stale: the write succeeds and advances from the
+        // refreshed version (1 -> 2)
+        assertThat(stale).hasFieldOrPropertyWithValue("version", 2);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(2L);
+    }
+
+    @Test
     void save_staleUserThroughRepository_throwsObjectOptimisticLockingFailureException() {
         // given a user detached at version 0 (the state a request holds between read and write)
         repository.saveAndFlush(newUser());

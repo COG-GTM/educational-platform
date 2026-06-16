@@ -70,6 +70,22 @@ class UserVersionColumnMigrationTest {
     }
 
     @Test
+    void migration_versionColumn_declaresSchemaLevelDefaultOfZero() throws Exception {
+        givenLegacyCustomUserTable();
+
+        runUsersChangelog();
+
+        // the changeSet's defaultValueNumeric:0 must materialise as a genuine DDL DEFAULT clause on the column,
+        // not merely a one-off backfill of existing rows. migration_newRowWithoutVersion_defaultsToZero proves
+        // the *behaviour* (an insert omitting version yields 0); this pins it at the *schema* level via column
+        // metadata, so the database itself - not application/JPA code - owns the default. (Structural complement
+        // in the spirit of isPurelyAdditive vs preservesExistingRowData.)
+        final String columnDefault = columnDefaultOf("VERSION");
+        assertThat(columnDefault).as("version column declares a schema-level DEFAULT").isNotNull();
+        assertThat(columnDefault.replaceAll("[^0-9-]", "")).as("the declared DEFAULT is 0").isEqualTo("0");
+    }
+
+    @Test
     void migration_freshInstall_createsTableWithVersionColumn() throws Exception {
         // given no pre-existing custom_user table: the createTable precondition
         // (not tableExists) is satisfied, so the full changelog runs end to end.
@@ -349,6 +365,14 @@ class UserVersionColumnMigrationTest {
             }
         }
         return names;
+    }
+
+    private String columnDefaultOf(final String column) throws SQLException {
+        try (Connection connection = openConnection();
+             ResultSet columns = connection.getMetaData().getColumns(null, null, "CUSTOM_USER", column)) {
+            assertThat(columns.next()).as("column %s exists on custom_user", column).isTrue();
+            return columns.getString("COLUMN_DEF");
+        }
     }
 
     private boolean columnIsNotNullable(final String column) throws SQLException {
