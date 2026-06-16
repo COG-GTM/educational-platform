@@ -1,5 +1,6 @@
 package com.educational.platform.courses;
 
+import com.educational.platform.common.exception.ResourceNotFoundException;
 import com.educational.platform.courses.course.Course;
 import com.educational.platform.courses.course.CourseRating;
 import com.educational.platform.courses.course.CourseRepository;
@@ -25,6 +26,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -177,6 +179,72 @@ class CourseRetryApplicationContextWiringTest {
                 .isThrownBy(() -> increaseNumberOfStudentsCommandHandler.handle(command));
         verify(repository, times(3)).findByUuid(uuid);
         verify(repository, times(3)).save(any(Course.class));
+    }
+
+    @Test
+    void productionContext_increaseNumberOfStudentsHandler_missingCourse_resourceNotFoundIsNotRetried() {
+        // given - the course is absent, so the handler throws before any save happens
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final IncreaseNumberOfStudentsCommand command = new IncreaseNumberOfStudentsCommand(uuid);
+
+        // then - ResourceNotFoundException sits outside retryFor, so the production proxy must surface it
+        // on the first attempt rather than burning the configured retries on a non-transient failure
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+                .isThrownBy(() -> increaseNumberOfStudentsCommandHandler.handle(command));
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, never()).save(any(Course.class));
+    }
+
+    @Test
+    void productionContext_updateCourseRatingHandler_missingCourse_resourceNotFoundIsNotRetried() {
+        // given - the course is absent, so the handler throws before any save happens
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 3.2);
+
+        // then - ResourceNotFoundException sits outside retryFor, so the production proxy must surface it
+        // on the first attempt rather than burning the configured retries on a non-transient failure
+        assertThatExceptionOfType(ResourceNotFoundException.class)
+                .isThrownBy(() -> updateCourseRatingCommandHandler.handle(command));
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, never()).save(any(Course.class));
+    }
+
+    @Test
+    void productionContext_increaseNumberOfStudentsHandler_nonRetryableSaveFailure_propagatesWithoutRetry() {
+        // given - the save fails with an exception that is not the configured ObjectOptimisticLockingFailureException
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class))).thenThrow(new IllegalStateException("boom"));
+
+        // when
+        final IncreaseNumberOfStudentsCommand command = new IncreaseNumberOfStudentsCommand(uuid);
+
+        // then - the production retry advisor must only retry on the declared optimistic-lock failure, so an
+        // unrelated exception propagates after a single attempt (guards against the wiring widening retryFor)
+        assertThatExceptionOfType(IllegalStateException.class)
+                .isThrownBy(() -> increaseNumberOfStudentsCommandHandler.handle(command));
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, times(1)).save(any(Course.class));
+    }
+
+    @Test
+    void productionContext_updateCourseRatingHandler_nonRetryableSaveFailure_propagatesWithoutRetry() {
+        // given - the save fails with an exception that is not the configured ObjectOptimisticLockingFailureException
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class))).thenThrow(new IllegalStateException("boom"));
+
+        // when
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 3.2);
+
+        // then - the production retry advisor must only retry on the declared optimistic-lock failure, so an
+        // unrelated exception propagates after a single attempt (guards against the wiring widening retryFor)
+        assertThatExceptionOfType(IllegalStateException.class)
+                .isThrownBy(() -> updateCourseRatingCommandHandler.handle(command));
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, times(1)).save(any(Course.class));
     }
 
     private static Course newCourse() {
