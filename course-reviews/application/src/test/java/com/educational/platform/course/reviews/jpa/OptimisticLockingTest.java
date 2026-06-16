@@ -90,6 +90,61 @@ public class OptimisticLockingTest {
 				.isThrownBy(() -> courseReviewRepository.saveAndFlush(stale));
 	}
 
+	@Test
+	void courseReview_multipleSequentialUpdates_versionIncrementsEachTime() {
+		// given
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+
+		// when - the row is updated twice in a row (capturing the version after each flush,
+		// since saveAndFlush returns the same managed instance whose version keeps mutating)
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "first update"));
+		courseReviewRepository.saveAndFlush(review);
+		final Object versionAfterFirst = ReflectionTestUtils.getField(review, "version");
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 3.0, "second update"));
+		courseReviewRepository.saveAndFlush(review);
+		final Object versionAfterSecond = ReflectionTestUtils.getField(review, "version");
+
+		// then - the version is bumped once per update rather than only on the first one
+		assertThat(versionAfterFirst).isEqualTo(1);
+		assertThat(versionAfterSecond).isEqualTo(2);
+	}
+
+	@Test
+	void courseReview_updated_versionPersistedToDatabase() {
+		// given - an update is flushed
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "persisted"));
+		courseReviewRepository.saveAndFlush(review);
+
+		// when - the persistence context is cleared and the row reloaded from the database
+		entityManager.clear();
+		final CourseReview reloaded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+
+		// then - the incremented version was actually written to the version column
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
+	}
+
+	@Test
+	void courseReview_staleDelete_throwsOptimisticLockingFailure() {
+		// given - two instances reading the same row at version 0
+		final CourseReview stale = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		entityManager.detach(stale);
+		final CourseReview fresh = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+
+		// and - the first update wins, bumping the persisted version to 1
+		fresh.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "first wins"));
+		courseReviewRepository.saveAndFlush(fresh);
+		entityManager.detach(fresh);
+
+		// when - the stale instance (still version 0) tries to delete the row
+		// then - the version guard rejects the delete instead of removing the newer row
+		assertThatExceptionOfType(OptimisticLockingFailureException.class)
+				.isThrownBy(() -> {
+					courseReviewRepository.delete(stale);
+					courseReviewRepository.flush();
+				});
+	}
+
 	// --- Reviewer -----------------------------------------------------------
 
 	@Test
@@ -137,6 +192,27 @@ public class OptimisticLockingTest {
 		// then
 		assertThatExceptionOfType(OptimisticLockingFailureException.class)
 				.isThrownBy(() -> reviewerRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void reviewer_multipleSequentialUpdates_versionIncrementsEachTime() {
+		// given
+		final Integer id = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("opt-lock-reviewer"))).getId();
+		entityManager.clear();
+
+		// when - the row is updated twice in a row (capturing the version after each flush,
+		// since saveAndFlush returns the same managed instance whose version keeps mutating)
+		final Reviewer reviewer = reviewerRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(reviewer, "username", "renamed-once");
+		reviewerRepository.saveAndFlush(reviewer);
+		final Object versionAfterFirst = ReflectionTestUtils.getField(reviewer, "version");
+		ReflectionTestUtils.setField(reviewer, "username", "renamed-twice");
+		reviewerRepository.saveAndFlush(reviewer);
+		final Object versionAfterSecond = ReflectionTestUtils.getField(reviewer, "version");
+
+		// then - the version is bumped once per update
+		assertThat(versionAfterFirst).isEqualTo(1);
+		assertThat(versionAfterSecond).isEqualTo(2);
 	}
 
 	// --- ReviewableCourse ---------------------------------------------------
@@ -189,5 +265,27 @@ public class OptimisticLockingTest {
 		// then
 		assertThatExceptionOfType(OptimisticLockingFailureException.class)
 				.isThrownBy(() -> reviewableCourseRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void reviewableCourse_multipleSequentialUpdates_versionIncrementsEachTime() {
+		// given
+		final Integer id = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		entityManager.clear();
+
+		// when - the row is updated twice in a row (capturing the version after each flush,
+		// since saveAndFlush returns the same managed instance whose version keeps mutating)
+		final ReviewableCourse course = reviewableCourseRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(course, "originalCourseId", UUID.randomUUID());
+		reviewableCourseRepository.saveAndFlush(course);
+		final Object versionAfterFirst = ReflectionTestUtils.getField(course, "version");
+		ReflectionTestUtils.setField(course, "originalCourseId", UUID.randomUUID());
+		reviewableCourseRepository.saveAndFlush(course);
+		final Object versionAfterSecond = ReflectionTestUtils.getField(course, "version");
+
+		// then - the version is bumped once per update
+		assertThat(versionAfterFirst).isEqualTo(1);
+		assertThat(versionAfterSecond).isEqualTo(2);
 	}
 }
