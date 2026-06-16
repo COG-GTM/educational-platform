@@ -2,6 +2,9 @@ package com.educational.platform.course.reviews.api;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
 
 import java.util.UUID;
 
@@ -140,6 +143,43 @@ public class CourseReviewApiTest {
 				.body("[0].uuid", equalTo(reviewUuid.toString()))
 				.body("[0].comment", equalTo("second update"))
 				.statusCode(HttpStatus.OK.value());
+	}
+
+	@Test
+	void review_response_doesNotExposeInternalVersionField() {
+		// given - the @Version field this PR added to the entities is an internal optimistic-lock column, not part
+		// of the public API contract: neither CourseReviewCreatedResponse nor CourseReviewDTO declares it
+		var token = SignUpHelper.signUpStudent();
+		final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+		// when - a review is created through the full HTTP stack
+		given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + token)
+				.body("{\n" + "  \"rating\": 3.2\n" + "}")
+
+				.when()
+				.post("/courses/{uuid}/reviews", courseUuid)
+
+				.then()
+				.statusCode(HttpStatus.CREATED.value())
+				// the create response carries only the new review's uuid, never the internal version
+				.body("uuid", notNullValue())
+				.body("$", not(hasKey("version")));
+
+		// then - the list payload exposes only the public CourseReviewDTO fields and must not leak the internal
+		// version column. Every other version test asserts the field via reflection at the persistence layer; this
+		// pins that the new concurrency-control field stays out of the public JSON contract.
+		given()
+				.header("Authorization", "Bearer " + token)
+
+				.when()
+				.get("/courses/{uuid}/reviews", courseUuid)
+
+				.then()
+				.statusCode(HttpStatus.OK.value())
+				.body("[0]", hasKey("uuid"))
+				.body("[0]", not(hasKey("version")));
 	}
 
 	private void updateReview(String token, UUID courseUuid, UUID reviewUuid, double rating, String comment) {
