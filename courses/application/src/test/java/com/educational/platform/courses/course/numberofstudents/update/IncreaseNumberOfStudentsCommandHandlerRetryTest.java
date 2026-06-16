@@ -17,9 +17,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.EnableRetry;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
+import java.lang.reflect.Method;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -178,6 +181,21 @@ class IncreaseNumberOfStudentsCommandHandlerRetryTest {
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
         verify(repository, times(1)).findByUuid(uuid);
         verify(repository, never()).save(any(Course.class));
+    }
+
+    @Test
+    void handle_isAnnotatedWithExpectedRetryableContract() throws NoSuchMethodException {
+        // given - reflect on the production handler method (the proxy delegates to this contract)
+        final Method handleMethod = IncreaseNumberOfStudentsCommandHandler.class
+                .getMethod("handle", IncreaseNumberOfStudentsCommand.class);
+        final Retryable retryable = handleMethod.getAnnotation(Retryable.class);
+        final Backoff backoff = retryable.backoff();
+
+        // then - the declared retry contract: 3 attempts, 100ms backoff, only on optimistic-lock failures
+        assertThat(retryable).isNotNull();
+        assertThat(retryable.maxAttempts()).isEqualTo(3);
+        assertThat(retryable.retryFor()).containsExactly(ObjectOptimisticLockingFailureException.class);
+        assertThat(backoff.delay()).isEqualTo(100L);
     }
 
     private static Course newCourse() {
