@@ -129,6 +129,51 @@ class AdministrationLiquibaseMigrationTest {
     }
 
     @Test
+    void migration_versionConditionedUpdate_behavesAsCompareAndSwap() throws Exception {
+        // the booted monolith runs against this Liquibase schema with ddl-auto=none, so the column
+        // must support the version-conditioned UPDATE Hibernate emits for optimistic locking: a write
+        // matching the current version wins and bumps it, while a concurrent write on a now-stale
+        // version matches zero rows (the conflict Hibernate turns into an optimistic-lock failure).
+        final String url = migratedDatabaseUrl();
+
+        try (Connection connection = DriverManager.getConnection(url, "sa", "")) {
+            // seed a row whose version relies on the changeSet default (status kept short to fit the
+            // existing VARCHAR(14) column); two admins will then both read it at version 0
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate(
+                        "insert into course_proposal (uuid, status) "
+                                + "values ('123e4567-e89b-12d3-a456-426655440001', 'APPROVED')");
+            }
+
+            // the winning write matches the read version 0, flips the status and bumps the version
+            try (Statement statement = connection.createStatement()) {
+                final int winningRows = statement.executeUpdate(
+                        "update course_proposal set status = 'DECLINED', version = version + 1 "
+                                + "where uuid = '123e4567-e89b-12d3-a456-426655440001' and version = 0");
+                assertThat(winningRows).as("write on the current version is applied").isEqualTo(1);
+            }
+
+            // the concurrent write still targets the stale version 0 and therefore matches no rows
+            try (Statement statement = connection.createStatement()) {
+                final int staleRows = statement.executeUpdate(
+                        "update course_proposal set status = 'APPROVED', version = version + 1 "
+                                + "where uuid = '123e4567-e89b-12d3-a456-426655440001' and version = 0");
+                assertThat(staleRows).as("write on a stale version matches no rows").isZero();
+            }
+
+            // the persisted row reflects the winning write at version 1, never the rejected stale one
+            try (Statement statement = connection.createStatement();
+                    ResultSet row = statement.executeQuery(
+                            "select status, version from course_proposal "
+                                    + "where uuid = '123e4567-e89b-12d3-a456-426655440001'")) {
+                assertThat(row.next()).isTrue();
+                assertThat(row.getString("status")).isEqualTo("DECLINED");
+                assertThat(row.getLong("version")).isEqualTo(1L);
+            }
+        }
+    }
+
+    @Test
     void migration_versionChangeSet_recordedInDatabaseChangeLog() throws Exception {
         // the addColumn changeSet must be tracked under its stable id. Renaming the id would make the
         // migration re-run against existing production databases (ddl-auto=none) and fail by re-adding

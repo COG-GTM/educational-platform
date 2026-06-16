@@ -12,6 +12,10 @@ import org.springframework.test.context.jdbc.Sql;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.not;
 
 /**
  * Represents API tests for administration of course proposal functionality.
@@ -104,6 +108,23 @@ public class CourseProposalApiTest {
 
                 .then()
                 .statusCode(HttpStatus.CONFLICT.value());
+    }
+
+    @Test
+    void courseProposals_listing_doesNotExposeVersionField() {
+        // the new @Version column is a persistence concern; the read API contract (CourseProposalDTO)
+        // must keep exposing only uuid + status and must not leak the version field to API clients
+        given()
+                .contentType(ContentType.JSON)
+
+                .when()
+                .get("/administration/course-proposals")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("uuid", hasItem("123e4567-e89b-12d3-a456-426655440001"))
+                .body("status", hasItem("WAITING_FOR_APPROVAL"))
+                .body("$", everyItem(not(hasKey("version"))));
     }
 
 }
