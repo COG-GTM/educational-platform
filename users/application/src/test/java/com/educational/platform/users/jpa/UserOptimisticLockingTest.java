@@ -397,6 +397,30 @@ public class UserOptimisticLockingTest {
     }
 
     @Test
+    void save_staleUserFromNonZeroBaseline_throughRepository_throwsObjectOptimisticLockingFailureException() {
+        // given a long-lived row detached at version 2 - every other merge-path stale test detaches at the
+        // initial version 0 (off-by-one or multi-behind), so the merge path is never exercised from a non-zero baseline
+        repository.saveAndFlush(newUser());
+        forceIncrementVersion();
+        forceIncrementVersion();
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        entityManager.detach(stale);
+        assertThat(stale).hasFieldOrPropertyWithValue("version", 2);
+
+        // when a concurrent transaction advances the row past the loaded baseline (2 -> 3)
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back through the Spring Data merge path, the version check still fires
+        // then optimistic locking on the merge path compares the loaded version against the row; like the raw-EM
+        // counterpart (update_staleUserFromNonZeroBaseline) it is not special-cased to the initial 0 -> 1 transition
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> repository.saveAndFlush(stale));
+    }
+
+    @Test
     void save_unchangedUpToDateUserThroughRepository_succeedsWithoutChangingVersion() {
         // given an up-to-date user detached at version 0
         repository.saveAndFlush(newUser());
@@ -637,6 +661,30 @@ public class UserOptimisticLockingTest {
         // translated exception just as for a findByUsername-loaded entity, never a silent overwrite
         assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
                 .isThrownBy(() -> repository.saveAndFlush(stale));
+    }
+
+    @Test
+    void delete_staleUserLoadedById_throwsObjectOptimisticLockingFailureException() {
+        // given a user loaded through the primary-key finder - the read shape a request flow uses (load aggregate
+        // by id, then delete). update_staleUserLoadedById and save_staleUserLoadedById_throughRepository cover the
+        // update/merge paths from a by-id load; the delete path from a by-id load is the missing sibling.
+        repository.saveAndFlush(newUser());
+        final int id = idOf(USERNAME);
+        entityManager.clear();
+        final User stale = repository.findById(id).orElseThrow();
+
+        // simulate a concurrent transaction that updated the row and bumped its version
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is deleted, the version check finds no row at the loaded version
+        repository.delete(stale);
+
+        // then the lost delete is rejected exactly as for a findByUsername-loaded entity: optimistic locking is
+        // bound to the row, not the finder used to load it
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(repository::flush);
     }
 
     @Test
