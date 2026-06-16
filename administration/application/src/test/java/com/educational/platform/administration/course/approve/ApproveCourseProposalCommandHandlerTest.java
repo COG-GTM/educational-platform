@@ -1,6 +1,7 @@
 package com.educational.platform.administration.course.approve;
 
 import com.educational.platform.administration.course.CourseProposal;
+import com.educational.platform.administration.course.CourseProposalAlreadyApprovedException;
 import com.educational.platform.administration.course.CourseProposalRepository;
 import com.educational.platform.administration.course.CourseProposalStatus;
 import com.educational.platform.administration.course.create.CreateCourseProposalCommand;
@@ -25,6 +26,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -119,5 +121,25 @@ class ApproveCourseProposalCommandHandlerTest {
         verify(repository).save(savedProposal.capture());
         assertThat(savedProposal.getValue())
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED);
+    }
+
+    @Test
+    void handle_alreadyApprovedProposal_domainGuardRejectsWithoutSavingOrPublishing() {
+        // given - the loaded aggregate is already APPROVED, so the domain guard (not the @Version
+        // check) rejects the duplicate approval; companion to the optimistic-lock conflict case
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+
+        final CourseProposal alreadyApproved = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        alreadyApproved.approve();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(alreadyApproved));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - the conflict surfaces and the failed command neither persists nor emits an event
+        assertThatExceptionOfType(CourseProposalAlreadyApprovedException.class).isThrownBy(handle);
+        verify(repository, never()).save(any());
+        verifyNoInteractions(eventPublisher);
     }
 }

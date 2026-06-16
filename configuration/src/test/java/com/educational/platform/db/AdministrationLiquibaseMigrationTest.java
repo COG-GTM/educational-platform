@@ -1,6 +1,7 @@
 package com.educational.platform.db;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -66,6 +67,41 @@ class AdministrationLiquibaseMigrationTest {
                     ResultSet row = statement.executeQuery("select version from course_proposal")) {
                 assertThat(row.next()).isTrue();
                 assertThat(row.getLong("version")).isZero();
+            }
+        }
+    }
+
+    @Test
+    void migration_rowInsertedWithNullVersion_rejectedByNotNullConstraint() throws Exception {
+        final String url = migratedDatabaseUrl();
+
+        try (Connection connection = DriverManager.getConnection(url, "sa", "");
+                Statement statement = connection.createStatement()) {
+            // the "not null" constraint must be enforced behaviourally, not only reported in metadata:
+            // an explicit null version is exactly the NULL the optimistic-lock UPDATE could never match
+            assertThatExceptionOfType(SQLException.class).isThrownBy(() -> statement.executeUpdate(
+                    "insert into course_proposal (uuid, status, version) "
+                            + "values ('123e4567-e89b-12d3-a456-426655440002', 'APPROVED', null)"));
+        }
+    }
+
+    @Test
+    void migration_rowInsertedWithExplicitVersion_valuePreserved() throws Exception {
+        final String url = migratedDatabaseUrl();
+
+        try (Connection connection = DriverManager.getConnection(url, "sa", "")) {
+            // the zero default only applies when the column is omitted; an explicit value must be stored
+            // verbatim, confirming version is a normal writable column Hibernate can bump on each update
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate(
+                        "insert into course_proposal (uuid, status, version) "
+                                + "values ('123e4567-e89b-12d3-a456-426655440003', 'APPROVED', 7)");
+            }
+
+            try (Statement statement = connection.createStatement();
+                    ResultSet row = statement.executeQuery("select version from course_proposal")) {
+                assertThat(row.next()).isTrue();
+                assertThat(row.getLong("version")).isEqualTo(7L);
             }
         }
     }
