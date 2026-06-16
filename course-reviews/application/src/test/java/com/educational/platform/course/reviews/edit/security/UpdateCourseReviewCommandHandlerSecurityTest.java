@@ -154,4 +154,24 @@ public class UpdateCourseReviewCommandHandlerSecurityTest {
         assertThatThrownBy(updateAction)
                 .isInstanceOf(AccessDeniedException.class);
     }
+
+    @Test
+    @WithMockUser(roles = "TEACHER")
+    void handle_userIsTeacher_versionNotIncremented() {
+        // given - the seeded review at version 0, updated by a teacher who is denied by the hasRole('STUDENT')
+        // branch of the @PreAuthorize expression (a different authorization branch than the ownership check)
+        var command = new UpdateCourseReviewCommand(uuid, 3.0, "updated comment");
+
+        // when - the unauthorized update is rejected (see handle_userIsTeacher_accessDeniedException)
+        final ThrowingCallable updateAction = () -> sut.handle(command);
+        assertThatThrownBy(updateAction).isInstanceOf(AccessDeniedException.class);
+
+        // then - authorization runs before the version-bumping save, so the denied request neither persists its
+        // change nor advances the optimistic-lock version: the seeded version stays 0.
+        // handle_anotherReviewer_versionNotIncremented pins this for the ownership branch (a non-author STUDENT);
+        // this pins it for the role branch (a TEACHER), the only authorization denial whose version-untouched
+        // guarantee was not yet asserted - handle_userIsTeacher_accessDeniedException checks only the exception.
+        final CourseReview saved = repository.findByUuid(uuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(saved, "version")).isEqualTo(0);
+    }
 }

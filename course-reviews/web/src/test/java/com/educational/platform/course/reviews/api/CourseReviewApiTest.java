@@ -182,6 +182,88 @@ public class CourseReviewApiTest {
 				.body("[0]", not(hasKey("version")));
 	}
 
+	@Test
+	void review_requestBodyWithUnknownVersion_ignoredAndReviewCreated() {
+		// given - the @Version this PR added is an internal optimistic-lock column, not part of the public write
+		// contract: ReviewCourseRequest declares only rating/comment, so a client-supplied version must not be a
+		// way to seed or tamper with the optimistic-lock version
+		var token = SignUpHelper.signUpStudent();
+		final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+		// when - a create request carries an out-of-contract version field through the full HTTP stack
+		final UUID reviewUuid = UUID.fromString(given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + token)
+				.body("{\n" + "  \"rating\": 3.2,\n" + "  \"version\": 99\n" + "}")
+
+				.when()
+				.post("/courses/{uuid}/reviews", courseUuid)
+
+				.then()
+				// then - the unknown version is ignored: the review is still created and the response carries only
+				// the new uuid, never the internal version. review_response_doesNotExposeInternalVersionField pins
+				// the output side of this contract; this pins the input side - the field is not writable via the API.
+				.statusCode(HttpStatus.CREATED.value())
+				.body("uuid", notNullValue())
+				.body("$", not(hasKey("version")))
+				.extract().path("uuid"));
+
+		// and - the created review is readable through the public read API and still leaks no version
+		given()
+				.header("Authorization", "Bearer " + token)
+
+				.when()
+				.get("/courses/{uuid}/reviews", courseUuid)
+
+				.then()
+				.statusCode(HttpStatus.OK.value())
+				.body("[0].uuid", equalTo(reviewUuid.toString()))
+				.body("[0]", not(hasKey("version")));
+	}
+
+	@Test
+	void update_requestBodyWithUnknownVersion_ignoredAndUpdateApplied() {
+		// given - a review created through the API at version 0
+		var token = SignUpHelper.signUpStudent();
+		final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final UUID reviewUuid = UUID.fromString(given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + token)
+				.body("{\n" + "  \"rating\": 3.2\n" + "}")
+
+				.when()
+				.post("/courses/{uuid}/reviews", courseUuid)
+				.path("uuid"));
+
+		// when - an update request carries an out-of-contract version field (a client trying to drive the
+		// optimistic-lock version itself). UpdateCourseReviewRequest declares only rating/comment.
+		given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + token)
+				.body("{\n" + "  \"comment\": \"updated\",\n" + "  \"rating\": 3.5,\n" + "  \"version\": 99\n" + "}")
+
+				.when()
+				.put("/courses/{courseUuid}/reviews/{reviewUuid}", courseUuid, reviewUuid)
+
+				.then()
+				// then - the unknown version is ignored: the update still succeeds (the version is managed by
+				// Hibernate from the persisted row, not the request body), rather than being rejected or used
+				.statusCode(HttpStatus.NO_CONTENT.value());
+
+		// and - the update was applied: the new comment is observable through the public read API
+		given()
+				.header("Authorization", "Bearer " + token)
+
+				.when()
+				.get("/courses/{uuid}/reviews", courseUuid)
+
+				.then()
+				.statusCode(HttpStatus.OK.value())
+				.body("[0].uuid", equalTo(reviewUuid.toString()))
+				.body("[0].comment", equalTo("updated"))
+				.body("[0]", not(hasKey("version")));
+	}
+
 	private void updateReview(String token, UUID courseUuid, UUID reviewUuid, double rating, String comment) {
 		given()
 				.contentType(ContentType.JSON)
