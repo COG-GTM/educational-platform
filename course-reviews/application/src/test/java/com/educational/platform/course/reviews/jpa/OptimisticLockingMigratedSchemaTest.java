@@ -86,6 +86,18 @@ public class OptimisticLockingMigratedSchemaTest {
 		}
 	}
 
+	@Test
+	void precondition_courseReviewVersionColumnIsBigintFromTheMigration() throws Exception {
+		// companion to precondition_versionColumnIsBigintFromTheMigration, which pins only the reviewer column:
+		// every CourseReview test in this slice runs against the migrated course_review table, so its version
+		// column must be the BIGINT the changelog creates for those tests to exercise the real Integer/BIGINT mismatch
+		try (Connection connection = dataSource.getConnection();
+				ResultSet columns = connection.getMetaData().getColumns(null, null, "COURSE_REVIEW", "VERSION")) {
+			assertThat(columns.next()).as("version column exists on the migrated course_review table").isTrue();
+			assertThat(columns.getString("TYPE_NAME")).isEqualTo("BIGINT");
+		}
+	}
+
 	// --- Reviewer -----------------------------------------------------------
 
 	@Test
@@ -381,6 +393,74 @@ public class OptimisticLockingMigratedSchemaTest {
 					courseReviewRepository.delete(stale);
 					courseReviewRepository.flush();
 				});
+	}
+
+	@Test
+	void courseReview_persistedAgainstBigintColumn_versionZeroReadBackFromDatabase() throws Exception {
+		// given - a course review persisted with its Integer @Version written into the migrated BIGINT column
+		final CourseReview review = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = review.toIdentifier();
+		courseReviewRepository.saveAndFlush(review);
+
+		// when - the persistence context is cleared and the row reloaded from the migrated schema
+		entityManager.clear();
+		final CourseReview reloaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+
+		// then - the initial version round-trips back out of the BIGINT column as 0 for the headline aggregate.
+		// courseReview_persistedAgainstBigintColumn_versionInitializedToZero only checks the in-memory entity
+		// returned by saveAndFlush; this confirms the value is actually read back from the column on the insert
+		// path, mirroring reviewer_persistedAgainstBigintColumn_versionZeroReadBackFromDatabase.
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void courseReview_currentDeleteAgainstBigintColumn_succeeds() throws Exception {
+		// given - a course review read at its current persisted version on the migrated schema
+		final CourseReview review = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = review.toIdentifier();
+		courseReviewRepository.saveAndFlush(review);
+		entityManager.clear();
+		final CourseReview current = courseReviewRepository.findByUuid(uuid).orElseThrow();
+
+		// when - it is deleted at its current version and flushed
+		courseReviewRepository.delete(current);
+		courseReviewRepository.flush();
+
+		// then - the success counterpart to courseReview_staleDeleteAgainstBigintColumn_throwsOptimisticLockingFailure:
+		// the version guard does not block deleting a row read at its current version on the headline aggregate's
+		// BIGINT-versioned table, mirroring reviewer_currentDeleteAgainstBigintColumn_succeeds.
+		entityManager.clear();
+		assertThat(courseReviewRepository.findByUuid(uuid)).isEmpty();
+	}
+
+	@Test
+	void courseReview_largeVersionWithinIntRangeAgainstBigintColumn_incrementsAndRoundTrips() throws Exception {
+		// given - a course review whose BIGINT version column already holds a large value, set directly via SQL
+		// to simulate a long-lived, heavily updated row without performing two billion updates. The value stays
+		// just inside Integer range - the boundary the PR's Integer-field / BIGINT-column mismatch hinges on -
+		// and this exercises it for the headline aggregate, which the reviewer-only large-version test leaves
+		// unverified on course_review.
+		final long largeVersion = 2_000_000_000L; // < Integer.MAX_VALUE (2_147_483_647), comfortably inside BIGINT
+		final CourseReview review = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = review.toIdentifier();
+		final Object id = ReflectionTestUtils.getField(courseReviewRepository.saveAndFlush(review), "id");
+		entityManager.getEntityManager()
+				.createNativeQuery("UPDATE course_review SET version = ? WHERE id = ?")
+				.setParameter(1, largeVersion)
+				.setParameter(2, id)
+				.executeUpdate();
+		entityManager.clear();
+
+		// when - the row is loaded (reading the large BIGINT value into the Integer field) and updated
+		final CourseReview reloaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo((int) largeVersion);
+		reloaded.update(new UpdateCourseReviewCommand(uuid, 5.0, "large-version updated"));
+		courseReviewRepository.saveAndFlush(reloaded);
+
+		// then - the increment round-trips back through the BIGINT column without overflow at the int boundary
+		entityManager.clear();
+		final CourseReview afterReload = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(afterReload, "version")).isEqualTo((int) (largeVersion + 1));
 	}
 
 	/**
