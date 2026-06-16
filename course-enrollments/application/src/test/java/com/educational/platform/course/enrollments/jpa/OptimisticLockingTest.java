@@ -76,6 +76,20 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void flush_unchangedCourseEnrollment_versionNotIncremented() {
+		// given a persisted enrollment at the initial version
+		final CourseEnrollment enrollment = entityManager
+				.persistFlushFind(new CourseEnrollment(COURSE_ID, STUDENT_ID));
+		assertThat(enrollment).hasFieldOrPropertyWithValue("version", 0);
+
+		// when it is flushed again without any state change
+		entityManager.flush();
+
+		// then the version is left untouched (only real updates bump it)
+		assertThat(enrollment).hasFieldOrPropertyWithValue("version", 0);
+	}
+
+	@Test
 	void save_staleCourseEnrollment_concurrentlyUpdated_optimisticLockingFailure() {
 		// given a persisted enrollment and a stale snapshot of it
 		final Integer id = entityManager
@@ -194,6 +208,19 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void flush_unchangedStudent_versionNotIncremented() {
+		// given a persisted student at the initial version
+		final Student student = entityManager.persistFlushFind(new Student(new CreateStudentCommand("username")));
+		assertThat(student).hasFieldOrPropertyWithValue("version", 0);
+
+		// when it is flushed again without any state change
+		entityManager.flush();
+
+		// then the version is left untouched (only real updates bump it)
+		assertThat(student).hasFieldOrPropertyWithValue("version", 0);
+	}
+
+	@Test
 	void save_staleStudent_concurrentlyUpdated_optimisticLockingFailure() {
 		// given a persisted student and a stale snapshot of it
 		final Integer id = entityManager
@@ -307,6 +334,20 @@ public class OptimisticLockingTest {
 
 		// then
 		assertThat(course).hasFieldOrPropertyWithValue("version", 1);
+	}
+
+	@Test
+	void flush_unchangedEnrollCourse_versionNotIncremented() {
+		// given a persisted course at the initial version
+		final EnrollCourse course = entityManager
+				.persistFlushFind(new EnrollCourse(new CreateCourseCommand(UUID.randomUUID())));
+		assertThat(course).hasFieldOrPropertyWithValue("version", 0);
+
+		// when it is flushed again without any state change
+		entityManager.flush();
+
+		// then the version is left untouched (only real updates bump it)
+		assertThat(course).hasFieldOrPropertyWithValue("version", 0);
 	}
 
 	@Test
