@@ -206,16 +206,38 @@ class CourseOptimisticLockingTest {
 
     @Test
     void curriculumItem_versionAttributeIsNamedVersionAndTypedInteger() {
-        // CurriculumItem persistence cannot be exercised directly in this @DataJpaTest: Hibernate's
-        // generated single-table-inheritance discriminator check constraint rejects inserts in the
-        // test schema (production uses Liquibase, which carries no such constraint). The version
-        // increment/conflict mechanics are generic JPA behaviour already proven for Course/Teacher
-        // above, so here we pin the CurriculumItem-specific mapping contract: the @Version field is
-        // the optimistic-lock version, named "version" and typed Integer (matching the BIGINT column
-        // the Liquibase change set adds to curriculum_item).
+        // Pins the CurriculumItem mapping contract: the @Version field is the optimistic-lock
+        // version, named "version" and typed Integer (matching the BIGINT column the Liquibase change
+        // set adds to curriculum_item). The increment/conflict mechanics are exercised behaviourally
+        // in CurriculumItemOptimisticLockingTest (which has to drop Hibernate's generated
+        // single-table-inheritance discriminator check constraint to insert a concrete item).
         final var versionAttribute = entityManager.getEntityManager()
                 .getMetamodel()
                 .entity(CurriculumItem.class)
+                .getVersion(Integer.class);
+
+        assertThat(versionAttribute.isVersion()).isTrue();
+        assertThat(versionAttribute.getName()).isEqualTo("version");
+        assertThat(versionAttribute.getJavaType()).isEqualTo(Integer.class);
+    }
+
+    @Test
+    void course_versionAttributeIsNamedVersionAndTypedInteger() {
+        final var versionAttribute = entityManager.getEntityManager()
+                .getMetamodel()
+                .entity(Course.class)
+                .getVersion(Integer.class);
+
+        assertThat(versionAttribute.isVersion()).isTrue();
+        assertThat(versionAttribute.getName()).isEqualTo("version");
+        assertThat(versionAttribute.getJavaType()).isEqualTo(Integer.class);
+    }
+
+    @Test
+    void teacher_versionAttributeIsNamedVersionAndTypedInteger() {
+        final var versionAttribute = entityManager.getEntityManager()
+                .getMetamodel()
+                .entity(Teacher.class)
                 .getVersion(Integer.class);
 
         assertThat(versionAttribute.isVersion()).isTrue();
