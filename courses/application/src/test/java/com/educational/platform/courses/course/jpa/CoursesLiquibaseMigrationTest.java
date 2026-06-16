@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -101,6 +102,86 @@ class CoursesLiquibaseMigrationTest {
                 statement.executeUpdate("INSERT INTO teacher (username, version) VALUES ('teacher', NULL)");
             }
         });
+    }
+
+    @Test
+    void courseVersionColumn_defaultsToZeroWhenOmittedOnInsert() throws SQLException {
+        // course is the table the PR's broken fixtures seeded via SQL (approved_course.sql); the
+        // production DEFAULT 0 is what keeps the omitted @Version column non-null on those inserts
+        final int teacherId = insertTeacher();
+        final int courseId = insertCourseOmittingVersion(teacherId);
+
+        assertThat(versionOf("course", courseId)).isZero();
+    }
+
+    @Test
+    void courseVersionColumn_rejectsExplicitNull() throws SQLException {
+        final int teacherId = insertTeacher();
+
+        assertThatExceptionOfType(SQLException.class).isThrownBy(() -> {
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate("INSERT INTO course "
+                        + "(uuid, name, description, publish_status, approval_status, rating, number_of_students, teacher, version) "
+                        + "VALUES (RANDOM_UUID(), 'name', 'description', 'DRAFT', 'APPROVED', 0, 0, " + teacherId + ", NULL)");
+            }
+        });
+    }
+
+    @Test
+    void curriculumItemVersionColumn_defaultsToZeroWhenOmittedOnInsert() throws SQLException {
+        final int teacherId = insertTeacher();
+        final int courseId = insertCourseOmittingVersion(teacherId);
+        final int itemId = insertCurriculumItemOmittingVersion(courseId);
+
+        assertThat(versionOf("curriculum_item", itemId)).isZero();
+    }
+
+    @Test
+    void curriculumItemVersionColumn_rejectsExplicitNull() throws SQLException {
+        final int teacherId = insertTeacher();
+        final int courseId = insertCourseOmittingVersion(teacherId);
+
+        assertThatExceptionOfType(SQLException.class).isThrownBy(() -> {
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate("INSERT INTO curriculum_item "
+                        + "(uuid, title, description, serial_number, course, type, content, version) "
+                        + "VALUES (RANDOM_UUID(), 'title', 'description', '1', " + courseId + ", 'LECTURE', 'content', NULL)");
+            }
+        });
+    }
+
+    private int insertTeacher() throws SQLException {
+        return insertReturningId("INSERT INTO teacher (username) VALUES ('teacher')");
+    }
+
+    private int insertCourseOmittingVersion(int teacherId) throws SQLException {
+        return insertReturningId("INSERT INTO course "
+                + "(uuid, name, description, publish_status, approval_status, rating, number_of_students, teacher) "
+                + "VALUES (RANDOM_UUID(), 'name', 'description', 'DRAFT', 'APPROVED', 0, 0, " + teacherId + ")");
+    }
+
+    private int insertCurriculumItemOmittingVersion(int courseId) throws SQLException {
+        return insertReturningId("INSERT INTO curriculum_item "
+                + "(uuid, title, description, serial_number, course, type, content) "
+                + "VALUES (RANDOM_UUID(), 'title', 'description', '1', " + courseId + ", 'LECTURE', 'content')");
+    }
+
+    private int insertReturningId(String sql) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            statement.executeUpdate();
+            try (ResultSet keys = statement.getGeneratedKeys()) {
+                assertThat(keys.next()).isTrue();
+                return keys.getInt(1);
+            }
+        }
+    }
+
+    private long versionOf(String table, int id) throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery("SELECT version FROM " + table + " WHERE id = " + id)) {
+            assertThat(rs.next()).isTrue();
+            return rs.getLong("version");
+        }
     }
 
     private void assertVersionColumnIsNonNullBigint(String table) throws SQLException {
