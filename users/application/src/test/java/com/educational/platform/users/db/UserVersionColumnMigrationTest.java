@@ -244,6 +244,20 @@ class UserVersionColumnMigrationTest {
         assertThat(versionOf("legacy")).isZero();
     }
 
+    @Test
+    void migration_versionColumn_storesValuesBeyondIntegerRange() throws Exception {
+        givenLegacyCustomUserTable();
+        insertUserWithoutVersion("legacy");
+        runUsersChangelog();
+
+        // a value past Integer.MAX_VALUE round-trips intact, proving the backing column is genuinely BIGINT -
+        // the intentional decoupling from the Integer-typed @Version entity field the migration must honour
+        final long beyondIntegerRange = (long) Integer.MAX_VALUE + 1L;
+        setVersion("legacy", beyondIntegerRange);
+
+        assertThat(versionOf("legacy")).isEqualTo(beyondIntegerRange);
+    }
+
     private int changeSetExecutionCount(final String id, final String author) throws SQLException {
         try (Connection connection = openConnection();
              PreparedStatement statement = connection.prepareStatement(

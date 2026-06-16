@@ -126,6 +126,23 @@ public class UserPersistenceTest {
         assertThat(repository.existsByUsername("missing")).isFalse();
     }
 
+    @Test
+    void persist_assignsGeneratedIdAlongsideVersion() {
+        // given / when a transient user is persisted
+        repository.saveAndFlush(newUser());
+
+        // then introducing @Version next to @Id leaves identity generation intact:
+        // the row still receives a generated, positive primary key
+        assertThat(idOf(USERNAME)).isPositive();
+    }
+
+    private long idOf(final String username) {
+        return ((Number) entityManager
+                .createNativeQuery("SELECT id FROM custom_user WHERE username = :username")
+                .setParameter("username", username)
+                .getSingleResult()).longValue();
+    }
+
     private User newUser() {
         return newUser(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT);
     }
