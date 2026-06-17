@@ -193,6 +193,93 @@ class UserVersioningProductionFlowOnMigratedSchemaTest {
     }
 
     @Test
+    void registrationHandler_onMigratedSchema_persistsTeacherAtVersionZero() {
+        // when the real registration write path persists a teacher (the non-default role) onto the migrated
+        // BIGINT column
+        registrationHandler.handle(command("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+
+        // force a genuine DB round trip so the version is read back from the row, not the in-context instance
+        entityManager.flush();
+        entityManager.clear();
+
+        // then the teacher aggregate persisted through the production write path carries the JPA-initialised
+        // optimistic-lock version (0) on the migration-owned column and its non-default role projection is
+        // unaffected by @Version - completing the role coverage of the registration write path on the schema that
+        // ships (registrationHandler_onMigratedSchema_persistsAggregateAtVersionZero only exercises the student
+        // role). This is the missing production-schema counterpart of
+        // UserRegistrationVersioningTest.handle_validTeacherCommand_persistsUserWithInitialVersionZero
+        // (Hibernate-generated INTEGER schema).
+        final User reloaded = repository.findByUsername("teacher").orElseThrow();
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(((Number) versionOf("teacher")).longValue()).isZero();
+        assertThat(reloaded.toDTO().role()).isEqualTo(RoleDTO.ROLE_TEACHER);
+    }
+
+    @Test
+    void registrationHandler_onMigratedSchema_resolvesStudentRoleIntoIssuedToken() {
+        // when the real registration write path runs and returns the token issued for the freshly persisted
+        // aggregate on the migrated BIGINT column
+        final String token = registrationHandler.handle(command(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+
+        // then the handler's return-value contract holds under @Version on the schema that ships: it issues the
+        // token built from the just-persisted, JPA-version-initialised aggregate, and the role carried into it is
+        // the student role resolved via toDTO().role() - never the optimistic-lock version. The other migrated
+        // registration tests assert the persisted row and the emitted event but never the issued token, so the
+        // return-value half of the production write path is otherwise unverified on the BIGINT column. This is the
+        // missing production-schema counterpart of
+        // UserRegistrationVersioningTest.handle_resolvesStudentRoleIntoIssuedToken_unaffectedByVersion
+        // (Hibernate-generated INTEGER schema).
+        assertThat(token).isEqualTo(TOKEN);
+        assertThat(rolesResolvedFor(USERNAME)).containsExactly(Role.ROLE_STUDENT);
+    }
+
+    @Test
+    void registrationHandler_onMigratedSchema_resolvesTeacherRoleIntoIssuedToken() {
+        // when a teacher (the non-default role) is registered through the real production write path on the
+        // migrated BIGINT column
+        final String token = registrationHandler.handle(command("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+
+        // then the non-default role is resolved into the issued token from the @Version-bearing aggregate on the
+        // schema that ships too, completing the role coverage of the token-issuance path on the migrated column
+        // (registrationHandler_onMigratedSchema_resolvesStudentRoleIntoIssuedToken only covers the student role).
+        // This is the missing production-schema counterpart of
+        // UserRegistrationVersioningTest.handle_resolvesTeacherRoleIntoIssuedToken_unaffectedByVersion
+        // (Hibernate-generated INTEGER schema).
+        assertThat(token).isEqualTo(TOKEN);
+        assertThat(rolesResolvedFor("teacher")).containsExactly(Role.ROLE_TEACHER);
+    }
+
+    @Test
+    void registrationHandler_onMigratedSchema_whenAnotherUsersVersionHasAdvanced_persistsNewUserAtIndependentVersionZero() {
+        // given a user registered through the real handler onto the migrated BIGINT column whose optimistic-lock
+        // version has since advanced to 1
+        registrationHandler.handle(command(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+        entityManager.flush();
+        forceIncrementVersionOf(USERNAME);
+
+        // when a brand-new user is subsequently registered through the same production write path
+        registrationHandler.handle(command("other", "other@gmail.com", RoleDTO.ROLE_STUDENT));
+
+        // force a genuine DB round trip so each version is read back from its row
+        entityManager.flush();
+        entityManager.clear();
+
+        // then version *initialisation* is per-row through the handler on the schema that ships: the new row starts
+        // at 0 on the migration-owned BIGINT column regardless of the advanced version on the pre-existing row,
+        // while that row keeps its advanced version. UserOptimisticLockingOnMigratedSchemaTest.save_newUser_whenAnotherUsersVersionHasAdvanced_onMigratedSchema_startsAtZero
+        // pins this at the raw-repository entity level on this schema; this drives it through the real
+        // UserRegistrationCommandHandler. It is the missing production-schema counterpart of
+        // UserRegistrationVersioningTest.handle_whenAnotherUsersVersionHasAdvanced_persistsNewUserAtIndependentVersionZero
+        // (Hibernate-generated INTEGER schema), and is distinct from
+        // registrationHandler_onMigratedSchema_persistsAggregateAtVersionZero, which only proves a single fresh
+        // insert starts at 0 with no pre-existing row having advanced first.
+        assertThat(repository.findByUsername("other").orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(repository.findByUsername(USERNAME).orElseThrow()).hasFieldOrPropertyWithValue("version", 1);
+        assertThat(((Number) versionOf("other")).longValue()).isZero();
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(1L);
+    }
+
+    @Test
     void signInHandler_onMigratedSchema_resolvesRoleFromVersionedUser() {
         // given a teacher persisted onto the migrated BIGINT column (the non-default role, to pin the role maps
         // through the read path unchanged)
