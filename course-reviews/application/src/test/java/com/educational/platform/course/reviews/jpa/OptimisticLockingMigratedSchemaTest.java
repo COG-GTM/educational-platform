@@ -10,6 +10,9 @@ import java.util.UUID;
 
 import javax.sql.DataSource;
 
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+
 import org.hibernate.StaleObjectStateException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +32,7 @@ import com.educational.platform.course.reviews.CourseReview;
 import com.educational.platform.course.reviews.CourseReviewRepository;
 import com.educational.platform.course.reviews.create.ReviewCourseCommand;
 import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommand;
+import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommandHandler;
 import com.educational.platform.course.reviews.reviewer.Reviewer;
 import com.educational.platform.course.reviews.reviewer.ReviewerRepository;
 import com.educational.platform.course.reviews.reviewer.create.CreateReviewerCommand;
@@ -655,6 +659,50 @@ public class OptimisticLockingMigratedSchemaTest {
 		// directly exercising the PR's "instead of silently overwriting each other" contract against BIGINT
 		assertThatExceptionOfType(OptimisticLockingFailureException.class)
 				.isThrownBy(() -> courseReviewRepository.saveAndFlush(stale));
+	}
+
+	@Test
+	void courseReview_winnerCommittedViaUpdateHandlerAgainstBigintColumn_staleRepositorySaveRejected() throws Exception {
+		// given - a stale instance captured at version 0 on the migrated schema, detached before the winning write
+		final CourseReview seed = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = seed.toIdentifier();
+		courseReviewRepository.saveAndFlush(seed);
+		entityManager.clear();
+		final CourseReview stale = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		final Object reviewId = ReflectionTestUtils.getField(stale, "id");
+		entityManager.detach(stale);
+
+		// and - the winning update is committed through the production update handler (read-modify-save), bumping the
+		// BIGINT version to 1. courseReview_concurrentUpdateAgainstBigintColumn_winnerPersistedAndStaleRejected commits
+		// the winner straight through the repository, and courseReview_winnerCommittedViaUpdateHandler_staleRepositorySaveRejected
+		// routes it through the real use case but against the Hibernate-generated INTEGER column. Only here does the
+		// production update use case meet the production-shaped BIGINT column on the conflict path.
+		final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+		final UpdateCourseReviewCommandHandler handler =
+				new UpdateCourseReviewCommandHandler(validator, courseReviewRepository);
+		handler.handle(new UpdateCourseReviewCommand(uuid, 5.0, "handler wins"));
+		entityManager.flush();
+		entityManager.clear();
+
+		// then - the handler's values are the ones actually stored (reloaded through the entity, since listCourseReviews
+		// selects reviewable_course.original_course_id, which the migrated reviewable_course table does not expose)
+		final CourseReview reloaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		assertThat(((CourseRating) ReflectionTestUtils.getField(reloaded, "rating")).rating()).isEqualTo(5.0);
+		assertThat(((Comment) ReflectionTestUtils.getField(reloaded, "comment")).comment()).isEqualTo("handler wins");
+		entityManager.clear();
+
+		// when - the stale instance (still version 0) tries to overwrite the handler's committed change
+		stale.update(new UpdateCourseReviewCommand(uuid, 1.0, "stale loses"));
+
+		// then - the loser is rejected with the version-specific failure (entity + row identified, rooted in stale-version
+		// detection) instead of silently overwriting the value the production handler committed against the BIGINT column
+		assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+				.isThrownBy(() -> courseReviewRepository.saveAndFlush(stale))
+				.satisfies(ex -> {
+					assertThat(ex.getPersistentClassName()).isEqualTo(CourseReview.class.getName());
+					assertThat(ex.getIdentifier()).isEqualTo(reviewId);
+				})
+				.withRootCauseInstanceOf(StaleObjectStateException.class);
 	}
 
 	@Test
