@@ -14,6 +14,7 @@ import com.educational.platform.users.registration.UserRegistrationCommandHandle
 import com.educational.platform.users.security.JwtTokenProvider;
 import com.educational.platform.users.security.MyUserDetails;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -233,6 +234,31 @@ class UserVersioningProductionFlowOnMigratedSchemaTest {
     }
 
     @Test
+    void signInHandler_onMigratedSchema_afterVersionIncrement_resolvesRoleFromVersionedUser() {
+        // given a teacher persisted onto the migrated BIGINT column whose optimistic-lock version has since
+        // advanced to 1 (the non-default role, to pin the role maps through the read path unchanged)
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        forceIncrementVersionOf("teacher");
+        entityManager.clear();
+
+        // when the real sign-in read path runs at a non-zero version (authenticate -> load the persisted
+        // aggregate -> resolve its role)
+        final String token = signInHandler.handle(signInCommand("teacher"));
+
+        // then a non-zero version read back from the migration-owned column never disturbs the production sign-in
+        // read path: a token is issued and the non-default role resolves unchanged. The BIGINT-column -> Integer-field
+        // read of a *non-zero* version is a distinct concern from version 0 (the same reason
+        // versionAtIntegerMaxValue_onMigratedSchema is pinned separately from persist_onMigratedSchema_initializesVersionToZero):
+        // signInHandler_onMigratedSchema_resolvesRoleFromVersionedUser only exercises version 0 on this schema, while
+        // SignInVersioningTest.handle_teacher_afterVersionIncrement_stillResolvesTeacherRole pins the non-zero cell on the
+        // Hibernate-generated INTEGER schema - this is its missing production-schema counterpart (the only configuration
+        // that ships), driving the read through the real handler rather than a raw repository call.
+        assertThat(token).isEqualTo(TOKEN);
+        assertThat(rolesResolvedFor("teacher")).containsExactly(Role.ROLE_TEACHER);
+        assertThat(((Number) versionOf("teacher")).longValue()).isEqualTo(1L);
+    }
+
+    @Test
     void userDetailsServiceLoad_onMigratedSchema_returnsTeacherUserDetailsFromVersionedUser() {
         // given a teacher persisted onto the migrated BIGINT column (the non-default role, to pin the role maps
         // through the load unchanged)
@@ -298,6 +324,33 @@ class UserVersioningProductionFlowOnMigratedSchemaTest {
         assertThat(((Number) versionOf(USERNAME)).longValue()).isZero();
     }
 
+    @Test
+    void userDetailsServiceLoad_onMigratedSchema_afterVersionIncrement_returnsTeacherUserDetailsFromVersionedUser() {
+        // given a teacher persisted onto the migrated BIGINT column whose optimistic-lock version has since
+        // advanced to 1 (the non-default role, to pin the role maps through the load unchanged)
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        forceIncrementVersionOf("teacher");
+        entityManager.clear();
+
+        // when Spring Security loads the user for authentication at a non-zero version through the production
+        // UserDetailsService against the migration-owned column
+        final UserDetails userDetails = new MyUserDetails(repository).loadUserByUsername("teacher");
+
+        // then a non-zero version read back from the BIGINT column never disturbs the UserDetailsService projection on
+        // the schema that ships: the username, encoded password and the non-default authority all project unchanged,
+        // while the advanced version is never leaked into the projection. As with the sign-in counterpart above, the
+        // BIGINT-column -> Integer-field read of a *non-zero* version is a distinct concern from version 0:
+        // userDetailsServiceLoad_onMigratedSchema_returnsTeacherUserDetailsFromVersionedUser only exercises version 0
+        // here, while MyUserDetailsVersioningTest.loadUserByUsername_teacher_afterVersionIncrement_stillReturnsTeacherAuthority
+        // pins the non-zero cell on the Hibernate-generated INTEGER schema - this is its missing production-schema counterpart.
+        assertThat(userDetails.getUsername()).isEqualTo("teacher");
+        assertThat(passwordEncoder.matches(PASSWORD, userDetails.getPassword())).isTrue();
+        assertThat(userDetails.getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactly(Role.ROLE_TEACHER.getAuthority());
+        assertThat(((Number) versionOf("teacher")).longValue()).isEqualTo(1L);
+    }
+
     @SuppressWarnings("unchecked")
     private List<Role> rolesResolvedFor(final String username) {
         // the role passed to the token is resolved from the persisted user the handler reads back by username,
@@ -305,6 +358,15 @@ class UserVersioningProductionFlowOnMigratedSchemaTest {
         final ArgumentCaptor<List<Role>> rolesCaptor = ArgumentCaptor.forClass(List.class);
         verify(jwtTokenProvider).createToken(eq(username), rolesCaptor.capture());
         return rolesCaptor.getValue();
+    }
+
+    private void forceIncrementVersionOf(final String username) {
+        // the User aggregate exposes no field mutator, so the only way to advance the optimistic-lock version is to
+        // force an increment on the managed instance - the same write-path simulation the rest of the suite uses
+        entityManager.clear();
+        final User loaded = repository.findByUsername(username).orElseThrow();
+        entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
     }
 
     private Object versionOf(final String username) {
