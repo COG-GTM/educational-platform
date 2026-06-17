@@ -1105,6 +1105,46 @@ public class OptimisticLockingMigratedSchemaTest {
 	}
 
 	@Test
+	void courseReview_createdAgainstBigintColumn_linkedParentVersionsUnchanged() throws Exception {
+		// given - freshly created reviewer/reviewable_course FK parents on the migrated (BIGINT) schema, both at
+		// version 0. reviewable_course is inserted with native SQL because its entity maps original_course_id while
+		// the migrated table exposes uuid (as documented on newCourseReviewForMigratedSchema).
+		final Integer reviewerId = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("insert-isolation-reviewer-" + UUID.randomUUID()))).getId();
+		entityManager.getEntityManager()
+				.createNativeQuery("INSERT INTO reviewable_course (uuid) VALUES (?)")
+				.setParameter(1, UUID.randomUUID())
+				.executeUpdate();
+		final Number reviewableCourseId = (Number) entityManager.getEntityManager()
+				.createNativeQuery("SELECT MAX(id) FROM reviewable_course")
+				.getSingleResult();
+		final Constructor<CourseReview> constructor = CourseReview.class
+				.getDeclaredConstructor(ReviewCourseCommand.class, Integer.class, Integer.class);
+		constructor.setAccessible(true);
+		final CourseReview review = constructor.newInstance(
+				new ReviewCourseCommand(UUID.randomUUID(), 4.0, "comment"), reviewableCourseId.intValue(), reviewerId);
+		final UUID uuid = review.toIdentifier();
+
+		// when - the new review is inserted against the migrated course_review table, establishing the FK link
+		courseReviewRepository.saveAndFlush(review);
+		entityManager.clear();
+
+		// then - inserting the child writes its own version 0 into the BIGINT column and leaves the referenced parents
+		// untouched (no JPA cascade), so their BIGINT versions stay 0. The migrated slice only asserted parent
+		// isolation on the update path (courseReview_updatedAgainstBigintColumn_linkedParentVersionsUnchanged); the
+		// insert path that first establishes the link was unverified on the production-shaped schema.
+		final CourseReview reloaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		final Reviewer reloadedReviewer = reviewerRepository.findById(reviewerId).orElseThrow();
+		final Number reviewableCourseVersion = (Number) entityManager.getEntityManager()
+				.createNativeQuery("SELECT version FROM reviewable_course WHERE id = ?")
+				.setParameter(1, reviewableCourseId.intValue())
+				.getSingleResult();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
+		assertThat(ReflectionTestUtils.getField(reloadedReviewer, "version")).isEqualTo(0);
+		assertThat(reviewableCourseVersion.longValue()).isZero();
+	}
+
+	@Test
 	void reviewer_updatedAgainstBigintColumn_linkedCourseReviewVersionUnchanged() throws Exception {
 		// given - a course review wired to a freshly created reviewer FK parent on the migrated (BIGINT) schema,
 		// both at version 0. The reviewer is created inline (rather than via newCourseReviewForMigratedSchema) so its

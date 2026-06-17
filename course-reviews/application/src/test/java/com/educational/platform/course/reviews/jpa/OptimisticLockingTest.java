@@ -523,6 +523,58 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void courseReview_createdReferencingExistingParents_parentVersionsUnchanged() throws Exception {
+		// given - the seeded reviewer and reviewable_course (both at version 0), referenced by FK id and not by a
+		// JPA association. The domain constructor is package-private, so it is reached reflectively from this package.
+		final Integer reviewerId = reviewerRepository.findByUsername("reviewer").getId();
+		final Integer reviewableCourseId = reviewableCourseRepository.findByOriginalCourseId(COURSE_UUID).orElseThrow().getId();
+		entityManager.clear();
+		final Constructor<CourseReview> constructor = CourseReview.class
+				.getDeclaredConstructor(ReviewCourseCommand.class, Integer.class, Integer.class);
+		constructor.setAccessible(true);
+		final CourseReview created = constructor
+				.newInstance(new ReviewCourseCommand(UUID.randomUUID(), 3.0, "new review"), reviewableCourseId, reviewerId);
+		final UUID createdUuid = created.toIdentifier();
+
+		// when - a brand new review referencing those parents is inserted and flushed
+		courseReviewRepository.saveAndFlush(created);
+		entityManager.clear();
+
+		// then - inserting the child starts it at version 0 and leaves the referenced parent aggregates untouched:
+		// there is no JPA cascade, so the reviewer and reviewable_course keep their independent version 0. The existing
+		// cross-aggregate isolation test only covers the update path (courseReview_updated_linkedReviewerAndReviewable
+		// CourseVersionsUnchanged); the insert path that first establishes the FK link was unverified, so a stray
+		// cascade bumping a parent version on persist would have slipped past it.
+		final CourseReview reloadedCreated = courseReviewRepository.findByUuid(createdUuid).orElseThrow();
+		final Reviewer reloadedReviewer = reviewerRepository.findById(reviewerId).orElseThrow();
+		final ReviewableCourse reloadedCourse = reviewableCourseRepository.findById(reviewableCourseId).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloadedCreated, "version")).isEqualTo(0);
+		assertThat(ReflectionTestUtils.getField(reloadedReviewer, "version")).isEqualTo(0);
+		assertThat(ReflectionTestUtils.getField(reloadedCourse, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void courseReview_partialUpdateChangingOnlyComment_versionIncrementedAndCommentPersisted() {
+		// given - the seeded review (version 0, rating 4.0, comment "comment")
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+
+		// when - it is updated keeping the same rating (4.0) but a new comment, so only one mapped field actually changes
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 4.0, "only the comment changed"));
+		courseReviewRepository.saveAndFlush(review);
+
+		// then - a single dirty field is enough to bump the version. This sits between courseReview_updated_version
+		// Incremented (rating and comment both change -> bump) and courseReview_updatedWithSameValues_versionNot
+		// Incremented (nothing changes -> no bump), pinning that the version tracks any field change rather than only
+		// a change to every field, and that the changed comment is the value persisted
+		entityManager.clear();
+		final CourseReview reloaded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
+		final CourseReviewDTO dto = courseReviewRepository.listCourseReviews(COURSE_UUID).get(0);
+		assertThat(dto.rating()).isEqualTo(4.0);
+		assertThat(dto.comment()).isEqualTo("only the comment changed");
+	}
+
+	@Test
 	void courseReview_staleUpdateAfterConcurrentDelete_throwsOptimisticLockingFailure() {
 		// given - two instances reading the same row at version 0
 		final CourseReview stale = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
