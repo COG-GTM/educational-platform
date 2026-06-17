@@ -40,3 +40,16 @@ databaseChangeLog:
                     nullable: false
                   name: role
                   type: VARCHAR(100)
+  - changeSet:
+      id: add-version-column-to-custom_user
+      author: devin
+      changes:
+        - addColumn:
+            tableName: custom_user
+            columns:
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false

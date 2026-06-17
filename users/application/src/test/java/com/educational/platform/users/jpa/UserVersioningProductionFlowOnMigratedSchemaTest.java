@@ -1,0 +1,485 @@
+package com.educational.platform.users.jpa;
+
+import com.educational.platform.common.exception.UnprocessableEntityException;
+import com.educational.platform.users.Role;
+import com.educational.platform.users.RoleDTO;
+import com.educational.platform.users.User;
+import com.educational.platform.users.UserDTO;
+import com.educational.platform.users.UserRepository;
+import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
+import com.educational.platform.users.login.SignInCommand;
+import com.educational.platform.users.login.SignInCommandHandler;
+import com.educational.platform.users.registration.UserRegistrationCommand;
+import com.educational.platform.users.registration.UserRegistrationCommandHandler;
+import com.educational.platform.users.security.JwtTokenProvider;
+import com.educational.platform.users.security.MyUserDetails;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import liquibase.Contexts;
+import liquibase.LabelExpression;
+import liquibase.Liquibase;
+import liquibase.database.Database;
+import liquibase.database.DatabaseFactory;
+import liquibase.database.jvm.JdbcConnection;
+import liquibase.resource.ClassLoaderResourceAccessor;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * Drives the real production flows ({@link UserRegistrationCommandHandler#handle} write path, the
+ * {@link SignInCommandHandler#handle} read path, and the {@link com.educational.platform.users.security.MyUserDetails}
+ * {@code UserDetailsService} authentication lookup) against the <em>production schema configuration</em>: the
+ * {@code custom_user} table is built by the real Liquibase changelog ({@code db/users.yml}, whose
+ * {@code add-version-column-to-custom_user} changeSet adds {@code version BIGINT NOT NULL}) and Hibernate runs
+ * with {@code ddl-auto=none}, exactly as in production.
+ *
+ * <p>This closes a seam the rest of the suite leaves open. The production-flow tests
+ * ({@link com.educational.platform.users.registration.UserRegistrationVersioningTest},
+ * {@link com.educational.platform.users.login.SignInVersioningTest},
+ * {@link com.educational.platform.users.security.MyUserDetailsVersioningTest}) all run against the default
+ * {@code @DataJpaTest} Hibernate-generated {@code INTEGER} schema, while
+ * {@link UserOptimisticLockingOnMigratedSchemaTest} exercises the genuinely migrated {@code BIGINT} column but
+ * only through raw {@code repository}/{@code EntityManager} operations - never the production handlers. So no
+ * test proves the registration handler persists a {@code @Version}-bearing aggregate, nor that the sign-in
+ * handler reads one back, when bound to the migration-owned {@code BIGINT} column under {@code ddl-auto=none} -
+ * the only configuration that ships. A renamed/retyped {@code version} column or the entity drifting from the
+ * migration would pass every production-flow test above (Hibernate schema) yet break the real production flow
+ * here, on the schema that actually deploys.
+ */
+@DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=none")
+class UserVersioningProductionFlowOnMigratedSchemaTest {
+
+    private static final String USERNAME = "username";
+    private static final String EMAIL = "email@gmail.com";
+    private static final String PASSWORD = "password";
+    private static final String TOKEN = "token";
+
+    @Autowired
+    private UserRepository repository;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private DataSource dataSource;
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final List<Object> publishedEvents = new ArrayList<>();
+
+    private JwtTokenProvider jwtTokenProvider;
+    private UserRegistrationCommandHandler registrationHandler;
+    private SignInCommandHandler signInHandler;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        applyProductionMigration();
+
+        jwtTokenProvider = mock(JwtTokenProvider.class);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn(TOKEN);
+        final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+        final ApplicationEventPublisher eventPublisher = publishedEvents::add;
+        registrationHandler = new UserRegistrationCommandHandler(
+                new TransactionTemplate(transactionManager),
+                passwordEncoder,
+                jwtTokenProvider,
+                repository,
+                eventPublisher,
+                validator);
+
+        // a stub manager that accepts the credentials, so the sign-in flow reaches the role-resolution read path
+        final AuthenticationManager authenticationManager = authentication -> authentication;
+        signInHandler = new SignInCommandHandler(jwtTokenProvider, repository, validator, authenticationManager);
+    }
+
+    private void applyProductionMigration() throws Exception {
+        // build the schema the way production does - via the Liquibase changelog, not Hibernate. With
+        // ddl-auto=none Hibernate never touches the schema, so without this the table would not exist.
+        // Re-running per test is idempotent: createTable is MARK_RAN (table already present) and the version
+        // changeSet is recorded once, so subsequent tests reuse the same migrated schema.
+        try (Connection connection = dataSource.getConnection()) {
+            final Database database = DatabaseFactory.getInstance()
+                    .findCorrectDatabaseImplementation(new JdbcConnection(connection));
+            try (Liquibase liquibase = new Liquibase("db/users.yml", new ClassLoaderResourceAccessor(), database)) {
+                liquibase.update(new Contexts(), new LabelExpression());
+            }
+        }
+    }
+
+    @Test
+    void registrationHandler_onMigratedSchema_persistsAggregateAtVersionZero() {
+        // when the real registration write path runs against the migrated BIGINT column (validate -> save inside
+        // the handler's transaction)
+        registrationHandler.handle(command(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+
+        // force a genuine DB round trip so the version is read back from the row, not the in-context instance
+        entityManager.flush();
+        entityManager.clear();
+
+        // then the production write path persists a @Version-bearing aggregate onto the migration-owned column:
+        // the Integer @Version maps cleanly onto BIGINT and JPA initialises it to 0, while the read projection is
+        // unaffected. UserRegistrationVersioningTest pins this on the Hibernate-generated INTEGER schema only;
+        // this is its missing production-schema counterpart (the only configuration that ships).
+        final User reloaded = repository.findByUsername(USERNAME).orElseThrow();
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isZero();
+        final UserDTO dto = reloaded.toDTO();
+        assertThat(dto.username()).isEqualTo(USERNAME);
+        assertThat(dto.email()).isEqualTo(EMAIL);
+        assertThat(dto.role()).isEqualTo(RoleDTO.ROLE_STUDENT);
+    }
+
+    @Test
+    void registrationHandler_duplicateUsername_onMigratedSchema_isRejected() {
+        // given a user already registered through the production write path on the migrated schema
+        registrationHandler.handle(command(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+
+        // when the same username is registered again
+        // then the existsByUsername guard still rejects it against the migration-owned table: adding @Version does
+        // not disturb the registration flow's duplicate-username contract on the schema that actually deploys
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(() -> registrationHandler.handle(command(USERNAME, "other@gmail.com", RoleDTO.ROLE_STUDENT)));
+    }
+
+    @Test
+    void registrationHandler_onMigratedSchema_emitsIntegrationEventUnaffectedByVersion() {
+        // when the real registration write path runs against the migrated BIGINT column (which now persists a
+        // @Version-bearing aggregate)
+        registrationHandler.handle(command(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+
+        // then the single cross-context event is still emitted with exactly username/email on the schema that
+        // ships: adding @Version to the aggregate must not disturb - nor leak the optimistic-lock version onto -
+        // the published integration event. The other migrated-schema flow tests assert the persisted row's
+        // projection and the resolved role but never the emitted event, so the event-publication half of the
+        // production write path is otherwise unverified on the BIGINT column. This is the missing production-schema
+        // counterpart of UserRegistrationVersioningTest.handle_validCommand_emitsIntegrationEventUnaffectedByVersion
+        // (Hibernate-generated INTEGER schema), proving the *whole* write path - persist onto the migration-owned
+        // column plus event publication - is unaffected by @Version, not just the persisted row.
+        assertThat(publishedEvents).singleElement()
+                .isInstanceOfSatisfying(UserCreatedIntegrationEvent.class, event -> {
+                    assertThat(event).hasFieldOrPropertyWithValue("username", USERNAME);
+                    assertThat(event).hasFieldOrPropertyWithValue("email", EMAIL);
+                });
+    }
+
+    @Test
+    void registrationHandler_onMigratedSchema_persistsTeacherAtVersionZero() {
+        // when the real registration write path persists a teacher (the non-default role) onto the migrated
+        // BIGINT column
+        registrationHandler.handle(command("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+
+        // force a genuine DB round trip so the version is read back from the row, not the in-context instance
+        entityManager.flush();
+        entityManager.clear();
+
+        // then the teacher aggregate persisted through the production write path carries the JPA-initialised
+        // optimistic-lock version (0) on the migration-owned column and its non-default role projection is
+        // unaffected by @Version - completing the role coverage of the registration write path on the schema that
+        // ships (registrationHandler_onMigratedSchema_persistsAggregateAtVersionZero only exercises the student
+        // role). This is the missing production-schema counterpart of
+        // UserRegistrationVersioningTest.handle_validTeacherCommand_persistsUserWithInitialVersionZero
+        // (Hibernate-generated INTEGER schema).
+        final User reloaded = repository.findByUsername("teacher").orElseThrow();
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(((Number) versionOf("teacher")).longValue()).isZero();
+        assertThat(reloaded.toDTO().role()).isEqualTo(RoleDTO.ROLE_TEACHER);
+    }
+
+    @Test
+    void registrationHandler_onMigratedSchema_resolvesStudentRoleIntoIssuedToken() {
+        // when the real registration write path runs and returns the token issued for the freshly persisted
+        // aggregate on the migrated BIGINT column
+        final String token = registrationHandler.handle(command(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+
+        // then the handler's return-value contract holds under @Version on the schema that ships: it issues the
+        // token built from the just-persisted, JPA-version-initialised aggregate, and the role carried into it is
+        // the student role resolved via toDTO().role() - never the optimistic-lock version. The other migrated
+        // registration tests assert the persisted row and the emitted event but never the issued token, so the
+        // return-value half of the production write path is otherwise unverified on the BIGINT column. This is the
+        // missing production-schema counterpart of
+        // UserRegistrationVersioningTest.handle_resolvesStudentRoleIntoIssuedToken_unaffectedByVersion
+        // (Hibernate-generated INTEGER schema).
+        assertThat(token).isEqualTo(TOKEN);
+        assertThat(rolesResolvedFor(USERNAME)).containsExactly(Role.ROLE_STUDENT);
+    }
+
+    @Test
+    void registrationHandler_onMigratedSchema_resolvesTeacherRoleIntoIssuedToken() {
+        // when a teacher (the non-default role) is registered through the real production write path on the
+        // migrated BIGINT column
+        final String token = registrationHandler.handle(command("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+
+        // then the non-default role is resolved into the issued token from the @Version-bearing aggregate on the
+        // schema that ships too, completing the role coverage of the token-issuance path on the migrated column
+        // (registrationHandler_onMigratedSchema_resolvesStudentRoleIntoIssuedToken only covers the student role).
+        // This is the missing production-schema counterpart of
+        // UserRegistrationVersioningTest.handle_resolvesTeacherRoleIntoIssuedToken_unaffectedByVersion
+        // (Hibernate-generated INTEGER schema).
+        assertThat(token).isEqualTo(TOKEN);
+        assertThat(rolesResolvedFor("teacher")).containsExactly(Role.ROLE_TEACHER);
+    }
+
+    @Test
+    void registrationHandler_onMigratedSchema_whenAnotherUsersVersionHasAdvanced_persistsNewUserAtIndependentVersionZero() {
+        // given a user registered through the real handler onto the migrated BIGINT column whose optimistic-lock
+        // version has since advanced to 1
+        registrationHandler.handle(command(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+        entityManager.flush();
+        forceIncrementVersionOf(USERNAME);
+
+        // when a brand-new user is subsequently registered through the same production write path
+        registrationHandler.handle(command("other", "other@gmail.com", RoleDTO.ROLE_STUDENT));
+
+        // force a genuine DB round trip so each version is read back from its row
+        entityManager.flush();
+        entityManager.clear();
+
+        // then version *initialisation* is per-row through the handler on the schema that ships: the new row starts
+        // at 0 on the migration-owned BIGINT column regardless of the advanced version on the pre-existing row,
+        // while that row keeps its advanced version. UserOptimisticLockingOnMigratedSchemaTest.save_newUser_whenAnotherUsersVersionHasAdvanced_onMigratedSchema_startsAtZero
+        // pins this at the raw-repository entity level on this schema; this drives it through the real
+        // UserRegistrationCommandHandler. It is the missing production-schema counterpart of
+        // UserRegistrationVersioningTest.handle_whenAnotherUsersVersionHasAdvanced_persistsNewUserAtIndependentVersionZero
+        // (Hibernate-generated INTEGER schema), and is distinct from
+        // registrationHandler_onMigratedSchema_persistsAggregateAtVersionZero, which only proves a single fresh
+        // insert starts at 0 with no pre-existing row having advanced first.
+        assertThat(repository.findByUsername("other").orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(repository.findByUsername(USERNAME).orElseThrow()).hasFieldOrPropertyWithValue("version", 1);
+        assertThat(((Number) versionOf("other")).longValue()).isZero();
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(1L);
+    }
+
+    @Test
+    void signInHandler_onMigratedSchema_resolvesRoleFromVersionedUser() {
+        // given a teacher persisted onto the migrated BIGINT column (the non-default role, to pin the role maps
+        // through the read path unchanged)
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        entityManager.clear();
+
+        // when the real sign-in read path runs (authenticate -> load the persisted aggregate -> resolve its role)
+        final String token = signInHandler.handle(signInCommand("teacher"));
+
+        // then the production read path is unaffected by @Version on the migration-owned column: a token is issued
+        // and the role resolved from the version-bearing user is the persisted role - never the optimistic-lock
+        // version. SignInVersioningTest pins this on the Hibernate-generated INTEGER schema only; this is its
+        // missing production-schema counterpart (the only configuration that ships).
+        assertThat(token).isEqualTo(TOKEN);
+        assertThat(rolesResolvedFor("teacher")).containsExactly(Role.ROLE_TEACHER);
+    }
+
+    @Test
+    void signInHandler_onMigratedSchema_doesNotAdvanceUserVersion() {
+        // given a user persisted at version 0 on the migrated BIGINT column
+        repository.saveAndFlush(newUser(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+        entityManager.clear();
+
+        // when the real sign-in flow runs (a pure read: authenticate -> load the persisted aggregate -> resolve its role)
+        signInHandler.handle(signInCommand(USERNAME));
+
+        // force a genuine DB round trip so the version is read back from the row, not the in-context instance
+        entityManager.flush();
+        entityManager.clear();
+
+        // then signing in does not advance the optimistic-lock version on the schema that ships: the authentication
+        // read path is side-effect-free under @Version, so repeated logins never churn the BIGINT version (which
+        // would otherwise cause spurious lock contention or needless writes). signInHandler_onMigratedSchema_resolvesRoleFromVersionedUser
+        // pins *what* sign-in reads on the migrated schema; this pins that the flow only reads.
+        // SignInVersioningTest.handle_signIn_doesNotAdvanceUserVersion proves this on the Hibernate-generated
+        // INTEGER schema - this is its missing production-schema counterpart.
+        assertThat(repository.findByUsername(USERNAME).orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isZero();
+    }
+
+    @Test
+    void signInHandler_onMigratedSchema_afterVersionIncrement_resolvesRoleFromVersionedUser() {
+        // given a teacher persisted onto the migrated BIGINT column whose optimistic-lock version has since
+        // advanced to 1 (the non-default role, to pin the role maps through the read path unchanged)
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        forceIncrementVersionOf("teacher");
+        entityManager.clear();
+
+        // when the real sign-in read path runs at a non-zero version (authenticate -> load the persisted
+        // aggregate -> resolve its role)
+        final String token = signInHandler.handle(signInCommand("teacher"));
+
+        // then a non-zero version read back from the migration-owned column never disturbs the production sign-in
+        // read path: a token is issued and the non-default role resolves unchanged. The BIGINT-column -> Integer-field
+        // read of a *non-zero* version is a distinct concern from version 0 (the same reason
+        // versionAtIntegerMaxValue_onMigratedSchema is pinned separately from persist_onMigratedSchema_initializesVersionToZero):
+        // signInHandler_onMigratedSchema_resolvesRoleFromVersionedUser only exercises version 0 on this schema, while
+        // SignInVersioningTest.handle_teacher_afterVersionIncrement_stillResolvesTeacherRole pins the non-zero cell on the
+        // Hibernate-generated INTEGER schema - this is its missing production-schema counterpart (the only configuration
+        // that ships), driving the read through the real handler rather than a raw repository call.
+        assertThat(token).isEqualTo(TOKEN);
+        assertThat(rolesResolvedFor("teacher")).containsExactly(Role.ROLE_TEACHER);
+        assertThat(((Number) versionOf("teacher")).longValue()).isEqualTo(1L);
+    }
+
+    @Test
+    void userDetailsServiceLoad_onMigratedSchema_returnsTeacherUserDetailsFromVersionedUser() {
+        // given a teacher persisted onto the migrated BIGINT column (the non-default role, to pin the role maps
+        // through the load unchanged)
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        entityManager.clear();
+
+        // when Spring Security loads the user through the production UserDetailsService - the lookup fired on every
+        // authentication - against the migration-owned column
+        final UserDetails userDetails = new MyUserDetails(repository).loadUserByUsername("teacher");
+
+        // then the UserDetailsService read path is unaffected by @Version on the migrated schema: the username,
+        // encoded password and the non-default authority all project, while the row's optimistic-lock version stays
+        // 0 and is never leaked into the projection. MyUserDetailsVersioningTest pins this on the Hibernate-generated
+        // INTEGER schema only; this is its missing production-schema counterpart. The UserDetailsService seam is the
+        // third production flow (alongside the registration write and sign-in read paths above) and the only one not
+        // yet exercised against the BIGINT column that actually ships - a renamed/retyped version column or the
+        // entity drifting from the migration would pass every MyUserDetailsVersioningTest yet break this real lookup.
+        assertThat(userDetails.getUsername()).isEqualTo("teacher");
+        assertThat(passwordEncoder.matches(PASSWORD, userDetails.getPassword())).isTrue();
+        assertThat(userDetails.getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactly(Role.ROLE_TEACHER.getAuthority());
+        assertThat(((Number) versionOf("teacher")).longValue()).isZero();
+    }
+
+    @Test
+    void userDetailsServiceLoad_unknownUser_onMigratedSchema_throwsUsernameNotFoundException() {
+        // given a populated table on the migrated schema carrying the new version column
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        entityManager.clear();
+
+        // when an absent username is looked up through the production UserDetailsService
+        // then adding @Version leaves the not-found contract intact on the schema that ships: the lookup still
+        // distinguishes a missing user rather than returning a stale or empty UserDetails. This mirrors the
+        // registrationHandler_duplicateUsername_onMigratedSchema_isRejected guard above - a "contract intact under
+        // @Version on the production schema" check - which MyUserDetailsVersioningTest pins only on the
+        // Hibernate-generated INTEGER schema.
+        assertThatExceptionOfType(UsernameNotFoundException.class)
+                .isThrownBy(() -> new MyUserDetails(repository).loadUserByUsername("missing"));
+    }
+
+    @Test
+    void userDetailsServiceLoad_onMigratedSchema_doesNotAdvanceUserVersion() {
+        // given a user persisted at version 0 on the migrated BIGINT column
+        repository.saveAndFlush(newUser(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+        entityManager.clear();
+
+        // when Spring Security loads it through the production UserDetailsService - the lookup fired on every
+        // authentication - against the migration-owned column (a pure read)
+        new MyUserDetails(repository).loadUserByUsername(USERNAME);
+
+        // force a genuine DB round trip so the version is read back from the row, not the in-context instance
+        entityManager.flush();
+        entityManager.clear();
+
+        // then loading a user for authentication does not advance the optimistic-lock version on the schema that
+        // ships: the UserDetailsService read path is side-effect-free under @Version on the BIGINT column too, so
+        // authenticating never churns the version. userDetailsServiceLoad_onMigratedSchema_returnsTeacherUserDetailsFromVersionedUser
+        // pins *what* the load yields on the migrated schema; this pins that the load only reads.
+        // MyUserDetailsVersioningTest.loadUserByUsername_doesNotAdvanceUserVersion proves this on the
+        // Hibernate-generated INTEGER schema - this is its missing production-schema counterpart.
+        assertThat(repository.findByUsername(USERNAME).orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isZero();
+    }
+
+    @Test
+    void userDetailsServiceLoad_onMigratedSchema_afterVersionIncrement_returnsTeacherUserDetailsFromVersionedUser() {
+        // given a teacher persisted onto the migrated BIGINT column whose optimistic-lock version has since
+        // advanced to 1 (the non-default role, to pin the role maps through the load unchanged)
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        forceIncrementVersionOf("teacher");
+        entityManager.clear();
+
+        // when Spring Security loads the user for authentication at a non-zero version through the production
+        // UserDetailsService against the migration-owned column
+        final UserDetails userDetails = new MyUserDetails(repository).loadUserByUsername("teacher");
+
+        // then a non-zero version read back from the BIGINT column never disturbs the UserDetailsService projection on
+        // the schema that ships: the username, encoded password and the non-default authority all project unchanged,
+        // while the advanced version is never leaked into the projection. As with the sign-in counterpart above, the
+        // BIGINT-column -> Integer-field read of a *non-zero* version is a distinct concern from version 0:
+        // userDetailsServiceLoad_onMigratedSchema_returnsTeacherUserDetailsFromVersionedUser only exercises version 0
+        // here, while MyUserDetailsVersioningTest.loadUserByUsername_teacher_afterVersionIncrement_stillReturnsTeacherAuthority
+        // pins the non-zero cell on the Hibernate-generated INTEGER schema - this is its missing production-schema counterpart.
+        assertThat(userDetails.getUsername()).isEqualTo("teacher");
+        assertThat(passwordEncoder.matches(PASSWORD, userDetails.getPassword())).isTrue();
+        assertThat(userDetails.getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactly(Role.ROLE_TEACHER.getAuthority());
+        assertThat(((Number) versionOf("teacher")).longValue()).isEqualTo(1L);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Role> rolesResolvedFor(final String username) {
+        // the role passed to the token is resolved from the persisted user the handler reads back by username,
+        // so capturing it pins what the @Version-bearing entity yielded through the sign-in read path
+        final ArgumentCaptor<List<Role>> rolesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(jwtTokenProvider).createToken(eq(username), rolesCaptor.capture());
+        return rolesCaptor.getValue();
+    }
+
+    private void forceIncrementVersionOf(final String username) {
+        // the User aggregate exposes no field mutator, so the only way to advance the optimistic-lock version is to
+        // force an increment on the managed instance - the same write-path simulation the rest of the suite uses
+        entityManager.clear();
+        final User loaded = repository.findByUsername(username).orElseThrow();
+        entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
+    }
+
+    private Object versionOf(final String username) {
+        return entityManager
+                .createNativeQuery("SELECT version FROM custom_user WHERE username = :username")
+                .setParameter("username", username)
+                .getSingleResult();
+    }
+
+    private SignInCommand signInCommand(final String username) {
+        return SignInCommand.builder()
+                .username(username)
+                .password(PASSWORD)
+                .build();
+    }
+
+    private User newUser(final String username, final String email, final RoleDTO role) {
+        return new User(command(username, email, role), passwordEncoder);
+    }
+
+    private UserRegistrationCommand command(final String username, final String email, final RoleDTO role) {
+        return UserRegistrationCommand.builder()
+                .username(username)
+                .email(email)
+                .password(PASSWORD)
+                .role(role)
+                .build();
+    }
+}

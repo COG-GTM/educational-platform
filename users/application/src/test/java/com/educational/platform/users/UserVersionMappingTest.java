@@ -1,0 +1,267 @@
+package com.educational.platform.users;
+
+import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
+import com.educational.platform.users.login.SignInCommand;
+import com.educational.platform.users.registration.UserRegistrationCommand;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Structural coverage for the {@code @Version} optimistic-locking field added to {@link User}.
+ *
+ * <p>Complements the behavioural {@code jpa} tests: those prove the version increments and rejects
+ * stale writes, while this fast, context-free test pins the source-level governance decision the PR
+ * is built on - {@code @Version} is mapped on the {@code @Entity} (typed {@link Integer}, deliberately
+ * decoupled from the {@code BIGINT} column), is never leaked onto a {@code *Command} request payload,
+ * and never surfaces on the {@link UserDTO} read projection.
+ */
+class UserVersionMappingTest {
+
+    private static final String USERS_PACKAGE = "com.educational.platform.users";
+
+    @Test
+    void entityUser_declaresSingleIntegerVersionField() {
+        // the entity exposes exactly one @Version field, named "version" and typed Integer
+        // (the intentional decoupling from the BIGINT backing column)
+        final List<Field> versionFields = List.of(User.class.getDeclaredFields()).stream()
+                .filter(field -> field.isAnnotationPresent(Version.class))
+                .toList();
+
+        assertThat(versionFields).singleElement().satisfies(field -> {
+            assertThat(field.getName()).isEqualTo("version");
+            assertThat(field.getType()).isEqualTo(Integer.class);
+        });
+    }
+
+    @Test
+    void entityUser_mapsToCustomUserTableTargetedByMigration() {
+        // the optimistic-locking column the Liquibase migration adds lives on the "custom_user" table. The
+        // version-column-name seam below pins the column, but the table mapping is the other half: in production
+        // (ddl-auto=none, schema owned by Liquibase) a renamed @Table would bind @Version to a different/absent
+        // table than the one the migration alters, silently disabling optimistic locking. The migration test
+        // asserts the column on "custom_user" with no entity in play, so this is the only place the entity-side
+        // mapping back to that exact table is pinned.
+        assertThat(User.class.isAnnotationPresent(Entity.class))
+                .as("User must remain a JPA @Entity for @Version to be managed")
+                .isTrue();
+
+        final Table table = User.class.getAnnotation(Table.class);
+        assertThat(table)
+                .as("User must declare @Table mapping it to the migration's table")
+                .isNotNull();
+        assertThat(table.name())
+                .as("User must map to the migration's \"custom_user\" table")
+                .isEqualTo("custom_user");
+    }
+
+    @Test
+    void entityUser_versionField_isNeitherIdNorGenerated() throws NoSuchFieldException {
+        // the @Version field is a dedicated optimistic-lock field, distinct from the primary key. Pin that it
+        // is neither the @Id nor @GeneratedValue-managed: conflating version with identity generation would make
+        // Hibernate populate it as a generated key rather than bump it on each write, silently breaking locking
+        // while still satisfying the "single Integer @Version field" checks above.
+        final Field version = User.class.getDeclaredField("version");
+        assertThat(version.isAnnotationPresent(Id.class))
+                .as("@Version field must not also be the @Id")
+                .isFalse();
+        assertThat(version.isAnnotationPresent(GeneratedValue.class))
+                .as("@Version must be bumped by JPA on write, not populated as a @GeneratedValue")
+                .isFalse();
+
+        // and the identity lives on a separate field, so the two concerns are not accidentally merged
+        final List<Field> idFields = List.of(User.class.getDeclaredFields()).stream()
+                .filter(field -> field.isAnnotationPresent(Id.class))
+                .toList();
+        assertThat(idFields).singleElement().satisfies(field ->
+                assertThat(field.getName())
+                        .as("the @Id must be a different field than the @Version field")
+                        .isNotEqualTo("version"));
+    }
+
+    @Test
+    void entityUser_versionField_isMappedToVersionColumn() throws NoSuchFieldException {
+        // the JPA-mapped column name must match the "version" column the Liquibase migration adds. The jpa
+        // tests run against a Hibernate-generated schema and the migration tests run with no entity, so neither
+        // pins this seam: in production (ddl-auto=none, schema owned by Liquibase) a renamed @Column would map
+        // @Version onto a non-existent column and silently disable optimistic locking.
+        final Field version = User.class.getDeclaredField("version");
+        final Column column = version.getAnnotation(Column.class);
+
+        final String mappedColumnName = (column == null || column.name().isEmpty())
+                ? version.getName()
+                : column.name();
+        assertThat(mappedColumnName)
+                .as("@Version must map to the migration's \"version\" column")
+                .isEqualTo("version");
+    }
+
+    @Test
+    void usersModule_declaresVersionFieldOnlyOnUserEntity() throws ClassNotFoundException {
+        // governance, generalised: rather than naming a fixed set of classes that must stay version-free
+        // (UserDTO / the integration event / the commands, each pinned above), assert the optimistic-locking
+        // version lives on exactly one class in the whole module - the User aggregate. Any future class that
+        // grows a @Version field (a second entity, a projection, a payload) is automatically caught.
+        final List<Class<?>> versionBearingClasses = classesInUsersModuleDeclaringVersionField();
+
+        assertThat(versionBearingClasses)
+                .as("@Version must be declared on the User aggregate and nowhere else in the users module")
+                .containsExactly(User.class);
+    }
+
+    @Test
+    void entityUser_versionField_isAPersistentInstanceField() throws NoSuchFieldException {
+        // a static or @Transient field would still satisfy the "single Integer @Version field" check above
+        // yet silently disable optimistic locking - Hibernate only manages a persistent instance field.
+        // Pin that the mapping is genuinely active, not merely present.
+        final Field version = User.class.getDeclaredField("version");
+
+        assertThat(Modifier.isStatic(version.getModifiers()))
+                .as("@Version must be an instance field, not static")
+                .isFalse();
+        assertThat(version.isAnnotationPresent(Transient.class))
+                .as("@Version must be persistent, not @Transient")
+                .isFalse();
+    }
+
+    @Test
+    void entityUser_versionField_isNotFinal() throws NoSuchFieldException {
+        // a final field would satisfy every other structural check yet silently break optimistic locking:
+        // Hibernate must reassign the version on each write, which it cannot do for a final field. Pin that
+        // the mapping stays writable by JPA, completing the static/@Transient guard above.
+        final Field version = User.class.getDeclaredField("version");
+
+        assertThat(Modifier.isFinal(version.getModifiers()))
+                .as("@Version must be reassignable by JPA, not final")
+                .isFalse();
+    }
+
+    @Test
+    void entityUser_versionField_isPrivate() throws NoSuchFieldException {
+        // the no-accessor/mutator check below rules out methods, but a non-private field would still leak the
+        // optimistic-locking version onto callers via direct field access. Pin that the version is fully
+        // encapsulated - owned by JPA, reachable by no one through the public API.
+        final Field version = User.class.getDeclaredField("version");
+
+        assertThat(Modifier.isPrivate(version.getModifiers()))
+                .as("@Version field must be private")
+                .isTrue();
+    }
+
+    @Test
+    void entityUser_doesNotExposeVersionAccessorOrMutator() {
+        // the PR's design rests on User having no field mutators - the version is owned by JPA and the
+        // only domain write path is the constructor. Enforce that the optimistic-locking version can be
+        // neither read nor set through the public API (no getVersion/setVersion leaks it onto callers).
+        assertThat(User.class.getDeclaredMethods())
+                .extracting(Method::getName)
+                .as("User must not expose any accessor or mutator for the version field")
+                .doesNotContain("getVersion", "setVersion", "isVersion", "version");
+    }
+
+    @Test
+    void everyCommandClassInUsersModule_doesNotCarryVersion() throws ClassNotFoundException {
+        // governance: @Version belongs to the aggregate's entity only - it must never appear on a
+        // command, so a request payload can neither read nor set the optimistic-locking version.
+        // Discover every *Command class in the module (rather than naming a fixed pair) so a command
+        // added later is automatically held to the same rule.
+        final List<Class<?>> commandClasses = commandClassesInUsersModule();
+
+        // guard against a vacuous pass: the scan must actually see the known commands
+        assertThat(commandClasses)
+                .as("the users module exposes discoverable *Command classes")
+                .contains(UserRegistrationCommand.class, SignInCommand.class);
+
+        assertThat(commandClasses).allSatisfy(command -> {
+            assertThat(command.getDeclaredFields())
+                    .as("%s must not declare a @Version-annotated field", command.getSimpleName())
+                    .noneMatch(field -> field.isAnnotationPresent(Version.class));
+            assertThat(command.getDeclaredFields())
+                    .extracting(Field::getName)
+                    .as("%s must not declare a version field", command.getSimpleName())
+                    .doesNotContain("version");
+        });
+    }
+
+    @Test
+    void userReadModel_doesNotExposeVersion() {
+        // the optimistic-locking version is an internal persistence concern: it must stay off the read
+        // projection so a UserDTO can neither carry nor leak the entity's @Version to API consumers
+        assertThat(UserDTO.class.getDeclaredFields())
+                .as("UserDTO must not declare a @Version-annotated field")
+                .noneMatch(field -> field.isAnnotationPresent(Version.class));
+        assertThat(UserDTO.class.getDeclaredFields())
+                .extracting(Field::getName)
+                .as("UserDTO must not expose a version field")
+                .doesNotContain("version");
+    }
+
+    @Test
+    void userCreatedIntegrationEvent_doesNotCarryVersion() {
+        // governance, extended to the bounded-context boundary: UserCreatedIntegrationEvent is the only
+        // user-data payload this module publishes to other contexts. The optimistic-locking version is an
+        // internal persistence concern of the User aggregate, so it must never cross that boundary - the
+        // event can neither declare a @Version-annotated field nor expose a "version" field/record component.
+        assertThat(UserCreatedIntegrationEvent.class.getDeclaredFields())
+                .as("UserCreatedIntegrationEvent must not declare a @Version-annotated field")
+                .noneMatch(field -> field.isAnnotationPresent(Version.class));
+        assertThat(UserCreatedIntegrationEvent.class.getDeclaredFields())
+                .extracting(Field::getName)
+                .as("UserCreatedIntegrationEvent must not expose a version field")
+                .doesNotContain("version");
+    }
+
+    private static List<Class<?>> classesInUsersModuleDeclaringVersionField() throws ClassNotFoundException {
+        final List<Class<?>> versionBearingClasses = new ArrayList<>();
+        for (final Class<?> candidate : allClassesInUsersModule()) {
+            final boolean declaresVersionField = List.of(candidate.getDeclaredFields()).stream()
+                    .anyMatch(field -> field.isAnnotationPresent(Version.class));
+            if (declaresVersionField) {
+                versionBearingClasses.add(candidate);
+            }
+        }
+        return versionBearingClasses;
+    }
+
+    private static List<Class<?>> allClassesInUsersModule() throws ClassNotFoundException {
+        final ClassPathScanningCandidateComponentProvider scanner =
+                new ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter((metadataReader, metadataReaderFactory) -> true);
+
+        final List<Class<?>> classes = new ArrayList<>();
+        for (final BeanDefinition definition : scanner.findCandidateComponents(USERS_PACKAGE)) {
+            classes.add(Class.forName(definition.getBeanClassName()));
+        }
+        return classes;
+    }
+
+    private static List<Class<?>> commandClassesInUsersModule() throws ClassNotFoundException {
+        final ClassPathScanningCandidateComponentProvider scanner =
+                new ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter((metadataReader, metadataReaderFactory) -> true);
+
+        final List<Class<?>> commandClasses = new ArrayList<>();
+        for (final BeanDefinition definition : scanner.findCandidateComponents(USERS_PACKAGE)) {
+            final Class<?> candidate = Class.forName(definition.getBeanClassName());
+            if (candidate.getSimpleName().endsWith("Command")) {
+                commandClasses.add(candidate);
+            }
+        }
+        return commandClasses;
+    }
+}
