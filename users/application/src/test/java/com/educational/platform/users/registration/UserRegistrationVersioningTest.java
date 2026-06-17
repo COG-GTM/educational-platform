@@ -1,6 +1,7 @@
 package com.educational.platform.users.registration;
 
 import com.educational.platform.common.exception.UnprocessableEntityException;
+import com.educational.platform.users.Role;
 import com.educational.platform.users.RoleDTO;
 import com.educational.platform.users.User;
 import com.educational.platform.users.UserDTO;
@@ -14,6 +15,7 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.ApplicationEventPublisher;
@@ -28,7 +30,9 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -48,6 +52,7 @@ class UserRegistrationVersioningTest {
     private static final String USERNAME = "username";
     private static final String EMAIL = "email@gmail.com";
     private static final String PASSWORD = "password";
+    private static final String TOKEN = "token";
 
     @Autowired
     private UserRepository repository;
@@ -60,13 +65,14 @@ class UserRegistrationVersioningTest {
 
     private final List<Object> publishedEvents = new ArrayList<>();
 
+    private JwtTokenProvider jwtTokenProvider;
     private UserRegistrationCommandHandler handler;
 
     @BeforeEach
     void setUp() {
         final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-        final JwtTokenProvider jwtTokenProvider = mock(JwtTokenProvider.class);
-        when(jwtTokenProvider.createToken(any(), any())).thenReturn("token");
+        jwtTokenProvider = mock(JwtTokenProvider.class);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn(TOKEN);
         final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
         final ApplicationEventPublisher eventPublisher = publishedEvents::add;
         handler = new UserRegistrationCommandHandler(
@@ -178,6 +184,43 @@ class UserRegistrationVersioningTest {
         // *fresh* inserts both start at 0 (write isolation) without any pre-existing row having advanced first.
         assertThat(repository.findByUsername("other").orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
         assertThat(repository.findByUsername(USERNAME).orElseThrow()).hasFieldOrPropertyWithValue("version", 1);
+    }
+
+    @Test
+    void handle_resolvesStudentRoleIntoIssuedToken_unaffectedByVersion() {
+        // when the real registration flow runs and returns the token issued for the freshly persisted aggregate
+        final String token = handler.handle(command(USERNAME, EMAIL));
+
+        // then the handler's return-value contract holds under @Version: it issues the token built from the
+        // just-persisted, JPA-version-initialised aggregate, and the role carried into it is the student role
+        // resolved via toDTO().role() - never the optimistic-lock version. The other registration tests assert the
+        // persisted row's projection and the emitted event but never the issued token; SignInVersioningTest pins
+        // this role-into-token resolution for the *read* path (handle_persistedVersionedUser_signsInAndResolvesStudentRole,
+        // via the same ArgumentCaptor) - this is its missing write-path counterpart.
+        assertThat(token).isEqualTo(TOKEN);
+        assertThat(rolesIssuedInTokenFor(USERNAME)).containsExactly(Role.ROLE_STUDENT);
+    }
+
+    @Test
+    void handle_resolvesTeacherRoleIntoIssuedToken_unaffectedByVersion() {
+        // when a teacher (the non-default role) is registered through the real production write path
+        final String token = handler.handle(command("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+
+        // then the non-default role is resolved into the issued token from the @Version-bearing aggregate too,
+        // completing the role coverage of the token-issuance path (handle_resolvesStudentRoleIntoIssuedToken_...
+        // only covers the student role) - the write-path counterpart to
+        // SignInVersioningTest.handle_teacher_resolvesTeacherRoleThroughSignInReadPath
+        assertThat(token).isEqualTo(TOKEN);
+        assertThat(rolesIssuedInTokenFor("teacher")).containsExactly(Role.ROLE_TEACHER);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Role> rolesIssuedInTokenFor(final String username) {
+        // the role passed to createToken is resolved from the just-persisted aggregate via toDTO().role(), so
+        // capturing it pins which role the @Version-bearing entity carried into the issued token
+        final ArgumentCaptor<List<Role>> rolesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(jwtTokenProvider).createToken(eq(username), rolesCaptor.capture());
+        return rolesCaptor.getValue();
     }
 
     private void forceIncrementVersionOf(final String username) {
