@@ -372,6 +372,31 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void courseReview_updatedViaCommandHandlerWithSameValues_versionNotIncremented() {
+		// given - the production update path (the handler unconditionally calls repository.save()) and the seeded
+		// review at version 0 (rating 4.0, comment "comment")
+		final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+		final UpdateCourseReviewCommandHandler handler = new UpdateCourseReviewCommandHandler(validator, courseReviewRepository);
+
+		// when - the review is "updated" through the handler with the values it already has
+		handler.handle(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 4.0, "comment"));
+		entityManager.flush();
+		entityManager.clear();
+
+		// then - the handler always saves, but the command preserves every field, so Hibernate's dirty check issues no
+		// UPDATE and the @Version stays 0. courseReview_updatedWithSameValues_versionNotIncremented proves the no-op for
+		// a direct entity update + saveAndFlush, and courseReview_updatedViaCommandHandler_versionIncrementedAndChangesPersisted
+		// proves the handler bumps on a real change; the conjunction - the production use case does not spuriously bump
+		// the optimistic-lock version on a value-preserving no-op - was unpinned, since the Mockito handler test mocks
+		// the repository and so cannot observe Hibernate's no-op.
+		final CourseReview reloaded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(0);
+		final CourseReviewDTO dto = courseReviewRepository.listCourseReviews(COURSE_UUID).get(0);
+		assertThat(dto.rating()).isEqualTo(4.0);
+		assertThat(dto.comment()).isEqualTo("comment");
+	}
+
+	@Test
 	void courseReview_createdViaCommandHandler_versionInitializedToZero() {
 		// given - the production create path: the real factory + command handler wired with the real
 		// repositories. Only the security-dependent reviewer lookup is mocked, as in CourseReviewFactoryTest.

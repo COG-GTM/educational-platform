@@ -1219,6 +1219,34 @@ public class OptimisticLockingMigratedSchemaTest {
 	}
 
 	@Test
+	void courseReview_updatedViaCommandHandlerWithSameValuesAgainstBigintColumn_versionNotIncremented() throws Exception {
+		// given - a course review persisted at version 0 on the migrated schema (rating 4.0, comment "comment")
+		final CourseReview review = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = review.toIdentifier();
+		courseReviewRepository.saveAndFlush(review);
+		entityManager.clear();
+
+		// when - it is "updated" through the production update handler (which always calls repository.save()) with the
+		// values it already has
+		final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+		final UpdateCourseReviewCommandHandler handler =
+				new UpdateCourseReviewCommandHandler(validator, courseReviewRepository);
+		handler.handle(new UpdateCourseReviewCommand(uuid, 4.0, "comment"));
+		entityManager.flush();
+		entityManager.clear();
+
+		// then - the handler always saves, but nothing is dirty, so Hibernate issues no UPDATE and the BIGINT version
+		// stays 0. courseReview_updatedWithSameValuesAgainstBigintColumn_versionNotIncremented pins the no-op for a
+		// direct entity update, and courseReview_winnerCommittedViaUpdateHandlerAgainstBigintColumn_staleRepositorySaveRejected
+		// routes a real change through the handler against this column; only here does the production use case meet the
+		// production-shaped BIGINT column on the value-preserving no-op path.
+		final CourseReview afterReload = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(afterReload, "version")).isEqualTo(0);
+		assertThat(((CourseRating) ReflectionTestUtils.getField(afterReload, "rating")).rating()).isEqualTo(4.0);
+		assertThat(((Comment) ReflectionTestUtils.getField(afterReload, "comment")).comment()).isEqualTo("comment");
+	}
+
+	@Test
 	void courseReview_updatingOneReviewAgainstBigintColumn_otherReviewsVersionUnchanged() throws Exception {
 		// given - two independently persisted course reviews on the migrated schema, both starting at version 0
 		final CourseReview firstSeed = newCourseReviewForMigratedSchema(4.0, "first review");
