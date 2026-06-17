@@ -811,6 +811,96 @@ public class OptimisticLockingTest {
 		assertThat(dto.rating()).isEqualTo(5.0);
 	}
 
+	@Test
+	void courseReview_largeVersionWithinIntRange_incrementsAndRoundTrips() {
+		// given - the seeded review whose version column is forced to a large value just inside Integer range,
+		// simulating a long-lived, heavily-updated row without performing two billion updates. Here the column
+		// Hibernate generates for the Integer @Version is itself INTEGER (field and column widths match), which
+		// isolates the @Version field's own behaviour from the Integer-field / BIGINT-column width mismatch the
+		// migrated-schema boundary tests deliberately entangle. The whole behaviour suite runs against this
+		// generated schema, yet none of it exercised the version near the top of its range.
+		final int largeVersion = 2_000_000_000; // < Integer.MAX_VALUE (2_147_483_647)
+		final Integer id = (Integer) ReflectionTestUtils
+				.getField(courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow(), "id");
+		entityManager.getEntityManager()
+				.createNativeQuery("UPDATE course_review SET version = ? WHERE id = ?")
+				.setParameter(1, largeVersion)
+				.setParameter(2, id)
+				.executeUpdate();
+		entityManager.clear();
+
+		// when - the row is loaded (reading the large value into the Integer field) and updated
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(review, "version")).isEqualTo(largeVersion);
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "large-version comment"));
+		courseReviewRepository.saveAndFlush(review);
+
+		// then - the increment round-trips through the INTEGER column without overflow at this point, and the
+		// business change is persisted alongside the bumped version
+		entityManager.clear();
+		final CourseReview reloaded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(largeVersion + 1);
+		final CourseReviewDTO dto = courseReviewRepository.listCourseReviews(COURSE_UUID).get(0);
+		assertThat(dto.rating()).isEqualTo(5.0);
+		assertThat(dto.comment()).isEqualTo("large-version comment");
+	}
+
+	@Test
+	void courseReview_versionAtIntegerMaxValue_readsBackAtBoundary() {
+		// given - the seeded review whose version column is forced to exactly Integer.MAX_VALUE, the largest
+		// value the Integer @Version field can represent, set directly via SQL because ordinary increments can
+		// never reach it. On the generated INTEGER column this is also the largest value the column itself holds.
+		final int maxIntVersion = Integer.MAX_VALUE; // 2_147_483_647
+		final Integer id = (Integer) ReflectionTestUtils
+				.getField(courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow(), "id");
+		entityManager.getEntityManager()
+				.createNativeQuery("UPDATE course_review SET version = ? WHERE id = ?")
+				.setParameter(1, maxIntVersion)
+				.setParameter(2, id)
+				.executeUpdate();
+		entityManager.clear();
+
+		// then - the boundary value round-trips out of the column into the Integer @Version field intact: reading
+		// a row that sits exactly at the field's maximum is not itself an error (the wrap only happens on the next
+		// increment, pinned by courseReview_versionAtIntegerMaxValue_incrementWrapsToIntegerMinValue)
+		final CourseReview reloaded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(Integer.MAX_VALUE);
+	}
+
+	@Test
+	void courseReview_versionAtIntegerMaxValue_incrementWrapsToIntegerMinValue() {
+		// given - the seeded review whose version column is forced to exactly Integer.MAX_VALUE, set directly via
+		// SQL because ordinary increments can never reach it
+		final int maxIntVersion = Integer.MAX_VALUE; // 2_147_483_647
+		final Integer id = (Integer) ReflectionTestUtils
+				.getField(courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow(), "id");
+		entityManager.getEntityManager()
+				.createNativeQuery("UPDATE course_review SET version = ? WHERE id = ?")
+				.setParameter(1, maxIntVersion)
+				.setParameter(2, id)
+				.executeUpdate();
+		entityManager.clear();
+
+		// when - the boundary row is loaded (reading MAX into the Integer field) and updated, so Hibernate computes
+		// the next optimistic-lock version as Integer.MAX_VALUE + 1
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(review, "version")).isEqualTo(Integer.MAX_VALUE);
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "wrapped comment"));
+		courseReviewRepository.saveAndFlush(review);
+
+		// then - incrementing from the boundary does not fail fast on the generated INTEGER column: the Integer
+		// @Version silently wraps on int overflow to Integer.MIN_VALUE, that wrapped (negative) value is stored
+		// and reads back intact alongside the persisted business change. This is the same wrap the migrated BIGINT
+		// slice documents, pinned here against the native INTEGER column to show the wrap is a property of the
+		// Integer @Version field itself, not an artefact of the wider BIGINT column.
+		entityManager.clear();
+		final CourseReview reloaded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(Integer.MIN_VALUE);
+		final CourseReviewDTO dto = courseReviewRepository.listCourseReviews(COURSE_UUID).get(0);
+		assertThat(dto.rating()).isEqualTo(5.0);
+		assertThat(dto.comment()).isEqualTo("wrapped comment");
+	}
+
 	// --- Reviewer -----------------------------------------------------------
 
 	@Test
@@ -1323,6 +1413,90 @@ public class OptimisticLockingTest {
 		assertThat(reviews.get(0).username()).isEqualTo("reviewer-renamed");
 		assertThat(courseReviewRepository.isReviewer(COURSE_REVIEW_UUID, "reviewer-renamed")).isTrue();
 		assertThat(courseReviewRepository.isReviewer(COURSE_REVIEW_UUID, "reviewer")).isFalse();
+	}
+
+	@Test
+	void reviewer_largeVersionWithinIntRange_incrementsAndRoundTrips() {
+		// given - a reviewer whose version column is forced to a large value just inside Integer range,
+		// simulating a long-lived, heavily-updated row without performing two billion updates. Hibernate maps
+		// the Integer @Version to an INTEGER column here (field and column widths match), so this pins the
+		// @Version field's own near-the-top-of-range behaviour without the Integer-field / BIGINT-column width
+		// mismatch the migrated-schema boundary tests deliberately entangle.
+		final int largeVersion = 2_000_000_000; // < Integer.MAX_VALUE (2_147_483_647)
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("large-version-reviewer"))).getId();
+		entityManager.getEntityManager()
+				.createNativeQuery("UPDATE reviewer SET version = ? WHERE id = ?")
+				.setParameter(1, largeVersion)
+				.setParameter(2, id)
+				.executeUpdate();
+		entityManager.clear();
+
+		// when - the row is loaded (reading the large value into the Integer field) and updated
+		final Reviewer reviewer = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reviewer, "version")).isEqualTo(largeVersion);
+		ReflectionTestUtils.setField(reviewer, "username", "large-version-reviewer-renamed");
+		reviewerRepository.saveAndFlush(reviewer);
+
+		// then - the increment round-trips through the INTEGER column without overflow at this point, alongside
+		// the persisted business change
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(largeVersion + 1);
+		assertThat(ReflectionTestUtils.getField(reloaded, "username")).isEqualTo("large-version-reviewer-renamed");
+	}
+
+	@Test
+	void reviewer_versionAtIntegerMaxValue_readsBackAtBoundary() {
+		// given - a reviewer whose version column is forced to exactly Integer.MAX_VALUE, the largest value the
+		// Integer @Version field can represent, set directly via SQL because ordinary increments can never reach it
+		final int maxIntVersion = Integer.MAX_VALUE; // 2_147_483_647
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("max-version-reviewer"))).getId();
+		entityManager.getEntityManager()
+				.createNativeQuery("UPDATE reviewer SET version = ? WHERE id = ?")
+				.setParameter(1, maxIntVersion)
+				.setParameter(2, id)
+				.executeUpdate();
+		entityManager.clear();
+
+		// then - the boundary value round-trips out of the column into the Integer @Version field intact: reading
+		// a row sitting exactly at the field's maximum is not itself an error (the wrap only happens on the next
+		// increment, pinned by reviewer_versionAtIntegerMaxValue_incrementWrapsToIntegerMinValue)
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(Integer.MAX_VALUE);
+	}
+
+	@Test
+	void reviewer_versionAtIntegerMaxValue_incrementWrapsToIntegerMinValue() {
+		// given - a reviewer whose version column is forced to exactly Integer.MAX_VALUE, set directly via SQL
+		// because ordinary increments can never reach it
+		final int maxIntVersion = Integer.MAX_VALUE; // 2_147_483_647
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("max-increment-reviewer"))).getId();
+		entityManager.getEntityManager()
+				.createNativeQuery("UPDATE reviewer SET version = ? WHERE id = ?")
+				.setParameter(1, maxIntVersion)
+				.setParameter(2, id)
+				.executeUpdate();
+		entityManager.clear();
+
+		// when - the boundary row is loaded (reading MAX into the Integer field) and updated, so Hibernate computes
+		// the next optimistic-lock version as Integer.MAX_VALUE + 1
+		final Reviewer reviewer = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reviewer, "version")).isEqualTo(Integer.MAX_VALUE);
+		ReflectionTestUtils.setField(reviewer, "username", "max-increment-reviewer-renamed");
+		reviewerRepository.saveAndFlush(reviewer);
+
+		// then - incrementing from the boundary does not fail fast on the generated INTEGER column: the Integer
+		// @Version silently wraps on int overflow to Integer.MIN_VALUE, that wrapped (negative) value is stored
+		// and reads back intact alongside the persisted business change. This is the same wrap the migrated BIGINT
+		// slice documents, pinned here against the native INTEGER column to show the wrap is a property of the
+		// Integer @Version field itself, not an artefact of the wider BIGINT column.
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(Integer.MIN_VALUE);
+		assertThat(ReflectionTestUtils.getField(reloaded, "username")).isEqualTo("max-increment-reviewer-renamed");
 	}
 
 	// --- ReviewableCourse ---------------------------------------------------
