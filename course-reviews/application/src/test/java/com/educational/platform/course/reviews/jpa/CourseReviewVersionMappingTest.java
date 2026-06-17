@@ -2,6 +2,7 @@ package com.educational.platform.course.reviews.jpa;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Set;
 import java.util.UUID;
 
 import jakarta.persistence.EntityManagerFactory;
@@ -66,6 +67,28 @@ public class CourseReviewVersionMappingTest {
 	@Test
 	void reviewableCourse_entityMapping_declaresIntegerOptimisticLockVersion() {
 		assertVersionAttribute(ReviewableCourse.class);
+	}
+
+	@Test
+	void everyModuleEntity_declaresIntegerOptimisticLockVersion() {
+		// when - every managed entity type in this bounded context's persistence unit is inspected. The
+		// per-class tests above pin the three aggregates by name; this scans the whole metamodel instead, so
+		// it keeps holding if a class is renamed and - more importantly - fails if a future @Entity is added
+		// to the module without the @Version this PR established for every aggregate here (CourseRating and
+		// Comment are @Embeddable, so getEntities() returns only the @Entity aggregates).
+		final Set<EntityType<?>> entities = entityManagerFactory.getMetamodel().getEntities();
+
+		// then - the unit actually has entities to check (so the assertion is not vacuously satisfied), and
+		// each one carries an Integer optimistic-lock version attribute named "version"
+		assertThat(entities).isNotEmpty();
+		for (final EntityType<?> entityType : entities) {
+			assertThat(entityType.hasVersionAttribute())
+					.as("%s should declare a @Version optimistic-lock attribute", entityType.getName())
+					.isTrue();
+			final SingularAttribute<?, Integer> version = entityType.getDeclaredVersion(Integer.class);
+			assertThat(version.getName()).as("version attribute name on %s", entityType.getName()).isEqualTo("version");
+			assertThat(version.isVersion()).as("version attribute flagged on %s", entityType.getName()).isTrue();
+		}
 	}
 
 	@Test
