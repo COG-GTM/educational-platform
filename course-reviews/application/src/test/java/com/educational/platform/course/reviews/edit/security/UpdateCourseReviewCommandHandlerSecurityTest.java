@@ -1,24 +1,32 @@
 package com.educational.platform.course.reviews.edit.security;
 
+import com.educational.platform.course.reviews.Comment;
+import com.educational.platform.course.reviews.CourseRating;
 import com.educational.platform.course.reviews.CourseReview;
 import com.educational.platform.course.reviews.CourseReviewRepository;
 import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommand;
 import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommandHandler;
 
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
+import org.hibernate.StaleObjectStateException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.jdbc.Sql;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import jakarta.validation.ConstraintViolationException;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -50,6 +58,146 @@ public class UpdateCourseReviewCommandHandlerSecurityTest {
     }
 
     @Test
+    @WithMockUser(username = "reviewer", roles = "STUDENT")
+    void handle_userIsReviewer_versionIncrementedFromSeededZero() {
+        // given - the seeded review starts at version 0 (course_review.sql)
+        var command = new UpdateCourseReviewCommand(uuid, 3.0, "updated comment");
+
+        // when - the authorized reviewer updates it through the fully assembled application
+        sut.handle(command);
+
+        // then - the @Version added by this PR is bumped to 1 end-to-end through the real Spring context,
+        // security authorization, command handler and JPA. Every version-increment-via-handler test is a
+        // @DataJpaTest slice, so this is the only assertion that the bump happens on the assembled application.
+        final CourseReview saved = repository.findByUuid(uuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(saved, "version")).isEqualTo(1);
+    }
+
+    @Test
+    @WithMockUser(username = "reviewer", roles = "STUDENT")
+    void handle_userIsReviewerUpdatesTwice_versionProgressesToTwo() {
+        // given - the seeded review starts at version 0 (course_review.sql)
+        // when - the authorized reviewer updates it twice in a row through the fully assembled application;
+        // this test class is not @Transactional, so each handle call is its own committed transaction
+        sut.handle(new UpdateCourseReviewCommand(uuid, 3.0, "first update"));
+        sut.handle(new UpdateCourseReviewCommand(uuid, 5.0, "second update"));
+
+        // then - each successful update advances the @Version, so it reaches 2 end-to-end, and the latest values
+        // are the ones persisted. handle_userIsReviewer_versionIncrementedFromSeededZero only proves the first
+        // 0 -> 1 bump on the assembled application; that repeated updates keep incrementing (1 -> 2) through the
+        // real Spring context, security and JPA was only ever covered by @DataJpaTest slices until now.
+        final CourseReview saved = repository.findByUuid(uuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(saved, "version")).isEqualTo(2);
+        assertThat(saved)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0))
+                .hasFieldOrPropertyWithValue("comment", new Comment("second update"));
+    }
+
+    @Test
+    @WithMockUser(username = "reviewer", roles = "STUDENT")
+    void handle_winnerCommittedThenStaleSave_optimisticLockingFailureOnAssembledApp() {
+        // given - a stale snapshot of the seeded review (version 0), read in its own committed transaction and
+        // therefore detached. This test class is not @Transactional, so the snapshot keeps version 0 while the
+        // database row moves on underneath it.
+        final CourseReview stale = repository.findByUuid(uuid).orElseThrow();
+        final Object reviewId = ReflectionTestUtils.getField(stale, "id");
+
+        // and - the winning update is committed through the real handler, advancing the persisted version to 1
+        sut.handle(new UpdateCourseReviewCommand(uuid, 5.0, "winner"));
+
+        // when - the stale snapshot (still version 0) tries to overwrite the row through the repository
+        stale.update(new UpdateCourseReviewCommand(uuid, 1.0, "stale loses"));
+
+        // then - the optimistic-lock guard fires across real committed transactions on the fully assembled
+        // application: the version-specific failure names the conflicting entity and row and is rooted in
+        // Hibernate's stale-version detection. Every other conflict proof is a @DataJpaTest slice (single
+        // transaction + detach) or a Mockito stub, so the assembled application's failure path was unverified -
+        // only its success path (version increments) was.
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> repository.saveAndFlush(stale))
+                .satisfies(ex -> {
+                    assertThat(ex.getPersistentClassName()).isEqualTo(CourseReview.class.getName());
+                    assertThat(ex.getIdentifier()).isEqualTo(reviewId);
+                })
+                .withRootCauseInstanceOf(StaleObjectStateException.class);
+
+        // and - the winner's values are the ones that survive; the rejected stale write changed nothing
+        final CourseReview reloaded = repository.findByUuid(uuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
+        assertThat(reloaded)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0))
+                .hasFieldOrPropertyWithValue("comment", new Comment("winner"));
+    }
+
+    @Test
+    @WithMockUser(username = "reviewer", roles = "STUDENT")
+    void handle_staleUpdateConflict_recoverableByRetryThroughHandler() {
+        // given - a stale snapshot of the seeded review (version 0), detached in its own committed transaction
+        final CourseReview stale = repository.findByUuid(uuid).orElseThrow();
+
+        // and - a concurrent winner commits through the real handler, advancing the persisted version to 1
+        sut.handle(new UpdateCourseReviewCommand(uuid, 5.0, "winner"));
+
+        // and - the stale write is rejected with an optimistic-lock failure
+        stale.update(new UpdateCourseReviewCommand(uuid, 1.0, "stale loses"));
+        assertThatExceptionOfType(OptimisticLockingFailureException.class)
+                .isThrownBy(() -> repository.saveAndFlush(stale));
+
+        // when - the loser recovers the way optimistic locking is meant to be used: it re-runs the update through
+        // the handler, which reads the current row (version 1) afresh in a new transaction and writes on top of it
+        sut.handle(new UpdateCourseReviewCommand(uuid, 2.0, "retried"));
+
+        // then - the conflict is recoverable end-to-end on the assembled application: the retry succeeds, the
+        // version progresses to 2 and the retried values win, proving a caught optimistic-lock failure leaves the
+        // application in a consistent, writable state rather than a wedged one. No existing test exercises the
+        // fail-then-retry round trip; the @DataJpaTest slices cannot, since a failed flush poisons their single
+        // shared transaction, whereas here each handler call is its own committed transaction.
+        final CourseReview reloaded = repository.findByUuid(uuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
+        assertThat(reloaded)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(2.0))
+                .hasFieldOrPropertyWithValue("comment", new Comment("retried"));
+    }
+
+    @Test
+    @WithMockUser(username = "reviewer", roles = "STUDENT")
+    void handle_userIsReviewerInvalidRating_versionNotIncremented() {
+        // given - the seeded review at version 0 (rating 4, comment "comment") and an authorized reviewer whose
+        // command has a null rating, violating @NotNull
+        var command = new UpdateCourseReviewCommand(uuid, null, "updated comment");
+
+        // when - authorization passes but validation rejects the command
+        final ThrowingCallable updateAction = () -> sut.handle(command);
+        assertThatThrownBy(updateAction).isInstanceOf(ConstraintViolationException.class);
+
+        // then - validation runs before the version-bumping save, so the rejected update neither persists its
+        // change nor advances the optimistic-lock version: the seeded version stays 0 and the fields are unchanged.
+        // handle_anotherReviewer_versionNotIncremented proves version-stays-0 for the authorization path; this proves
+        // it for the validation path on the assembled application.
+        final CourseReview saved = repository.findByUuid(uuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(saved, "version")).isEqualTo(0);
+        assertThat(saved)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(4.0))
+                .hasFieldOrPropertyWithValue("comment", new Comment("comment"));
+    }
+
+    @Test
+    @WithMockUser(username = "another-reviewer", roles = "STUDENT")
+    void handle_anotherReviewer_versionNotIncremented() {
+        // given - the seeded review at version 0, updated by a student who is not its author
+        var command = new UpdateCourseReviewCommand(uuid, 3.0, "updated comment");
+
+        // when - the unauthorized update is rejected (see handle_anotherReviewer_accessDeniedException)
+        final ThrowingCallable updateAction = () -> sut.handle(command);
+        assertThatThrownBy(updateAction).isInstanceOf(AccessDeniedException.class);
+
+        // then - authorization runs before the version-bumping save, so the denied request neither persists
+        // its change nor advances the optimistic-lock version: the seeded version stays 0
+        final CourseReview saved = repository.findByUuid(uuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(saved, "version")).isEqualTo(0);
+    }
+
+    @Test
     @WithMockUser(username = "another-reviewer", roles = "STUDENT")
     void handle_anotherReviewer_accessDeniedException() {
         // given
@@ -75,5 +223,25 @@ public class UpdateCourseReviewCommandHandlerSecurityTest {
         // then
         assertThatThrownBy(updateAction)
                 .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithMockUser(roles = "TEACHER")
+    void handle_userIsTeacher_versionNotIncremented() {
+        // given - the seeded review at version 0, updated by a teacher who is denied by the hasRole('STUDENT')
+        // branch of the @PreAuthorize expression (a different authorization branch than the ownership check)
+        var command = new UpdateCourseReviewCommand(uuid, 3.0, "updated comment");
+
+        // when - the unauthorized update is rejected (see handle_userIsTeacher_accessDeniedException)
+        final ThrowingCallable updateAction = () -> sut.handle(command);
+        assertThatThrownBy(updateAction).isInstanceOf(AccessDeniedException.class);
+
+        // then - authorization runs before the version-bumping save, so the denied request neither persists its
+        // change nor advances the optimistic-lock version: the seeded version stays 0.
+        // handle_anotherReviewer_versionNotIncremented pins this for the ownership branch (a non-author STUDENT);
+        // this pins it for the role branch (a TEACHER), the only authorization denial whose version-untouched
+        // guarantee was not yet asserted - handle_userIsTeacher_accessDeniedException checks only the exception.
+        final CourseReview saved = repository.findByUuid(uuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(saved, "version")).isEqualTo(0);
     }
 }

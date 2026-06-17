@@ -64,11 +64,18 @@ public class CourseReviewFactoryTest {
         // when
         final CourseReview courseReview = sut.createFrom(command);
 
-        // then
-        // todo recheck course and reviewer references
+        // then - the factory copies the command's rating/comment and wires the resolved reviewable course
+        // (id 11) and reviewer (id 22) as the foreign-key references the optimistic-lock isolation tests rely
+        // on being independent. It also leaves the @Version this PR added unmanaged: the factory never seeds a
+        // version, so a freshly constructed (transient) review still has a null version here - Hibernate
+        // initialises it to 0 on persist. No other test pins the factory's treatment of these references or
+        // the new version field; the slice tests assert the resulting persisted values, not this construction.
         assertThat(courseReview)
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(4.0))
-                .hasFieldOrPropertyWithValue("comment", new Comment("comment"));
+                .hasFieldOrPropertyWithValue("comment", new Comment("comment"))
+                .hasFieldOrPropertyWithValue("course", 11)
+                .hasFieldOrPropertyWithValue("reviewer", 22);
+        assertThat(ReflectionTestUtils.getField(courseReview, "version")).isNull();
     }
 
 
