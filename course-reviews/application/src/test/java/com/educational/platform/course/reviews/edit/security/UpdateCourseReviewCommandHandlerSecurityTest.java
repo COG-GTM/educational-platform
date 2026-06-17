@@ -8,10 +8,13 @@ import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommand;
 import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommandHandler;
 
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
+import org.hibernate.StaleObjectStateException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -23,6 +26,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -87,6 +91,72 @@ public class UpdateCourseReviewCommandHandlerSecurityTest {
         assertThat(saved)
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0))
                 .hasFieldOrPropertyWithValue("comment", new Comment("second update"));
+    }
+
+    @Test
+    @WithMockUser(username = "reviewer", roles = "STUDENT")
+    void handle_winnerCommittedThenStaleSave_optimisticLockingFailureOnAssembledApp() {
+        // given - a stale snapshot of the seeded review (version 0), read in its own committed transaction and
+        // therefore detached. This test class is not @Transactional, so the snapshot keeps version 0 while the
+        // database row moves on underneath it.
+        final CourseReview stale = repository.findByUuid(uuid).orElseThrow();
+        final Object reviewId = ReflectionTestUtils.getField(stale, "id");
+
+        // and - the winning update is committed through the real handler, advancing the persisted version to 1
+        sut.handle(new UpdateCourseReviewCommand(uuid, 5.0, "winner"));
+
+        // when - the stale snapshot (still version 0) tries to overwrite the row through the repository
+        stale.update(new UpdateCourseReviewCommand(uuid, 1.0, "stale loses"));
+
+        // then - the optimistic-lock guard fires across real committed transactions on the fully assembled
+        // application: the version-specific failure names the conflicting entity and row and is rooted in
+        // Hibernate's stale-version detection. Every other conflict proof is a @DataJpaTest slice (single
+        // transaction + detach) or a Mockito stub, so the assembled application's failure path was unverified -
+        // only its success path (version increments) was.
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> repository.saveAndFlush(stale))
+                .satisfies(ex -> {
+                    assertThat(ex.getPersistentClassName()).isEqualTo(CourseReview.class.getName());
+                    assertThat(ex.getIdentifier()).isEqualTo(reviewId);
+                })
+                .withRootCauseInstanceOf(StaleObjectStateException.class);
+
+        // and - the winner's values are the ones that survive; the rejected stale write changed nothing
+        final CourseReview reloaded = repository.findByUuid(uuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
+        assertThat(reloaded)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(5.0))
+                .hasFieldOrPropertyWithValue("comment", new Comment("winner"));
+    }
+
+    @Test
+    @WithMockUser(username = "reviewer", roles = "STUDENT")
+    void handle_staleUpdateConflict_recoverableByRetryThroughHandler() {
+        // given - a stale snapshot of the seeded review (version 0), detached in its own committed transaction
+        final CourseReview stale = repository.findByUuid(uuid).orElseThrow();
+
+        // and - a concurrent winner commits through the real handler, advancing the persisted version to 1
+        sut.handle(new UpdateCourseReviewCommand(uuid, 5.0, "winner"));
+
+        // and - the stale write is rejected with an optimistic-lock failure
+        stale.update(new UpdateCourseReviewCommand(uuid, 1.0, "stale loses"));
+        assertThatExceptionOfType(OptimisticLockingFailureException.class)
+                .isThrownBy(() -> repository.saveAndFlush(stale));
+
+        // when - the loser recovers the way optimistic locking is meant to be used: it re-runs the update through
+        // the handler, which reads the current row (version 1) afresh in a new transaction and writes on top of it
+        sut.handle(new UpdateCourseReviewCommand(uuid, 2.0, "retried"));
+
+        // then - the conflict is recoverable end-to-end on the assembled application: the retry succeeds, the
+        // version progresses to 2 and the retried values win, proving a caught optimistic-lock failure leaves the
+        // application in a consistent, writable state rather than a wedged one. No existing test exercises the
+        // fail-then-retry round trip; the @DataJpaTest slices cannot, since a failed flush poisons their single
+        // shared transaction, whereas here each handler call is its own committed transaction.
+        final CourseReview reloaded = repository.findByUuid(uuid).orElseThrow();
+        assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(2);
+        assertThat(reloaded)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(2.0))
+                .hasFieldOrPropertyWithValue("comment", new Comment("retried"));
     }
 
     @Test
