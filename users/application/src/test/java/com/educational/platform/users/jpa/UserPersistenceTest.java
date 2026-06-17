@@ -230,6 +230,27 @@ public class UserPersistenceTest {
         assertThat(reloaded).hasFieldOrPropertyWithValue("version", 1);
     }
 
+    @Test
+    void findById_teacher_afterPersist_preservesTeacherRoleProjection() {
+        // given a teacher persisted with the new @Version column in place
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        final int id = idOf("teacher");
+        entityManager.clear();
+
+        // when it is read back through the primary-key finder
+        final User reloaded = repository.findById(id).orElseThrow();
+
+        // then the non-default role maps through both by-id projections unchanged by @Version, and a freshly
+        // persisted row reports version 0. This closes the only open cell of the by-id read path: findById is
+        // otherwise pinned only for the student role (findById_afterPersist_... and findById_afterVersionIncrement_...),
+        // while the teacher role through a read path is pinned only for findByUsername (persistAndReload_preservesTeacherRoleProjection).
+        assertThat(reloaded).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(reloaded.toDTO().role()).isEqualTo(RoleDTO.ROLE_TEACHER);
+        assertThat(reloaded.toUserDetails().getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactly(Role.ROLE_TEACHER.getAuthority());
+    }
+
     private int idOf(final String username) {
         return ((Number) entityManager
                 .createNativeQuery("SELECT id FROM custom_user WHERE username = :username")
