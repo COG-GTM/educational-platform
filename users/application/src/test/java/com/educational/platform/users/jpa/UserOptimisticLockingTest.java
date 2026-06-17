@@ -15,6 +15,12 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
@@ -29,10 +35,31 @@ public class UserOptimisticLockingTest {
     @Autowired
     private UserRepository repository;
 
+    @Autowired
+    private DataSource dataSource;
+
     @PersistenceContext
     private EntityManager entityManager;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+
+    @Test
+    void schemaUnderTest_isTheHibernateGeneratedIntegerColumn_notTheMigratedBigInt() throws SQLException {
+        // precondition that gives every other test here its meaning: the default @DataJpaTest slice runs the
+        // entity against the INTEGER version column Hibernate derives from the Integer @Version field
+        // (ddl-auto=create-drop), not the migration's BIGINT column. This is the mirror of
+        // UserOptimisticLockingOnMigratedSchemaTest.schemaUnderTest_isTheMigratedBigIntColumn_notAHibernateGeneratedOne:
+        // together they pin that the two locking suites genuinely exercise different column types rather than
+        // silently collapsing onto the same schema (e.g. were the migration accidentally applied in this slice).
+        try (Connection connection = dataSource.getConnection();
+             ResultSet columns = connection.getMetaData().getColumns(null, null, "CUSTOM_USER", "VERSION")) {
+            assertThat(columns.next()).as("version column exists on the Hibernate-generated custom_user").isTrue();
+            assertThat(columns.getInt("DATA_TYPE"))
+                    .as("version is the INTEGER Hibernate derives from the Integer field, not the migration's BIGINT")
+                    .isEqualTo(Types.INTEGER)
+                    .isNotEqualTo(Types.BIGINT);
+        }
+    }
 
     @Test
     void newUser_beforePersist_hasNullVersion() {
@@ -816,6 +843,37 @@ public class UserOptimisticLockingTest {
         // then the maximum representable Integer version materialises intact onto the Integer-typed @Version field
         assertThat(reloaded).extracting("version").isInstanceOf(Integer.class);
         assertThat(reloaded).hasFieldOrPropertyWithValue("version", Integer.MAX_VALUE);
+    }
+
+    @Test
+    void update_staleUserNearIntegerMaxValueBaseline_throwsOptimisticLockException() {
+        // given a user loaded at the top of the INTEGER column's range; every other stale test here loads a
+        // small (0/2) baseline
+        repository.saveAndFlush(newUser());
+        entityManager.createNativeQuery("UPDATE custom_user SET version = :version WHERE username = :username")
+                .setParameter("version", Integer.MAX_VALUE - 1)
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+        assertThat(stale).hasFieldOrPropertyWithValue("version", Integer.MAX_VALUE - 1);
+
+        // and a concurrent transaction advances the row to Integer.MAX_VALUE - the largest value this INTEGER
+        // column can hold. This is the Hibernate-INTEGER-schema counterpart to the migrated suite's
+        // staleWriteFromIntegerMaxValueBaseline_onMigratedSchema, which advances one *past* Integer.MAX_VALUE (a
+        // value only the BIGINT column can store); here the conflict is pinned at the boundary the INTEGER column
+        // can actually represent.
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is written back, the version check still fires from a near-max-Integer baseline:
+        // detection compares the loaded version against the row and is not limited to small versions
+        assertThatExceptionOfType(OptimisticLockException.class)
+                .isThrownBy(() -> {
+                    entityManager.lock(stale, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+                    repository.flush();
+                });
     }
 
     @Test

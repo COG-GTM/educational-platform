@@ -8,6 +8,7 @@ import com.educational.platform.users.UserRepository;
 import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
 import com.educational.platform.users.security.JwtTokenProvider;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -154,6 +155,36 @@ class UserRegistrationVersioningTest {
         // (handle_validCommand_persistsUserWithInitialVersionZero only exercises a single registration)
         assertThat(repository.findByUsername(USERNAME).orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
         assertThat(repository.findByUsername("other").orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
+    }
+
+    @Test
+    void handle_whenAnotherUsersVersionHasAdvanced_persistsNewUserAtIndependentVersionZero() {
+        // given a user registered through the real handler whose optimistic-lock version has since advanced to 1
+        handler.handle(command(USERNAME, EMAIL));
+        entityManager.flush();
+        forceIncrementVersionOf(USERNAME);
+
+        // when a brand-new user is subsequently registered through the same production write path
+        handler.handle(command("other", "other@gmail.com"));
+
+        // force a genuine DB round trip so each version is read back from its row
+        entityManager.flush();
+        entityManager.clear();
+
+        // then version *initialisation* is per-row through the handler: the new row starts at 0 regardless of the
+        // advanced version on the pre-existing row, while that row keeps its advanced version. This is the
+        // production-handler counterpart to UserOptimisticLockingTest.save_newUser_whenAnotherUsersVersionHasAdvanced_startsAtZero,
+        // and is distinct from handle_distinctUsers_eachPersistedAtIndependentVersionZero, which only proves two
+        // *fresh* inserts both start at 0 (write isolation) without any pre-existing row having advanced first.
+        assertThat(repository.findByUsername("other").orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(repository.findByUsername(USERNAME).orElseThrow()).hasFieldOrPropertyWithValue("version", 1);
+    }
+
+    private void forceIncrementVersionOf(final String username) {
+        entityManager.clear();
+        final User loaded = repository.findByUsername(username).orElseThrow();
+        entityManager.lock(loaded, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        repository.flush();
     }
 
     private UserRegistrationCommand command(final String username, final String email) {
