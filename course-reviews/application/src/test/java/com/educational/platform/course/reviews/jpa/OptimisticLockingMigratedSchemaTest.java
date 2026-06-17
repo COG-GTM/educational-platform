@@ -130,6 +130,29 @@ public class OptimisticLockingMigratedSchemaTest {
 	}
 
 	@Test
+	void reviewer_updatedAgainstBigintColumn_newUsernamePersistedToDatabase() {
+		// given - a reviewer persisted at version 0, then renamed and flushed against the migrated schema
+		final Integer id = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("migrated-reviewer"))).getId();
+		entityManager.clear();
+		final Reviewer reviewer = reviewerRepository.findById(id).orElseThrow();
+		ReflectionTestUtils.setField(reviewer, "username", "migrated-reviewer-renamed");
+		reviewerRepository.saveAndFlush(reviewer);
+
+		// when - the persistence context is cleared and the row reloaded from the migrated schema
+		entityManager.clear();
+		final Reviewer reloaded = reviewerRepository.findById(id).orElseThrow();
+
+		// then - a plain single update wrote the new field value alongside the version bump through the BIGINT
+		// column, not the version alone. reviewer_updatedAgainstBigintColumn_versionIncrementsAndPersists pins
+		// only the version on this path, so the business-value round-trip on a single update against the
+		// production-shaped column was otherwise asserted only by the concurrent winner-persisted test - the
+		// Hibernate slice keeps reviewer_updated_newUsernamePersistedToDatabase as its standalone counterpart.
+		assertThat(ReflectionTestUtils.getField(reloaded, "username")).isEqualTo("migrated-reviewer-renamed");
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
+	}
+
+	@Test
 	void reviewer_persistedAgainstBigintColumn_versionZeroReadBackFromDatabase() {
 		// given - a reviewer persisted with its Integer @Version written into the migrated BIGINT column
 		final Integer id = reviewerRepository
@@ -545,6 +568,34 @@ public class OptimisticLockingMigratedSchemaTest {
 		// then - the increment round-trips through the BIGINT column
 		entityManager.clear();
 		final CourseReview afterReload = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(afterReload, "version")).isEqualTo(1);
+	}
+
+	@Test
+	void courseReview_updatedAgainstBigintColumn_newRatingAndCommentPersistedToDatabase() throws Exception {
+		// given - a persisted course review at version 0 on the migrated schema
+		final CourseReview review = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = review.toIdentifier();
+		courseReviewRepository.saveAndFlush(review);
+		entityManager.clear();
+
+		// when - it is updated once through the domain method and flushed
+		final CourseReview reloaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		reloaded.update(new UpdateCourseReviewCommand(uuid, 5.0, "updated comment"));
+		courseReviewRepository.saveAndFlush(reloaded);
+
+		// and - the persistence context is cleared and the row reloaded through the entity (listCourseReviews
+		// selects reviewable_course.original_course_id, which the migrated reviewable_course table does not expose)
+		entityManager.clear();
+		final CourseReview afterReload = courseReviewRepository.findByUuid(uuid).orElseThrow();
+
+		// then - a plain single update persisted the new field values alongside the version bump through the BIGINT
+		// column, not only the version. courseReview_updatedAgainstBigintColumn_versionIncrementsAndPersists pins
+		// only the version on this path for the headline aggregate, so the business-value round-trip on a single
+		// update against the production-shaped column was otherwise asserted only by the concurrent winner-persisted
+		// test - the Hibernate slice keeps courseReview_updated_newRatingAndCommentPersistedToDatabase standalone.
+		assertThat(((CourseRating) ReflectionTestUtils.getField(afterReload, "rating")).rating()).isEqualTo(5.0);
+		assertThat(((Comment) ReflectionTestUtils.getField(afterReload, "comment")).comment()).isEqualTo("updated comment");
 		assertThat(ReflectionTestUtils.getField(afterReload, "version")).isEqualTo(1);
 	}
 
