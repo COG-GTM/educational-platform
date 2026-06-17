@@ -114,6 +114,23 @@ class UserOptimisticLockingOnMigratedSchemaTest {
     }
 
     @Test
+    void save_newUser_managedVersionIsIntegerTyped_onMigratedSchema() {
+        // given / when a transient user is persisted onto the migrated BIGINT column
+        final User saved = repository.saveAndFlush(newUser());
+
+        // then JPA populates the freshly-INSERTed managed instance's @Version as an Integer even though the backing
+        // column is BIGINT - the meaningful side of the intentional Integer<->BIGINT decoupling, pinned at the
+        // persist lifecycle point (no SELECT round trip). persist_onMigratedSchema_initializesVersionToZero pins the
+        // *value* (0) on this instance but not its runtime type; legacyRowInsertedWithoutVersion_... and
+        // write_onMigratedSchema_incrementsVersionAndReadsBackAsInteger pin the Integer typing only on a
+        // SELECT-loaded / post-write-reloaded instance, never the one JPA populates during the INSERT itself.
+        // UserOptimisticLockingTest.save_newUser_managedVersionIsIntegerTyped pins this on the Hibernate-generated
+        // INTEGER column, where the assertion is trivial; this is its missing production-schema counterpart, where the
+        // entity field type and the column type genuinely differ.
+        assertThat(saved).extracting("version").isInstanceOf(Integer.class);
+    }
+
+    @Test
     void legacyRowInsertedWithoutVersion_onMigratedSchema_loadsAtZeroAndParticipatesInOptimisticLocking() {
         // given a row inserted directly into the migrated table without supplying a version - the shape of a
         // pre-existing/legacy row the upgrade backfills via the column's DEFAULT 0, rather than one the
@@ -181,6 +198,27 @@ class UserOptimisticLockingOnMigratedSchemaTest {
                     entityManager.lock(stale, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
                     repository.flush();
                 });
+    }
+
+    @Test
+    void staleManagedInstance_holdsOutdatedVersion_afterConcurrentModification_onMigratedSchema() {
+        // given a persisted user loaded into the context at version 0 from the migrated schema
+        repository.saveAndFlush(newUser());
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+
+        // when a concurrent transaction advances the row's version to 1 on the BIGINT column
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // then the in-context instance still reports the version it was loaded with while the row has moved on - the
+        // concurrent advance is not auto-reflected onto the managed instance on read, only surfaced on the next flush
+        // (the divergence staleWrite_onMigratedSchema_... then detects). This is the production-schema counterpart to
+        // UserOptimisticLockingTest.staleUser_holdsOutdatedVersion_afterConcurrentModification, which pins this
+        // load-time divergence only on the Hibernate-generated INTEGER schema.
+        assertThat(stale).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(1L);
     }
 
     @Test
