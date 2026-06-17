@@ -1336,6 +1336,86 @@ public class OptimisticLockingMigratedSchemaTest {
 		assertThat(courseReviewRepository.findByUuid(uuid)).isEmpty();
 	}
 
+	@Test
+	void reviewer_versionBumped_isReviewerQueryStillResolvesAcrossBigintJoin() throws Exception {
+		// given - a course review on the migrated schema wired to a reviewer with a known username, both at version 0
+		final String originalUsername = "isReviewer-reviewer-" + UUID.randomUUID();
+		final Integer reviewerId = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand(originalUsername))).getId();
+		final UUID reviewUuid = persistMigratedCourseReviewForReviewer(reviewerId);
+		entityManager.clear();
+
+		// baseline - the course_review -> reviewer join resolves the seeded reviewer on the migrated BIGINT schema
+		assertThat(courseReviewRepository.isReviewer(reviewUuid, originalUsername)).isTrue();
+
+		// when - the joined reviewer parent is renamed, bumping its BIGINT version 0 -> 1
+		final String renamedUsername = "isReviewer-reviewer-renamed-" + UUID.randomUUID();
+		final Reviewer reloadedReviewer = reviewerRepository.findById(reviewerId).orElseThrow();
+		ReflectionTestUtils.setField(reloadedReviewer, "username", renamedUsername);
+		reviewerRepository.saveAndFlush(reloadedReviewer);
+		entityManager.clear();
+
+		// then - the reviewer row really advanced past version 0, and the course_review -> reviewer join is
+		// undisturbed by the BIGINT version bump: isReviewer resolves the now-current username and rejects the
+		// stale one. The Hibernate slice proves this on the INTEGER column
+		// (reviewer_versionBumped_listCourseReviewsAndIsReviewerStillResolveAcrossJoin), but the migrated slice never
+		// exercised a read query, so the read path was unverified against the production-shaped BIGINT column.
+		// isReviewer is the query that can run here: listCourseReviews projects reviewable_course.original_course_id,
+		// which the migrated reviewable_course table does not expose.
+		assertThat(ReflectionTestUtils.getField(
+				reviewerRepository.findById(reviewerId).orElseThrow(), "version")).isEqualTo(1);
+		assertThat(courseReviewRepository.isReviewer(reviewUuid, renamedUsername)).isTrue();
+		assertThat(courseReviewRepository.isReviewer(reviewUuid, originalUsername)).isFalse();
+	}
+
+	@Test
+	void courseReview_versionBumped_isReviewerQueryStillResolvesAgainstBigintColumn() throws Exception {
+		// given - a course review on the migrated schema wired to a reviewer with a known username, both at version 0
+		final String username = "isReviewer-reviewer-" + UUID.randomUUID();
+		final Integer reviewerId = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand(username))).getId();
+		final UUID reviewUuid = persistMigratedCourseReviewForReviewer(reviewerId);
+		entityManager.clear();
+
+		// when - the review itself is updated, bumping its own BIGINT version 0 -> 1
+		final CourseReview reloaded = courseReviewRepository.findByUuid(reviewUuid).orElseThrow();
+		reloaded.update(new UpdateCourseReviewCommand(reviewUuid, 5.0, "updated comment"));
+		courseReviewRepository.saveAndFlush(reloaded);
+		entityManager.clear();
+
+		// then - the review row really advanced past version 0, and bumping the child course_review version leaves
+		// the course_review -> reviewer join intact on the BIGINT column: isReviewer still resolves the reviewer and
+		// rejects a non-reviewer. The child-side counterpart of the test above, mirroring the Hibernate slice's
+		// courseReview_updatedBumpingVersion_isReviewerQueryStillResolves against the production-shaped column.
+		assertThat(ReflectionTestUtils.getField(
+				courseReviewRepository.findByUuid(reviewUuid).orElseThrow(), "version")).isEqualTo(1);
+		assertThat(courseReviewRepository.isReviewer(reviewUuid, username)).isTrue();
+		assertThat(courseReviewRepository.isReviewer(reviewUuid, "not-the-reviewer")).isFalse();
+	}
+
+	/**
+	 * Persists a {@link CourseReview} bound to the given reviewer (and a freshly created reviewable-course FK parent)
+	 * on the migrated schema, returning its uuid. Used by the {@code isReviewer} read-query tests, which need the
+	 * reviewer's id captured so its row can be bumped independently of {@link #newCourseReviewForMigratedSchema}.
+	 */
+	private UUID persistMigratedCourseReviewForReviewer(Integer reviewerId) throws Exception {
+		entityManager.getEntityManager()
+				.createNativeQuery("INSERT INTO reviewable_course (uuid) VALUES (?)")
+				.setParameter(1, UUID.randomUUID())
+				.executeUpdate();
+		final Number courseId = (Number) entityManager.getEntityManager()
+				.createNativeQuery("SELECT MAX(id) FROM reviewable_course")
+				.getSingleResult();
+		final Constructor<CourseReview> constructor = CourseReview.class
+				.getDeclaredConstructor(ReviewCourseCommand.class, Integer.class, Integer.class);
+		constructor.setAccessible(true);
+		final CourseReview review = constructor.newInstance(
+				new ReviewCourseCommand(UUID.randomUUID(), 4.0, "comment"), courseId.intValue(), reviewerId);
+		final UUID reviewUuid = review.toIdentifier();
+		courseReviewRepository.saveAndFlush(review);
+		return reviewUuid;
+	}
+
 	/**
 	 * Builds a transient {@link CourseReview} bound to freshly created reviewer/reviewable-course FK parents.
 	 *
