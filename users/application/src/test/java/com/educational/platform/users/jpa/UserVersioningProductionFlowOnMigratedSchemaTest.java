@@ -11,6 +11,7 @@ import com.educational.platform.users.login.SignInCommandHandler;
 import com.educational.platform.users.registration.UserRegistrationCommand;
 import com.educational.platform.users.registration.UserRegistrationCommandHandler;
 import com.educational.platform.users.security.JwtTokenProvider;
+import com.educational.platform.users.security.MyUserDetails;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.validation.Validation;
@@ -29,6 +30,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -48,8 +52,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Drives the real production command handlers ({@link UserRegistrationCommandHandler#handle} write path and
- * {@link SignInCommandHandler#handle} read path) against the <em>production schema configuration</em>: the
+ * Drives the real production flows ({@link UserRegistrationCommandHandler#handle} write path, the
+ * {@link SignInCommandHandler#handle} read path, and the {@link com.educational.platform.users.security.MyUserDetails}
+ * {@code UserDetailsService} authentication lookup) against the <em>production schema configuration</em>: the
  * {@code custom_user} table is built by the real Liquibase changelog ({@code db/users.yml}, whose
  * {@code add-version-column-to-custom_user} changeSet adds {@code version BIGINT NOT NULL}) and Hibernate runs
  * with {@code ddl-auto=none}, exactly as in production.
@@ -180,6 +185,48 @@ class UserVersioningProductionFlowOnMigratedSchemaTest {
         // missing production-schema counterpart (the only configuration that ships).
         assertThat(token).isEqualTo(TOKEN);
         assertThat(rolesResolvedFor("teacher")).containsExactly(Role.ROLE_TEACHER);
+    }
+
+    @Test
+    void userDetailsServiceLoad_onMigratedSchema_returnsTeacherUserDetailsFromVersionedUser() {
+        // given a teacher persisted onto the migrated BIGINT column (the non-default role, to pin the role maps
+        // through the load unchanged)
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        entityManager.clear();
+
+        // when Spring Security loads the user through the production UserDetailsService - the lookup fired on every
+        // authentication - against the migration-owned column
+        final UserDetails userDetails = new MyUserDetails(repository).loadUserByUsername("teacher");
+
+        // then the UserDetailsService read path is unaffected by @Version on the migrated schema: the username,
+        // encoded password and the non-default authority all project, while the row's optimistic-lock version stays
+        // 0 and is never leaked into the projection. MyUserDetailsVersioningTest pins this on the Hibernate-generated
+        // INTEGER schema only; this is its missing production-schema counterpart. The UserDetailsService seam is the
+        // third production flow (alongside the registration write and sign-in read paths above) and the only one not
+        // yet exercised against the BIGINT column that actually ships - a renamed/retyped version column or the
+        // entity drifting from the migration would pass every MyUserDetailsVersioningTest yet break this real lookup.
+        assertThat(userDetails.getUsername()).isEqualTo("teacher");
+        assertThat(passwordEncoder.matches(PASSWORD, userDetails.getPassword())).isTrue();
+        assertThat(userDetails.getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactly(Role.ROLE_TEACHER.getAuthority());
+        assertThat(((Number) versionOf("teacher")).longValue()).isZero();
+    }
+
+    @Test
+    void userDetailsServiceLoad_unknownUser_onMigratedSchema_throwsUsernameNotFoundException() {
+        // given a populated table on the migrated schema carrying the new version column
+        repository.saveAndFlush(newUser("teacher", "teacher@gmail.com", RoleDTO.ROLE_TEACHER));
+        entityManager.clear();
+
+        // when an absent username is looked up through the production UserDetailsService
+        // then adding @Version leaves the not-found contract intact on the schema that ships: the lookup still
+        // distinguishes a missing user rather than returning a stale or empty UserDetails. This mirrors the
+        // registrationHandler_duplicateUsername_onMigratedSchema_isRejected guard above - a "contract intact under
+        // @Version on the production schema" check - which MyUserDetailsVersioningTest pins only on the
+        // Hibernate-generated INTEGER schema.
+        assertThatExceptionOfType(UsernameNotFoundException.class)
+                .isThrownBy(() -> new MyUserDetails(repository).loadUserByUsername("missing"));
     }
 
     @SuppressWarnings("unchecked")
