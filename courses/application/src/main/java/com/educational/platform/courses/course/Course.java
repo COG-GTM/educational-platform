@@ -13,6 +13,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.Version;
 
 import com.educational.platform.common.domain.AggregateRoot;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
@@ -26,6 +27,9 @@ public class Course implements AggregateRoot {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Integer id;
+
+	@Version
+	private Integer version;
 
 	private UUID uuid;
 
@@ -102,7 +106,6 @@ public class Course implements AggregateRoot {
 		rating = new CourseRating(value);
 	}
 
-	//todo how it works in concurrency
 	public void increaseNumberOfStudents() {
 		numberOfStudents = new NumberOfStudents(numberOfStudents.number() + 1);
 	}

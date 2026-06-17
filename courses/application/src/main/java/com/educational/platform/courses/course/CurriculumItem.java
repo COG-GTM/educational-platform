@@ -12,6 +12,7 @@ import jakarta.persistence.Inheritance;
 import jakarta.persistence.InheritanceType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Version;
 
 /**
  * Represents Curriculum Item domain model.
@@ -25,6 +26,9 @@ public abstract class CurriculumItem {
 	@Id
 	@GeneratedValue(strategy = GenerationType.TABLE)
 	private Integer id;
+
+	@Version
+	private Integer version;
 
 	private UUID uuid;
 

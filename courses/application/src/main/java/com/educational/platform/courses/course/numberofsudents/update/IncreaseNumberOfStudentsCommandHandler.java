@@ -4,6 +4,9 @@ import com.educational.platform.common.exception.ResourceNotFoundException;
 import com.educational.platform.courses.course.Course;
 import com.educational.platform.courses.course.CourseRepository;
 
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +25,7 @@ public class IncreaseNumberOfStudentsCommandHandler {
         this.repository = repository;
     }
 
+    @Retryable(retryFor = ObjectOptimisticLockingFailureException.class, maxAttempts = 3, backoff = @Backoff(delay = 100))
     public void handle(IncreaseNumberOfStudentsCommand command) {
         final Optional<Course> dbResult = repository.findByUuid(command.uuid());
         if (dbResult.isEmpty()) {

@@ -153,4 +153,180 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
     }
 
+    @Test
+    void increaseNumberOfStudents_newCourse_numberOfStudentsIncrementedToOne() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when
+        course.increaseNumberOfStudents();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(1));
+    }
+
+    @Test
+    void increaseNumberOfStudents_calledMultipleTimes_incrementsCumulatively() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when
+        course.increaseNumberOfStudents();
+        course.increaseNumberOfStudents();
+        course.increaseNumberOfStudents();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(3));
+    }
+
+    @Test
+    void updateRating_validValue_ratingUpdatedToValue() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when
+        course.updateRating(3.2);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(3.2));
+    }
+
+    @Test
+    void updateRating_calledMultipleTimes_lastValueWins() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when - the rating is recomputed on every save, so a retry replaces (not accumulates) the value
+        course.updateRating(3.2);
+        course.updateRating(4.5);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(4.5));
+    }
+
+    @Test
+    void increaseNumberOfStudents_leavesRatingUntouched() {
+        // given - a fresh course starts with the default zero rating
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when - the number-of-students write path runs
+        course.increaseNumberOfStudents();
+
+        // then - it mutates only its own field; the rating retry path must not observe a side effect here
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(1))
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0));
+    }
+
+    @Test
+    void create_validCommand_initialRatingAndNumberOfStudentsAreZero() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // then - the mutation tests assume these start at zero; make the baseline explicit
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0))
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(0));
+    }
+
+    @Test
+    void create_validCommand_versionIsNullBeforePersist() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // then - the @Version field is JPA-managed; before persist it must be null so that Hibernate
+        // initialises it to 0 on INSERT rather than issuing an UPDATE with a stale snapshot
+        assertThat(ReflectionTestUtils.getField(course, "version")).isNull();
+    }
+
+    @Test
+    void updateRating_leavesNumberOfStudentsUntouched() {
+        // given - a fresh course starts with zero students
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when - the rating write path runs
+        course.updateRating(3.2);
+
+        // then - it mutates only its own field; the number-of-students retry path must not observe a side effect here
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(3.2))
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(0));
+    }
+
+    @Test
+    void increaseNumberOfStudents_leavesVersionNullForJpaToManage() {
+        // given - a freshly constructed, not-yet-persisted course (its @Version is still null)
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when - the number-of-students write path (the @Retryable handler's mutation) runs
+        course.increaseNumberOfStudents();
+
+        // then - the mutator must not touch the JPA-managed @Version: it stays null so Hibernate still
+        // initialises it on INSERT. Manually managing the version here would break optimistic locking,
+        // and the existing version-null test only pins the construction-time state, not post-mutation
+        assertThat(ReflectionTestUtils.getField(course, "version")).isNull();
+    }
+
+    @Test
+    void updateRating_leavesVersionNullForJpaToManage() {
+        // given - a freshly constructed, not-yet-persisted course (its @Version is still null)
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when - the rating write path (the @Retryable handler's mutation) runs
+        course.updateRating(3.2);
+
+        // then - the mutator must not touch the JPA-managed @Version: it stays null so Hibernate still
+        // initialises it on INSERT. Manually managing the version here would break optimistic locking,
+        // and the existing version-null test only pins the construction-time state, not post-mutation
+        assertThat(ReflectionTestUtils.getField(course, "version")).isNull();
+    }
+
 }

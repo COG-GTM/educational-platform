@@ -1,0 +1,308 @@
+package com.educational.platform.courses.course.rating.update;
+
+import com.educational.platform.common.exception.ResourceNotFoundException;
+import com.educational.platform.courses.course.Course;
+import com.educational.platform.courses.course.CourseRating;
+import com.educational.platform.courses.course.CourseRepository;
+import com.educational.platform.courses.course.create.CreateCourseCommand;
+
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.EnableRetry;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+
+import java.lang.reflect.Method;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * Verifies the {@code @Retryable} contract added to {@link UpdateCourseRatingCommandHandler}.
+ * Uses a minimal Spring context with {@code @EnableRetry} so the retry proxy is actually applied.
+ */
+@SpringJUnitConfig
+class UpdateCourseRatingCommandHandlerRetryTest {
+
+    @Configuration
+    @EnableRetry
+    static class RetryTestConfig {
+
+        @Bean
+        CourseRepository courseRepository() {
+            return mock(CourseRepository.class);
+        }
+
+        @Bean
+        UpdateCourseRatingCommandHandler updateCourseRatingCommandHandler(CourseRepository repository) {
+            return new UpdateCourseRatingCommandHandler(repository);
+        }
+    }
+
+    private final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+    private final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 3.2);
+
+    @Autowired
+    private CourseRepository repository;
+
+    @Autowired
+    private UpdateCourseRatingCommandHandler sut;
+
+    @BeforeEach
+    void resetMock() {
+        reset(repository);
+    }
+
+    @Test
+    void handle_succeedsOnFirstAttempt_doesNotRetry() {
+        // given - the save persists immediately, no version clash
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        sut.handle(command);
+
+        // then - the happy path runs exactly once, the retry proxy does not re-invoke
+        verify(repository, times(1)).findByUuid(uuid);
+        final ArgumentCaptor<Course> saved = ArgumentCaptor.forClass(Course.class);
+        verify(repository, times(1)).save(saved.capture());
+        assertThat(saved.getValue()).hasFieldOrPropertyWithValue("rating", new CourseRating(3.2));
+    }
+
+    @Test
+    void handle_singleOptimisticLockThenSuccess_retriesOnce() {
+        // given - only the first save clashes on the version, the retry succeeds
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        sut.handle(command);
+
+        // then - retry stops as soon as a save succeeds: exactly two attempts, fewer than maxAttempts
+        verify(repository, times(2)).findByUuid(uuid);
+        verify(repository, times(2)).save(any(Course.class));
+    }
+
+    @Test
+    void handle_nonRetryableException_propagatesWithoutRetry() {
+        // given - save fails with an exception outside retryFor
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class))).thenThrow(new IllegalStateException("boom"));
+
+        // when
+        final ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - only ObjectOptimisticLockingFailureException is retried, so this propagates on the first attempt
+        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(handle);
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, times(1)).save(any(Course.class));
+    }
+
+    @Test
+    void handle_parentOptimisticLockingFailure_isNotRetried() {
+        // given - the broader supertype is thrown, not the configured ObjectOptimisticLockingFailureException
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class))).thenThrow(new OptimisticLockingFailureException("stale"));
+
+        // when
+        final ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - retryFor targets the ObjectOptimisticLockingFailureException subtype only, so the parent propagates immediately
+        assertThatExceptionOfType(OptimisticLockingFailureException.class).isThrownBy(handle);
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, times(1)).save(any(Course.class));
+    }
+
+    @Test
+    void handle_optimisticLockThenNonRetryableException_propagatesOnSecondAttemptWithoutFurtherRetry() {
+        // given - the first save clashes on the version (retryable), the retry then fails with an
+        // exception outside retryFor
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenThrow(new IllegalStateException("boom"));
+
+        // when
+        final ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - the retry policy re-classifies each failure, so the non-retryable exception thrown on
+        // the second attempt propagates immediately, short-circuiting the third (still-allowed) attempt
+        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(handle);
+        verify(repository, times(2)).findByUuid(uuid);
+        verify(repository, times(2)).save(any(Course.class));
+    }
+
+    @Test
+    void handle_optimisticLockThenSuccess_retriesUntilSavePersists() {
+        // given - the first two saves clash on the version, the third one succeeds
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        sut.handle(command);
+
+        // then - each attempt reloads and re-applies the rating, total of three attempts
+        verify(repository, times(3)).findByUuid(uuid);
+        final ArgumentCaptor<Course> saved = ArgumentCaptor.forClass(Course.class);
+        verify(repository, times(3)).save(saved.capture());
+        assertThat(saved.getValue()).hasFieldOrPropertyWithValue("rating", new CourseRating(3.2));
+    }
+
+    @Test
+    void handle_retryAfterConcurrentRatingUpdate_appliesCommandRatingRegardlessOfReloadedState() {
+        // given - the first attempt loads a course already rated 1.0 and clashes on save; the retry
+        // reloads the course as a concurrent writer left it (rated 4.5) and then succeeds
+        when(repository.findByUuid(uuid))
+                .thenReturn(Optional.of(courseWithRating(1.0)))
+                .thenReturn(Optional.of(courseWithRating(4.5)));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        sut.handle(command);
+
+        // then - unlike the increment handler (which composes on top of the reloaded state), the
+        // rating is an idempotent overwrite taken from the command, so the persisted value is the
+        // command's 3.2 on every attempt - never the stale snapshot (1.0) nor the concurrent writer's
+        // value (4.5)
+        verify(repository, times(2)).findByUuid(uuid);
+        final ArgumentCaptor<Course> saved = ArgumentCaptor.forClass(Course.class);
+        verify(repository, times(2)).save(saved.capture());
+        assertThat(saved.getValue()).hasFieldOrPropertyWithValue("rating", new CourseRating(3.2));
+    }
+
+    @Test
+    void handle_persistentOptimisticLock_exhaustsThreeAttemptsThenThrows() {
+        // given - every save clashes on the version
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1));
+
+        // when
+        final ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - the original exception is rethrown after maxAttempts is reached, no further attempts
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class).isThrownBy(handle);
+        verify(repository, times(3)).findByUuid(uuid);
+        verify(repository, times(3)).save(any(Course.class));
+    }
+
+    @Test
+    void handle_invokedAgainAfterExhaustingRetries_getsAFreshRetryBudget() {
+        // given - every reload returns a fresh course; the save clashes on the version four times in
+        // a row before finally persisting on the fifth call
+        when(repository.findByUuid(uuid)).thenAnswer(invocation -> Optional.of(newCourse()));
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when - the first invocation burns all three attempts on the first three clashes and rethrows
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(() -> sut.handle(command));
+
+        // then - retry is stateless, so a second independent invocation is granted a fresh maxAttempts
+        // budget rather than inheriting the exhausted state: it retries the fourth clash and persists
+        // on the fifth save. A regression to stateful retry would starve this call and rethrow instead
+        sut.handle(command);
+        verify(repository, times(5)).findByUuid(uuid);
+        verify(repository, times(5)).save(any(Course.class));
+    }
+
+    @Test
+    void handle_missingCourse_resourceNotFoundExceptionIsNotRetried() {
+        // given
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - ResourceNotFoundException is not in retryFor, so it propagates on the first attempt
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verify(repository, times(1)).findByUuid(uuid);
+        verify(repository, never()).save(any(Course.class));
+    }
+
+    @Test
+    void handle_optimisticLockThenCourseDeletedOnRetry_resourceNotFoundPropagatesWithoutFurtherRetry() {
+        // given - the first attempt loads the course and clashes on save (retryable); before the
+        // retry reloads, a concurrent writer deletes the course, so the second findByUuid is empty
+        when(repository.findByUuid(uuid))
+                .thenReturn(Optional.of(newCourse()))
+                .thenReturn(Optional.empty());
+        when(repository.save(any(Course.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Course.class, 1));
+
+        // when
+        final ThrowingCallable handle = () -> sut.handle(command);
+
+        // then - each retry re-runs the full load -> mutate -> save, so the now-missing course makes
+        // the second attempt raise ResourceNotFoundException. That exception is outside retryFor, so it
+        // propagates immediately (no third attempt) and the only save issued is the first attempt's clash
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verify(repository, times(2)).findByUuid(uuid);
+        verify(repository, times(1)).save(any(Course.class));
+    }
+
+    @Test
+    void handle_isAnnotatedWithExpectedRetryableContract() throws NoSuchMethodException {
+        // given - reflect on the production handler method (the proxy delegates to this contract)
+        final Method handleMethod = UpdateCourseRatingCommandHandler.class
+                .getMethod("handle", UpdateCourseRatingCommand.class);
+        final Retryable retryable = handleMethod.getAnnotation(Retryable.class);
+        final Backoff backoff = retryable.backoff();
+
+        // then - the declared retry contract: 3 attempts, 100ms backoff, only on optimistic-lock failures
+        assertThat(retryable).isNotNull();
+        assertThat(retryable.maxAttempts()).isEqualTo(3);
+        assertThat(retryable.retryFor()).containsExactly(ObjectOptimisticLockingFailureException.class);
+        assertThat(backoff.delay()).isEqualTo(100L);
+    }
+
+    @Test
+    void handle_declaringClass_isAnnotatedWithTransactional() {
+        // the retry-wraps-outside-transaction contract requires @Transactional on the handler class;
+        // without it, retry attempts would not run in their own fresh transactions
+        assertThat(UpdateCourseRatingCommandHandler.class.getAnnotation(
+                org.springframework.transaction.annotation.Transactional.class)).isNotNull();
+    }
+
+    private static Course newCourse() {
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        return new Course(createCourseCommand, 15);
+    }
+
+    private static Course courseWithRating(double rating) {
+        final Course course = newCourse();
+        course.updateRating(rating);
+        return course;
+    }
+}
