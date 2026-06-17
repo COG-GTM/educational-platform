@@ -6,6 +6,7 @@ import com.educational.platform.users.RoleDTO;
 import com.educational.platform.users.User;
 import com.educational.platform.users.UserDTO;
 import com.educational.platform.users.UserRepository;
+import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
 import com.educational.platform.users.login.SignInCommand;
 import com.educational.platform.users.login.SignInCommandHandler;
 import com.educational.platform.users.registration.UserRegistrationCommand;
@@ -170,6 +171,27 @@ class UserVersioningProductionFlowOnMigratedSchemaTest {
     }
 
     @Test
+    void registrationHandler_onMigratedSchema_emitsIntegrationEventUnaffectedByVersion() {
+        // when the real registration write path runs against the migrated BIGINT column (which now persists a
+        // @Version-bearing aggregate)
+        registrationHandler.handle(command(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+
+        // then the single cross-context event is still emitted with exactly username/email on the schema that
+        // ships: adding @Version to the aggregate must not disturb - nor leak the optimistic-lock version onto -
+        // the published integration event. The other migrated-schema flow tests assert the persisted row's
+        // projection and the resolved role but never the emitted event, so the event-publication half of the
+        // production write path is otherwise unverified on the BIGINT column. This is the missing production-schema
+        // counterpart of UserRegistrationVersioningTest.handle_validCommand_emitsIntegrationEventUnaffectedByVersion
+        // (Hibernate-generated INTEGER schema), proving the *whole* write path - persist onto the migration-owned
+        // column plus event publication - is unaffected by @Version, not just the persisted row.
+        assertThat(publishedEvents).singleElement()
+                .isInstanceOfSatisfying(UserCreatedIntegrationEvent.class, event -> {
+                    assertThat(event).hasFieldOrPropertyWithValue("username", USERNAME);
+                    assertThat(event).hasFieldOrPropertyWithValue("email", EMAIL);
+                });
+    }
+
+    @Test
     void signInHandler_onMigratedSchema_resolvesRoleFromVersionedUser() {
         // given a teacher persisted onto the migrated BIGINT column (the non-default role, to pin the role maps
         // through the read path unchanged)
@@ -185,6 +207,29 @@ class UserVersioningProductionFlowOnMigratedSchemaTest {
         // missing production-schema counterpart (the only configuration that ships).
         assertThat(token).isEqualTo(TOKEN);
         assertThat(rolesResolvedFor("teacher")).containsExactly(Role.ROLE_TEACHER);
+    }
+
+    @Test
+    void signInHandler_onMigratedSchema_doesNotAdvanceUserVersion() {
+        // given a user persisted at version 0 on the migrated BIGINT column
+        repository.saveAndFlush(newUser(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+        entityManager.clear();
+
+        // when the real sign-in flow runs (a pure read: authenticate -> load the persisted aggregate -> resolve its role)
+        signInHandler.handle(signInCommand(USERNAME));
+
+        // force a genuine DB round trip so the version is read back from the row, not the in-context instance
+        entityManager.flush();
+        entityManager.clear();
+
+        // then signing in does not advance the optimistic-lock version on the schema that ships: the authentication
+        // read path is side-effect-free under @Version, so repeated logins never churn the BIGINT version (which
+        // would otherwise cause spurious lock contention or needless writes). signInHandler_onMigratedSchema_resolvesRoleFromVersionedUser
+        // pins *what* sign-in reads on the migrated schema; this pins that the flow only reads.
+        // SignInVersioningTest.handle_signIn_doesNotAdvanceUserVersion proves this on the Hibernate-generated
+        // INTEGER schema - this is its missing production-schema counterpart.
+        assertThat(repository.findByUsername(USERNAME).orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isZero();
     }
 
     @Test
@@ -227,6 +272,30 @@ class UserVersioningProductionFlowOnMigratedSchemaTest {
         // Hibernate-generated INTEGER schema.
         assertThatExceptionOfType(UsernameNotFoundException.class)
                 .isThrownBy(() -> new MyUserDetails(repository).loadUserByUsername("missing"));
+    }
+
+    @Test
+    void userDetailsServiceLoad_onMigratedSchema_doesNotAdvanceUserVersion() {
+        // given a user persisted at version 0 on the migrated BIGINT column
+        repository.saveAndFlush(newUser(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+        entityManager.clear();
+
+        // when Spring Security loads it through the production UserDetailsService - the lookup fired on every
+        // authentication - against the migration-owned column (a pure read)
+        new MyUserDetails(repository).loadUserByUsername(USERNAME);
+
+        // force a genuine DB round trip so the version is read back from the row, not the in-context instance
+        entityManager.flush();
+        entityManager.clear();
+
+        // then loading a user for authentication does not advance the optimistic-lock version on the schema that
+        // ships: the UserDetailsService read path is side-effect-free under @Version on the BIGINT column too, so
+        // authenticating never churns the version. userDetailsServiceLoad_onMigratedSchema_returnsTeacherUserDetailsFromVersionedUser
+        // pins *what* the load yields on the migrated schema; this pins that the load only reads.
+        // MyUserDetailsVersioningTest.loadUserByUsername_doesNotAdvanceUserVersion proves this on the
+        // Hibernate-generated INTEGER schema - this is its missing production-schema counterpart.
+        assertThat(repository.findByUsername(USERNAME).orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isZero();
     }
 
     @SuppressWarnings("unchecked")
