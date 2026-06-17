@@ -74,6 +74,28 @@ public class UpdateCourseReviewCommandHandlerTest {
     }
 
     @Test
+    void handle_existingCourseReview_savedInstanceCarriesLoadedOptimisticLockVersion() {
+        // given - the review the handler loads already carries a non-zero @Version, as a row read part-way
+        // through its lifecycle would (set on the managed instance findByUuid returns)
+        final UUID uuid = configureCourseReview();
+        final CourseReview loaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+        ReflectionTestUtils.setField(loaded, "version", 3);
+        final UpdateCourseReviewCommand command = new UpdateCourseReviewCommand(uuid, 3.0, "updated comment");
+
+        // when
+        sut.handle(command);
+
+        // then - the handler mutates and persists the very instance it loaded, so the loaded optimistic-lock
+        // version travels into save() unchanged (Hibernate, not the handler, increments it on flush). A handler
+        // that copied the command's fields onto a freshly constructed CourseReview would hand save() a null
+        // @Version and silently disable optimistic locking - the existing success test only checks the saved
+        // rating/comment, which such a reconstructed copy would also satisfy, leaving this contract unpinned.
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(argument.capture());
+        assertThat(ReflectionTestUtils.getField(argument.getValue(), "version")).isEqualTo(3);
+    }
+
+    @Test
     void handle_concurrentModificationOnSave_optimisticLockingFailurePropagated() {
         // given - an existing review whose save loses an optimistic-lock race: another writer already
         // bumped the @Version added in this PR, so persisting the stale state raises the optimistic-lock

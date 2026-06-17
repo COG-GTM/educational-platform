@@ -90,6 +90,28 @@ public class ReviewCourseCommandHandlerTest {
     }
 
     @Test
+    void handle_validCommand_reviewPersistedWithUnmanagedVersion() {
+        // given - the related course and current reviewer both resolve, so the factory can build the review
+        configureRelatedResources();
+        final ReviewCourseCommand command = new ReviewCourseCommand(COURSE_ID, 4.0, "comment");
+
+        // when
+        sut.handle(command);
+
+        // then - the handler hands Hibernate a transient review whose @Version it has not pre-set: the field is
+        // still null at the point of save, so the row's optimistic-lock lifecycle starts there (Hibernate writes
+        // 0 on insert) rather than the handler seeding it. The reviewer and reviewable-course create handler tests
+        // pin this unmanaged-version-at-save contract for their aggregates
+        // (handle_validCommand_reviewerPersistedWithUsernameAndUnmanagedVersion), but the CourseReview create
+        // handler test asserted only the persisted rating/comment and returned identifier, never that it leaves
+        // the version untouched - a handler that pre-set a version here would behave like an update and could
+        // throw on the first insert.
+        final ArgumentCaptor<CourseReview> argument = ArgumentCaptor.forClass(CourseReview.class);
+        verify(courseReviewRepository).save(argument.capture());
+        assertThat(ReflectionTestUtils.getField(argument.getValue(), "version")).isNull();
+    }
+
+    @Test
     void handle_invalidRating_noReviewPersisted() {
         // given - an otherwise valid create whose rating violates @Max(5)
         final ReviewCourseCommand command = new ReviewCourseCommand(COURSE_ID, 6.0, "comment");
