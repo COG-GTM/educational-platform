@@ -20,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -596,6 +597,36 @@ class UserOptimisticLockingOnMigratedSchemaTest {
         assertThat(reloaded).extracting("version").isInstanceOf(Integer.class);
         assertThat(reloaded).hasFieldOrPropertyWithValue("version", Integer.MAX_VALUE);
         assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo((long) Integer.MAX_VALUE);
+    }
+
+    @Test
+    void loadingVersionBeyondIntegerRange_onMigratedSchema_failsFastRatherThanTruncating() {
+        // given a user whose BIGINT row version has been advanced one past Integer.MAX_VALUE - a value the
+        // migration-owned column is intentionally sized to hold but the Integer-typed @Version field cannot
+        // represent. This is the one cell where the column's 64-bit range and the field's Integer range meet, and
+        // it is otherwise unpinned: UserVersionColumnMigrationTest.migration_versionColumn_storesValuesBeyondIntegerRange
+        // proves the column stores a beyond-Integer value at the JDBC level (no entity in play),
+        // versionAtIntegerMaxValue_onMigratedSchema_materializesOntoIntegerField pins that the boundary value
+        // itself round-trips onto the field, and staleWriteFromIntegerMaxValueBaseline_onMigratedSchema pushes the
+        // *row* one past it only to detect a stale write - none of them ever load a beyond-Integer value back
+        // through the entity.
+        repository.saveAndFlush(newUser());
+        final long beyondIntegerRange = (long) Integer.MAX_VALUE + 1L;
+        entityManager.createNativeQuery("UPDATE custom_user SET version = :version WHERE username = :username")
+                .setParameter("version", beyondIntegerRange)
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+        entityManager.clear();
+
+        // the row genuinely holds the beyond-Integer value on the BIGINT column...
+        assertThat(((Number) versionOf(USERNAME)).longValue()).isEqualTo(beyondIntegerRange);
+
+        // ...yet loading it through the Integer-typed @Version entity fails fast with a translated data-access
+        // exception rather than silently truncating or wrapping it to a bogus Integer version. The intentional
+        // Integer<->BIGINT decoupling stays safe at its boundary: a version the field cannot represent is surfaced
+        // loudly, never corrupted, so optimistic locking can never proceed on a silently mangled version.
+        assertThatExceptionOfType(DataIntegrityViolationException.class)
+                .isThrownBy(() -> repository.findByUsername(USERNAME).orElseThrow());
     }
 
     @Test
