@@ -497,6 +497,44 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void courseReview_concurrentUpdatesToDifferentRows_bothSucceedAndEachVersionIncrements() throws Exception {
+		// given - the seeded review plus a second independently persisted review, both at version 0. The domain
+		// constructor is package-private, so it is reached reflectively from this test package.
+		final Constructor<CourseReview> constructor = CourseReview.class
+				.getDeclaredConstructor(ReviewCourseCommand.class, Integer.class, Integer.class);
+		constructor.setAccessible(true);
+		final CourseReview secondRow = constructor
+				.newInstance(new ReviewCourseCommand(UUID.randomUUID(), 3.0, "second review"), 1, 1);
+		final UUID secondUuid = secondRow.toIdentifier();
+		courseReviewRepository.saveAndFlush(secondRow);
+		entityManager.clear();
+
+		// and - both rows are read into independent snapshots before either is written, modelling two concurrent
+		// transactions that each loaded a *different* row while both rows were still at version 0
+		final CourseReview firstSnapshot = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		entityManager.detach(firstSnapshot);
+		final CourseReview secondSnapshot = courseReviewRepository.findByUuid(secondUuid).orElseThrow();
+		entityManager.detach(secondSnapshot);
+
+		// when - each snapshot writes its own row, the second one only after the first has already been committed
+		firstSnapshot.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "first row updated"));
+		courseReviewRepository.saveAndFlush(firstSnapshot);
+		secondSnapshot.update(new UpdateCourseReviewCommand(secondUuid, 2.0, "second row updated"));
+		courseReviewRepository.saveAndFlush(secondSnapshot);
+
+		// then - the optimistic-lock check is scoped per row, not per table: committing one row does not stale a
+		// snapshot of a *different* row, so both writes succeed (neither throws) and each version advances
+		// independently to 1. courseReview_updatingOneReview_otherReviewsVersionUnchanged only updates one row and
+		// asserts the other is untouched; it never writes a pre-loaded snapshot of the second row after the first
+		// was committed, so a guard that wrongly keyed off table-wide state would have slipped past it.
+		entityManager.clear();
+		final CourseReview reloadedFirst = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		final CourseReview reloadedSecond = courseReviewRepository.findByUuid(secondUuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloadedFirst, "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(reloadedSecond, "version")).isEqualTo(1);
+	}
+
+	@Test
 	void courseReview_updated_linkedReviewerAndReviewableCourseVersionsUnchanged() {
 		// given - the seeded review at version 0 together with the reviewer and reviewable_course rows it
 		// references by FK id (not by a JPA association), all seeded at version 0
@@ -1057,6 +1095,38 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void reviewer_concurrentUpdatesToDifferentRows_bothSucceedAndEachVersionIncrements() {
+		// given - two independently persisted reviewers, both starting at version 0
+		final Integer firstId = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("row-one"))).getId();
+		final Integer secondId = reviewerRepository.saveAndFlush(new Reviewer(new CreateReviewerCommand("row-two"))).getId();
+		entityManager.clear();
+
+		// and - both rows are read into independent snapshots before either is written, modelling two concurrent
+		// transactions that each loaded a *different* row while both rows were still at version 0
+		final Reviewer firstSnapshot = reviewerRepository.findById(firstId).orElseThrow();
+		entityManager.detach(firstSnapshot);
+		final Reviewer secondSnapshot = reviewerRepository.findById(secondId).orElseThrow();
+		entityManager.detach(secondSnapshot);
+
+		// when - each snapshot writes its own row, the second one only after the first has already been committed
+		ReflectionTestUtils.setField(firstSnapshot, "username", "row-one-renamed");
+		reviewerRepository.saveAndFlush(firstSnapshot);
+		ReflectionTestUtils.setField(secondSnapshot, "username", "row-two-renamed");
+		reviewerRepository.saveAndFlush(secondSnapshot);
+
+		// then - the optimistic-lock check is scoped per row, not per table: committing one row does not stale a
+		// snapshot of a *different* row, so both writes succeed (neither throws) and each version advances
+		// independently to 1. reviewer_updatingOneRow_otherRowsVersionUnchanged only updates one row and asserts the
+		// other is untouched; it never writes a pre-loaded snapshot of the second row after the first was committed,
+		// so a guard that wrongly keyed off table-wide state would have slipped past it.
+		entityManager.clear();
+		final Reviewer reloadedFirst = reviewerRepository.findById(firstId).orElseThrow();
+		final Reviewer reloadedSecond = reviewerRepository.findById(secondId).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloadedFirst, "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(reloadedSecond, "version")).isEqualTo(1);
+	}
+
+	@Test
 	void reviewer_updated_linkedCourseReviewVersionUnchanged() {
 		// given - the seeded reviewer at version 0 and the course_review that references it by FK id
 		final Integer reviewerId = reviewerRepository.findByUsername("reviewer").getId();
@@ -1588,6 +1658,40 @@ public class OptimisticLockingTest {
 		final ReviewableCourse reloadedSecond = reviewableCourseRepository.findById(secondId).orElseThrow();
 		assertThat(ReflectionTestUtils.getField(reloadedFirst, "version")).isEqualTo(1);
 		assertThat(ReflectionTestUtils.getField(reloadedSecond, "version")).isEqualTo(0);
+	}
+
+	@Test
+	void reviewableCourse_concurrentUpdatesToDifferentRows_bothSucceedAndEachVersionIncrements() {
+		// given - two independently persisted reviewable courses, both starting at version 0
+		final Integer firstId = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		final Integer secondId = reviewableCourseRepository
+				.saveAndFlush(new ReviewableCourse(new CreateReviewableCourseCommand(UUID.randomUUID()))).getId();
+		entityManager.clear();
+
+		// and - both rows are read into independent snapshots before either is written, modelling two concurrent
+		// transactions that each loaded a *different* row while both rows were still at version 0
+		final ReviewableCourse firstSnapshot = reviewableCourseRepository.findById(firstId).orElseThrow();
+		entityManager.detach(firstSnapshot);
+		final ReviewableCourse secondSnapshot = reviewableCourseRepository.findById(secondId).orElseThrow();
+		entityManager.detach(secondSnapshot);
+
+		// when - each snapshot writes its own row, the second one only after the first has already been committed
+		ReflectionTestUtils.setField(firstSnapshot, "originalCourseId", UUID.randomUUID());
+		reviewableCourseRepository.saveAndFlush(firstSnapshot);
+		ReflectionTestUtils.setField(secondSnapshot, "originalCourseId", UUID.randomUUID());
+		reviewableCourseRepository.saveAndFlush(secondSnapshot);
+
+		// then - the optimistic-lock check is scoped per row, not per table: committing one row does not stale a
+		// snapshot of a *different* row, so both writes succeed (neither throws) and each version advances
+		// independently to 1. reviewableCourse_updatingOneRow_otherRowsVersionUnchanged only updates one row and
+		// asserts the other is untouched; it never writes a pre-loaded snapshot of the second row after the first was
+		// committed, so a guard that wrongly keyed off table-wide state would have slipped past it.
+		entityManager.clear();
+		final ReviewableCourse reloadedFirst = reviewableCourseRepository.findById(firstId).orElseThrow();
+		final ReviewableCourse reloadedSecond = reviewableCourseRepository.findById(secondId).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloadedFirst, "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(reloadedSecond, "version")).isEqualTo(1);
 	}
 
 	@Test
