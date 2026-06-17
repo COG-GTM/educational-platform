@@ -139,6 +139,28 @@ class SignInVersioningTest {
         assertThat(rolesResolvedFor("teacher")).containsExactly(Role.ROLE_TEACHER);
     }
 
+    @Test
+    void handle_signIn_doesNotAdvanceUserVersion() {
+        // given a student persisted at version 0
+        repository.saveAndFlush(newUser(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+        entityManager.clear();
+
+        // when the user signs in (a pure read: authenticate -> load the persisted aggregate -> resolve its role)
+        handler.handle(command(USERNAME));
+
+        // force a genuine DB round trip so the version is read back from the row, not the in-context instance
+        entityManager.flush();
+        entityManager.clear();
+
+        // then signing in does not advance the optimistic-lock version: the authentication read path is
+        // side-effect-free under @Version, so repeated logins never churn the version (which would otherwise cause
+        // spurious lock contention or needless writes). The other tests pin *what* sign-in reads (token + role);
+        // this pins that the flow only reads. UserOptimisticLockingTest.read_withoutModification_doesNotChangeVersion
+        // proves this at the entity level (a bare finder + flush); this proves it through the real
+        // SignInCommandHandler.handle production flow.
+        assertThat(repository.findByUsername(USERNAME).orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
+    }
+
     @SuppressWarnings("unchecked")
     private List<Role> rolesResolvedFor(final String username) {
         // the role passed to the token is resolved from the persisted user the handler reads back by username,

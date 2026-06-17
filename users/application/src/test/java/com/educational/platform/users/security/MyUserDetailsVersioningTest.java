@@ -124,6 +124,28 @@ class MyUserDetailsVersioningTest {
     }
 
     @Test
+    void loadUserByUsername_doesNotAdvanceUserVersion() {
+        // given a user persisted at version 0
+        repository.saveAndFlush(newUser(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
+        entityManager.clear();
+
+        // when Spring Security loads it through the production UserDetailsService (a pure read)
+        new MyUserDetails(repository).loadUserByUsername(USERNAME);
+
+        // force a genuine DB round trip so the version is read back from the row, not the in-context instance
+        entityManager.flush();
+        entityManager.clear();
+
+        // then loading a user for authentication does not advance the optimistic-lock version: the
+        // UserDetailsService read path is side-effect-free under @Version, so authenticating never churns the
+        // version (which would otherwise cause spurious lock contention or needless writes). The projection tests
+        // pin *what* the load yields; this pins that the load only reads.
+        // UserOptimisticLockingTest.read_withoutModification_doesNotChangeVersion proves this at the entity level
+        // (a bare finder + flush); this proves it through the production UserDetailsService seam.
+        assertThat(repository.findByUsername(USERNAME).orElseThrow()).hasFieldOrPropertyWithValue("version", 0);
+    }
+
+    @Test
     void loadUserByUsername_unknownUser_throwsUsernameNotFoundException() {
         // given a populated table that carries the new version column
         repository.saveAndFlush(newUser(USERNAME, EMAIL, RoleDTO.ROLE_STUDENT));
