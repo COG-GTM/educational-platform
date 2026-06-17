@@ -334,10 +334,63 @@ class CourseReviewsLiquibaseMigrationTest {
 		}
 	}
 
+	@Test
+	void migration_rollback_removesVersionColumnFromAllThreeTablesAndPreservesData() throws Exception {
+		// given - a fully migrated, populated database: all three tables carry the version column at 0. The
+		// add-version-column-* changeSets are plain addColumn changes, so Liquibase derives an automatic
+		// rollback (drop column) for each. Every other test only applies the changelog forward, so the
+		// reversibility a deploy-time rollback depends on was never exercised.
+		try (PartialMigration migration = applyFullChangelog()) {
+			final JdbcTemplate jdbc = migration.jdbcTemplate();
+			jdbc.update("INSERT INTO reviewer (username, version) VALUES ('rollback-reviewer', 0)");
+			jdbc.update("INSERT INTO reviewable_course (uuid, version) VALUES (?, 0)", UUID.randomUUID());
+			jdbc.update("INSERT INTO course_review (uuid, reviewer, course, rating, comment, version) VALUES (?, "
+					+ "(SELECT id FROM reviewer WHERE username = 'rollback-reviewer'), "
+					+ "(SELECT MAX(id) FROM reviewable_course), 4.0, 'keep me', 0)", UUID.randomUUID());
+
+			// when - the three add-version-column-* changeSets (the last three applied) are rolled back
+			migration.liquibase().rollback(VERSION_CHANGE_SET_COUNT, new Contexts(), new LabelExpression());
+
+			// then - the optimistic-lock column is gone from every table, so the migration is cleanly reversible
+			assertVersionColumnAbsent(migration.dataSource(), "COURSE_REVIEW");
+			assertVersionColumnAbsent(migration.dataSource(), "REVIEWABLE_COURSE");
+			assertVersionColumnAbsent(migration.dataSource(), "REVIEWER");
+
+			// and - the business data the version column was added alongside survives the rollback untouched
+			assertThat(jdbc.queryForObject("SELECT rating FROM course_review", Double.class)).isEqualTo(4.0);
+			assertThat(jdbc.queryForObject("SELECT comment FROM course_review", String.class)).isEqualTo("keep me");
+			assertThat(jdbc.queryForObject(
+					"SELECT COUNT(*) FROM reviewer WHERE username = 'rollback-reviewer'", Long.class)).isEqualTo(1L);
+		}
+	}
+
+	@Test
+	void migration_rolledBackThenReapplied_restoresNonNullVersionColumnDefaultingToZero() throws Exception {
+		// given - a fully migrated database whose three add-version-column-* changeSets are then rolled back
+		try (PartialMigration migration = applyFullChangelog()) {
+			final JdbcTemplate jdbc = migration.jdbcTemplate();
+			migration.liquibase().rollback(VERSION_CHANGE_SET_COUNT, new Contexts(), new LabelExpression());
+			assertVersionColumnAbsent(migration.dataSource(), "REVIEWER");
+
+			// when - the changelog is applied again (a deploy -> rollback -> redeploy cycle)
+			migration.liquibase().update(new Contexts(), new LabelExpression());
+
+			// then - the rollback left the changeSets re-runnable: the column returns exactly as a fresh
+			// migration leaves it, so a row inserted without a version still defaults to 0 rather than failing
+			jdbc.update("INSERT INTO reviewer (username) VALUES ('redeployed-reviewer')");
+			assertThat(jdbc.queryForObject(
+					"SELECT version FROM reviewer WHERE username = 'redeployed-reviewer'", Long.class)).isZero();
+		}
+	}
+
 	// The five 2021_06_25-* changeSets that build the base schema, before the three add-version-column-*
 	// changeSets. Applying exactly these reproduces a production database as it looked before this PR; the
 	// assertVersionColumnAbsent guard fails loudly if a base changeSet is ever added and this count drifts.
 	private static final int BASE_SCHEMA_CHANGE_SET_COUNT = 5;
+
+	// The three add-version-column-* changeSets this PR appends after the base schema. Rolling back this
+	// many changeSets reverts exactly the version columns, leaving the pre-existing schema in place.
+	private static final int VERSION_CHANGE_SET_COUNT = 3;
 
 	/**
 	 * Builds a fresh in-memory database with only the base course-reviews schema applied (no version columns
@@ -351,6 +404,21 @@ class CourseReviewsLiquibaseMigrationTest {
 				.findCorrectDatabaseImplementation(new JdbcConnection(ds.getConnection()));
 		final Liquibase liquibase = new Liquibase("db/course-reviews.yml", new ClassLoaderResourceAccessor(), database);
 		liquibase.update(BASE_SCHEMA_CHANGE_SET_COUNT, new Contexts(), new LabelExpression());
+		return new PartialMigration(ds, new JdbcTemplate(ds), liquibase);
+	}
+
+	/**
+	 * Builds a fresh in-memory database with the entire course-reviews changelog applied (including the three
+	 * add-version-column-* changeSets), leaving the returned {@link Liquibase} positioned to roll those
+	 * changeSets back.
+	 */
+	private PartialMigration applyFullChangelog() throws Exception {
+		final DriverManagerDataSource ds = new DriverManagerDataSource(
+				"jdbc:h2:mem:course-reviews-rollback-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", "");
+		final Database database = DatabaseFactory.getInstance()
+				.findCorrectDatabaseImplementation(new JdbcConnection(ds.getConnection()));
+		final Liquibase liquibase = new Liquibase("db/course-reviews.yml", new ClassLoaderResourceAccessor(), database);
+		liquibase.update(new Contexts(), new LabelExpression());
 		return new PartialMigration(ds, new JdbcTemplate(ds), liquibase);
 	}
 
