@@ -3,6 +3,7 @@ package com.educational.platform.courses.course.jpa;
 import com.educational.platform.courses.course.Course;
 import com.educational.platform.courses.course.CourseRepository;
 import com.educational.platform.courses.course.CurriculumItem;
+import com.educational.platform.courses.course.NumberOfStudents;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
 import com.educational.platform.courses.course.create.CreateCurriculumItemCommand;
 import com.educational.platform.courses.course.create.CreateLectureCommand;
@@ -210,6 +211,49 @@ class CurriculumItemOptimisticLockingTest {
         // every other test mutates exactly one of the two entities at a time
         assertThat(ReflectionTestUtils.getField(course, "version")).isEqualTo(1);
         assertThat(ReflectionTestUtils.getField(item, "version")).isEqualTo(1);
+    }
+
+    @Test
+    void saveAndFlush_onlyCurriculumItemDirty_leavesParentCourseVersionUnchanged() {
+        // given - a persisted course (version 0) whose single curriculum item is also at version 0
+        final UUID courseUuid = persistCourseWithLecture();
+        entityManager.clear();
+
+        // when - only the cascaded child is mutated; the Course aggregate's own state is left untouched
+        final Course course = courseRepository.findByUuid(courseUuid).orElseThrow();
+        final CurriculumItem item = singleCurriculumItem(course);
+        ReflectionTestUtils.setField(item, "title", "renamed");
+        courseRepository.saveAndFlush(course);
+
+        // then - editing an existing element of the @OneToMany inverse side dirties only the child row,
+        // so its version advances to 1 while the parent course version stays 0. The both-dirty test only
+        // proves the two columns bump together; this pins the one-sided case, the guarantee that a
+        // concurrent curriculum-item edit cannot spuriously conflict the course-level @Retryable write
+        // paths (increaseNumberOfStudents / updateRating) that load and re-save the Course aggregate
+        assertThat(ReflectionTestUtils.getField(item, "version")).isEqualTo(1);
+        assertThat(ReflectionTestUtils.getField(course, "version")).isEqualTo(0);
+    }
+
+    @Test
+    void saveAndFlush_onlyCourseDirty_leavesCurriculumItemVersionUnchanged() {
+        // given - a persisted course (version 0) whose single curriculum item is also at version 0
+        final UUID courseUuid = persistCourseWithLecture();
+        entityManager.clear();
+
+        // when - only the Course aggregate's own field is mutated through a @Retryable write path
+        // (increaseNumberOfStudents); the cascaded curriculum item is left untouched
+        final Course course = courseRepository.findByUuid(courseUuid).orElseThrow();
+        course.increaseNumberOfStudents();
+        final CurriculumItem item = singleCurriculumItem(course);
+        courseRepository.saveAndFlush(course);
+
+        // then - the versioned UPDATE touches only the course row, so its version advances to 1 while
+        // the untouched child stays at 0. This is the complement of the previous test: together they
+        // prove the @Version columns this PR adds are independent in both directions, so neither side's
+        // write path burns the other's optimistic-lock budget on an unrelated edit
+        assertThat(ReflectionTestUtils.getField(course, "version")).isEqualTo(1);
+        assertThat(course).hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(1));
+        assertThat(ReflectionTestUtils.getField(item, "version")).isEqualTo(0);
     }
 
     private UUID persistCourseWithLecture() {
