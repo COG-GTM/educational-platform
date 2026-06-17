@@ -575,6 +575,27 @@ public class OptimisticLockingTest {
 	}
 
 	@Test
+	void courseReview_partialUpdateChangingOnlyRating_versionIncrementedAndRatingPersisted() {
+		// given - the seeded review (version 0, rating 4.0, comment "comment")
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+
+		// when - it is updated keeping the same comment ("comment") but a new rating, so only the other mapped field
+		// actually changes. courseReview_partialUpdateChangingOnlyComment_versionIncrementedAndCommentPersisted covers
+		// the comment-only direction; the rating-only direction was the one single-dirty-field case left unverified.
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "comment"));
+		courseReviewRepository.saveAndFlush(review);
+
+		// then - changing only the rating is enough to bump the version, the new rating is persisted, and the
+		// untouched comment survives the edit
+		entityManager.clear();
+		final CourseReview reloaded = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloaded, "version")).isEqualTo(1);
+		final CourseReviewDTO dto = courseReviewRepository.listCourseReviews(COURSE_UUID).get(0);
+		assertThat(dto.rating()).isEqualTo(5.0);
+		assertThat(dto.comment()).isEqualTo("comment");
+	}
+
+	@Test
 	void courseReview_staleUpdateAfterConcurrentDelete_throwsOptimisticLockingFailure() {
 		// given - two instances reading the same row at version 0
 		final CourseReview stale = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();

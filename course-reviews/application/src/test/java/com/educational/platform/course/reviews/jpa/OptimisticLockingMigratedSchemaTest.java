@@ -604,6 +604,55 @@ public class OptimisticLockingMigratedSchemaTest {
 	}
 
 	@Test
+	void courseReview_partialUpdateChangingOnlyCommentAgainstBigintColumn_versionIncrementedAndCommentPersisted() throws Exception {
+		// given - a persisted course review at version 0 on the migrated schema (rating 4.0, comment "comment")
+		final CourseReview review = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = review.toIdentifier();
+		courseReviewRepository.saveAndFlush(review);
+		entityManager.clear();
+
+		// when - it is updated keeping the same rating (4.0) but a new comment, so only one mapped field changes.
+		// Every other migrated update test flushes a change to both fields; the Hibernate slice keeps the single-
+		// dirty-field bump (courseReview_partialUpdateChangingOnlyComment...) standalone, so the production-shaped
+		// BIGINT column had no single-field-bump coverage at all.
+		final CourseReview reloaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		reloaded.update(new UpdateCourseReviewCommand(uuid, 4.0, "only the comment changed"));
+		courseReviewRepository.saveAndFlush(reloaded);
+
+		// then - a single dirty field is enough to bump the BIGINT version, the changed comment is persisted and the
+		// untouched rating survives. The row is reloaded through the entity (listCourseReviews selects
+		// reviewable_course.original_course_id, which the migrated reviewable_course table does not expose).
+		entityManager.clear();
+		final CourseReview afterReload = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(afterReload, "version")).isEqualTo(1);
+		assertThat(((CourseRating) ReflectionTestUtils.getField(afterReload, "rating")).rating()).isEqualTo(4.0);
+		assertThat(((Comment) ReflectionTestUtils.getField(afterReload, "comment")).comment()).isEqualTo("only the comment changed");
+	}
+
+	@Test
+	void courseReview_partialUpdateChangingOnlyRatingAgainstBigintColumn_versionIncrementedAndRatingPersisted() throws Exception {
+		// given - a persisted course review at version 0 on the migrated schema (rating 4.0, comment "comment")
+		final CourseReview review = newCourseReviewForMigratedSchema(4.0, "comment");
+		final UUID uuid = review.toIdentifier();
+		courseReviewRepository.saveAndFlush(review);
+		entityManager.clear();
+
+		// when - it is updated keeping the same comment ("comment") but a new rating, exercising the rating-only
+		// single-dirty-field direction against the BIGINT column (the comment-only direction is covered above)
+		final CourseReview reloaded = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		reloaded.update(new UpdateCourseReviewCommand(uuid, 5.0, "comment"));
+		courseReviewRepository.saveAndFlush(reloaded);
+
+		// then - changing only the rating bumps the BIGINT version, the new rating round-trips and the untouched
+		// comment survives
+		entityManager.clear();
+		final CourseReview afterReload = courseReviewRepository.findByUuid(uuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(afterReload, "version")).isEqualTo(1);
+		assertThat(((CourseRating) ReflectionTestUtils.getField(afterReload, "rating")).rating()).isEqualTo(5.0);
+		assertThat(((Comment) ReflectionTestUtils.getField(afterReload, "comment")).comment()).isEqualTo("comment");
+	}
+
+	@Test
 	void courseReview_concurrentUpdateAgainstBigintColumn_throwsOptimisticLockingFailure() throws Exception {
 		// given - two instances reading the same migrated row at version 0
 		final CourseReview seed = newCourseReviewForMigratedSchema(4.0, "comment");
