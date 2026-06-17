@@ -256,6 +256,40 @@ class UserOptimisticLockingOnMigratedSchemaTest {
     }
 
     @Test
+    void staleDelete_failureIdentifiesConflictingUserAndId_onMigratedSchema() {
+        // given a user loaded at version 0 from the migrated schema, with its primary key captured up front for
+        // the assertion below
+        repository.saveAndFlush(newUser());
+        final int id = idOf(USERNAME);
+        entityManager.clear();
+        final User stale = repository.findByUsername(USERNAME).orElseThrow();
+
+        // and a concurrent transaction that advanced the row's version
+        entityManager.createNativeQuery("UPDATE custom_user SET version = version + 1 WHERE username = :username")
+                .setParameter("username", USERNAME)
+                .executeUpdate();
+
+        // when the stale instance is deleted on the migrated schema, the version check finds no row at the loaded version
+        repository.delete(stale);
+
+        // then the translated failure does not merely signal that *a* conflict happened: it names the conflicting
+        // aggregate and its identifier on the real BIGINT column too - the information a caller needs to report which
+        // User lost a delete race. staleDelete_onMigratedSchema_... pins only the exception type, the merge path's
+        // identity payload is pinned by staleMerge_failureIdentifiesConflictingUserAndId_onMigratedSchema, and
+        // UserOptimisticLockingTest.delete_staleUserThroughRepository_failureIdentifiesConflictingUserAndId pins this
+        // delete-path identity payload on the Hibernate-generated INTEGER schema. This is its missing production-schema
+        // counterpart: a lost delete is a distinct Hibernate action carrying its own StaleObjectStateException, so a
+        // retyped/misbound version column could change how its identifier round-trips through Spring's translation on
+        // the only schema that ships.
+        assertThatExceptionOfType(ObjectOptimisticLockingFailureException.class)
+                .isThrownBy(repository::flush)
+                .satisfies(thrown -> {
+                    assertThat(thrown.getPersistentClassName()).isEqualTo(User.class.getName());
+                    assertThat(thrown.getIdentifier()).isEqualTo(id);
+                });
+    }
+
+    @Test
     void deleteStaleUserAfterRealJpaWrite_onMigratedSchema_throwsObjectOptimisticLockingFailureException() {
         // given a user detached at version 0 (a request's view captured before a concurrent write)
         repository.saveAndFlush(newUser());
