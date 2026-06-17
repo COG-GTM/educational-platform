@@ -1478,6 +1478,81 @@ public class OptimisticLockingMigratedSchemaTest {
 		assertThat(courseReviewRepository.isReviewer(reviewUuid, "not-the-reviewer")).isFalse();
 	}
 
+	@Test
+	void reviewer_concurrentUpdatesToDifferentRowsAgainstBigintColumn_bothSucceedAndEachVersionIncrements() {
+		// given - two independently persisted reviewers on the migrated schema, both starting at version 0
+		final Integer firstId = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("row-one-" + UUID.randomUUID()))).getId();
+		final Integer secondId = reviewerRepository
+				.saveAndFlush(new Reviewer(new CreateReviewerCommand("row-two-" + UUID.randomUUID()))).getId();
+		entityManager.clear();
+
+		// and - both rows are read into independent snapshots before either is written, modelling two concurrent
+		// transactions that each loaded a *different* row while both rows were still at version 0
+		final Reviewer firstSnapshot = reviewerRepository.findById(firstId).orElseThrow();
+		entityManager.detach(firstSnapshot);
+		final Reviewer secondSnapshot = reviewerRepository.findById(secondId).orElseThrow();
+		entityManager.detach(secondSnapshot);
+
+		// when - each snapshot writes its own row, the second one only after the first has already been committed
+		ReflectionTestUtils.setField(firstSnapshot, "username", "row-one-renamed");
+		reviewerRepository.saveAndFlush(firstSnapshot);
+		ReflectionTestUtils.setField(secondSnapshot, "username", "row-two-renamed");
+		reviewerRepository.saveAndFlush(secondSnapshot);
+
+		// then - the optimistic-lock check is scoped per row, not per table, on the production-shaped BIGINT column:
+		// committing one row does not stale a snapshot of a *different* row, so both writes succeed (neither throws)
+		// and each BIGINT version advances independently to 1. The Hibernate slice proves this on the INTEGER column
+		// (reviewer_concurrentUpdatesToDifferentRows_bothSucceedAndEachVersionIncrements); the migrated slice only
+		// asserted the same-row stale-write rejection and single-row update isolation
+		// (reviewer_updatingOneRowAgainstBigintColumn_otherRowsVersionUnchanged), never that two distinct pre-loaded
+		// snapshots both commit, so a guard wrongly keyed off table-wide state would have slipped past it here.
+		entityManager.clear();
+		final Reviewer reloadedFirst = reviewerRepository.findById(firstId).orElseThrow();
+		final Reviewer reloadedSecond = reviewerRepository.findById(secondId).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloadedFirst, "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(reloadedSecond, "version")).isEqualTo(1);
+	}
+
+	@Test
+	void courseReview_concurrentUpdatesToDifferentRowsAgainstBigintColumn_bothSucceedAndEachVersionIncrements()
+			throws Exception {
+		// given - two independently persisted reviews on the migrated schema, each wired to its own FK parents and
+		// both starting at version 0
+		final CourseReview firstRow = newCourseReviewForMigratedSchema(4.0, "first review");
+		final UUID firstUuid = firstRow.toIdentifier();
+		courseReviewRepository.saveAndFlush(firstRow);
+		final CourseReview secondRow = newCourseReviewForMigratedSchema(3.0, "second review");
+		final UUID secondUuid = secondRow.toIdentifier();
+		courseReviewRepository.saveAndFlush(secondRow);
+		entityManager.clear();
+
+		// and - both rows are read into independent snapshots before either is written, modelling two concurrent
+		// transactions that each loaded a *different* row while both rows were still at version 0
+		final CourseReview firstSnapshot = courseReviewRepository.findByUuid(firstUuid).orElseThrow();
+		entityManager.detach(firstSnapshot);
+		final CourseReview secondSnapshot = courseReviewRepository.findByUuid(secondUuid).orElseThrow();
+		entityManager.detach(secondSnapshot);
+
+		// when - each snapshot writes its own row, the second one only after the first has already been committed
+		firstSnapshot.update(new UpdateCourseReviewCommand(firstUuid, 5.0, "first row updated"));
+		courseReviewRepository.saveAndFlush(firstSnapshot);
+		secondSnapshot.update(new UpdateCourseReviewCommand(secondUuid, 2.0, "second row updated"));
+		courseReviewRepository.saveAndFlush(secondSnapshot);
+
+		// then - the optimistic-lock check is scoped per row, not per table, on the production-shaped BIGINT column:
+		// committing one row does not stale a snapshot of a *different* row, so both writes succeed (neither throws)
+		// and each BIGINT version advances independently to 1. Mirrors the Hibernate slice's
+		// courseReview_concurrentUpdatesToDifferentRows_bothSucceedAndEachVersionIncrements onto the migrated column;
+		// courseReview_updatingOneReviewAgainstBigintColumn_otherReviewsVersionUnchanged only updates one row and
+		// asserts the other is untouched, never writing a pre-loaded snapshot of the second row after the first commit.
+		entityManager.clear();
+		final CourseReview reloadedFirst = courseReviewRepository.findByUuid(firstUuid).orElseThrow();
+		final CourseReview reloadedSecond = courseReviewRepository.findByUuid(secondUuid).orElseThrow();
+		assertThat(ReflectionTestUtils.getField(reloadedFirst, "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(reloadedSecond, "version")).isEqualTo(1);
+	}
+
 	/**
 	 * Persists a {@link CourseReview} bound to the given reviewer (and a freshly created reviewable-course FK parent)
 	 * on the migrated schema, returning its uuid. Used by the {@code isReviewer} read-query tests, which need the
