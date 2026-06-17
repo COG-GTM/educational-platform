@@ -708,6 +708,46 @@ public class OptimisticLockingTest {
 		assertThat(courseReviewRepository.isReviewer(COURSE_REVIEW_UUID, "another-reviewer")).isFalse();
 	}
 
+	@Test
+	void courseReview_allJoinedTablesVersionBumped_listCourseReviewsStillProjectsEveryField() {
+		// given - every table the listCourseReviews projection joins is mutated, so all three rows this PR
+		// versioned advance to version 1: the reviewable_course's originalCourseId, the reviewer's username
+		// and the course_review's own rating/comment. None of the foreign keys change, so the joins still match.
+		final UUID newOriginalCourseId = UUID.randomUUID();
+		final ReviewableCourse course = reviewableCourseRepository.findByOriginalCourseId(COURSE_UUID).orElseThrow();
+		ReflectionTestUtils.setField(course, "originalCourseId", newOriginalCourseId);
+		reviewableCourseRepository.saveAndFlush(course);
+
+		final Reviewer reviewer = reviewerRepository.findByUsername("reviewer");
+		ReflectionTestUtils.setField(reviewer, "username", "reviewer-renamed");
+		reviewerRepository.saveAndFlush(reviewer);
+
+		final CourseReview review = courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow();
+		review.update(new UpdateCourseReviewCommand(COURSE_REVIEW_UUID, 5.0, "updated comment"));
+		courseReviewRepository.saveAndFlush(review);
+		entityManager.clear();
+
+		// then - each of the three joined rows really sits at version 1 now
+		assertThat(ReflectionTestUtils.getField(
+				reviewableCourseRepository.findByOriginalCourseId(newOriginalCourseId).orElseThrow(), "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(reviewerRepository.findByUsername("reviewer-renamed"), "version")).isEqualTo(1);
+		assertThat(ReflectionTestUtils.getField(
+				courseReviewRepository.findByUuid(COURSE_REVIEW_UUID).orElseThrow(), "version")).isEqualTo(1);
+
+		// and - the three-way join/projection stays fully intact when every joined table sits at a non-zero
+		// version: every DTO field still resolves to its now-current value. listCourseReviews_seededReviewProjects...
+		// pins the projection while all rows are at the initial version 0; this pins it once every joined table
+		// this PR versioned has advanced past it, so the added version columns cannot quietly corrupt the read join.
+		final List<CourseReviewDTO> reviews = courseReviewRepository.listCourseReviews(newOriginalCourseId);
+		assertThat(reviews).hasSize(1);
+		final CourseReviewDTO dto = reviews.get(0);
+		assertThat(dto.uuid()).isEqualTo(COURSE_REVIEW_UUID);
+		assertThat(dto.course()).isEqualTo(newOriginalCourseId);
+		assertThat(dto.username()).isEqualTo("reviewer-renamed");
+		assertThat(dto.comment()).isEqualTo("updated comment");
+		assertThat(dto.rating()).isEqualTo(5.0);
+	}
+
 	// --- Reviewer -----------------------------------------------------------
 
 	@Test
@@ -1164,6 +1204,30 @@ public class OptimisticLockingTest {
 		reviewerRepository.flush();
 		entityManager.clear();
 		assertThat(reviewerRepository.findById(id)).isEmpty();
+	}
+
+	@Test
+	void reviewer_versionBumped_listCourseReviewsAndIsReviewerStillResolveAcrossJoin() {
+		// given - the seeded reviewer is renamed, bumping the reviewer row this PR versioned to version 1.
+		// The seeded course_review joins to this row (by id) for the username the read queries project/match on.
+		final Reviewer seeded = reviewerRepository.findByUsername("reviewer");
+		ReflectionTestUtils.setField(seeded, "username", "reviewer-renamed");
+		reviewerRepository.saveAndFlush(seeded);
+		entityManager.clear();
+
+		// then - the joined reviewer row really advanced to version 1
+		assertThat(ReflectionTestUtils.getField(reviewerRepository.findByUsername("reviewer-renamed"), "version")).isEqualTo(1);
+
+		// and - the read queries that join course_review -> reviewer are unaffected by the parent's version bump:
+		// listCourseReviews still projects the now-current username across the join, and isReviewer resolves the
+		// renamed reviewer while rejecting the stale name. courseReview_updatedBumpingVersion_isReviewerQueryStillResolves
+		// only bumps the course_review version; the joined reviewer table this PR also versioned was never checked.
+		final List<CourseReviewDTO> reviews = courseReviewRepository.listCourseReviews(COURSE_UUID);
+		assertThat(reviews).hasSize(1);
+		assertThat(reviews.get(0).uuid()).isEqualTo(COURSE_REVIEW_UUID);
+		assertThat(reviews.get(0).username()).isEqualTo("reviewer-renamed");
+		assertThat(courseReviewRepository.isReviewer(COURSE_REVIEW_UUID, "reviewer-renamed")).isTrue();
+		assertThat(courseReviewRepository.isReviewer(COURSE_REVIEW_UUID, "reviewer")).isFalse();
 	}
 
 	// --- ReviewableCourse ---------------------------------------------------
@@ -1645,6 +1709,30 @@ public class OptimisticLockingTest {
 		reviewableCourseRepository.flush();
 		entityManager.clear();
 		assertThat(reviewableCourseRepository.findById(id)).isEmpty();
+	}
+
+	@Test
+	void reviewableCourse_versionBumped_listCourseReviewsStillProjectsCourseAcrossJoin() {
+		// given - the seeded reviewable_course's originalCourseId is changed, bumping the row this PR versioned
+		// to version 1. The seeded course_review joins to this row by id (unchanged), and the query projects the
+		// course's originalCourseId as the review's course field.
+		final UUID newOriginalCourseId = UUID.randomUUID();
+		final ReviewableCourse seeded = reviewableCourseRepository.findByOriginalCourseId(COURSE_UUID).orElseThrow();
+		ReflectionTestUtils.setField(seeded, "originalCourseId", newOriginalCourseId);
+		reviewableCourseRepository.saveAndFlush(seeded);
+		entityManager.clear();
+
+		// then - the joined reviewable_course row really advanced to version 1
+		assertThat(ReflectionTestUtils.getField(
+				reviewableCourseRepository.findByOriginalCourseId(newOriginalCourseId).orElseThrow(), "version")).isEqualTo(1);
+
+		// and - listCourseReviews still resolves the join to the version-bumped parent and projects its now-current
+		// originalCourseId as the review's course. Only the course_review version bump was previously checked for
+		// read resilience; the joined reviewable_course table this PR also versioned was not.
+		final List<CourseReviewDTO> reviews = courseReviewRepository.listCourseReviews(newOriginalCourseId);
+		assertThat(reviews).hasSize(1);
+		assertThat(reviews.get(0).uuid()).isEqualTo(COURSE_REVIEW_UUID);
+		assertThat(reviews.get(0).course()).isEqualTo(newOriginalCourseId);
 	}
 
 	// --- Seed fixture (course_review.sql) -----------------------------------
