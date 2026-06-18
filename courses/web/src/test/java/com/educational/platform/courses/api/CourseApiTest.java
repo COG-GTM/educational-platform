@@ -14,6 +14,8 @@ import org.springframework.test.context.jdbc.Sql;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.notNullValue;
 
 /**
  * Represents API tests for course functionality.
@@ -63,5 +65,76 @@ public class CourseApiTest {
 
                 .then()
                 .statusCode(HttpStatus.NO_CONTENT.value());
+    }
+
+    @Test
+    void search_keywordMatchesExistingCourse_courseReturned() {
+        var token = SignUpHelper.signUpTeacher();
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .queryParam("keyword", "course")
+
+                .when()
+                .get("/courses/search")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("size()", equalTo(1))
+                .body("[0].name", equalTo("course name"))
+                .body("[0].description", equalTo("description"));
+    }
+
+    @Test
+    void search_keywordWithoutMatches_emptyArrayReturned() {
+        var token = SignUpHelper.signUpTeacher();
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .queryParam("keyword", "no-such-course")
+
+                .when()
+                .get("/courses/search")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("size()", equalTo(0));
+    }
+
+    @Test
+    void search_keywordMatchesDescription_courseReturned() {
+        var token = SignUpHelper.signUpTeacher();
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .queryParam("keyword", "description")
+
+                .when()
+                .get("/courses/search")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("size()", equalTo(1))
+                .body("[0].name", equalTo("course name"))
+                .body("[0].description", equalTo("description"))
+                .body("[0].numberOfStudents", equalTo(0))
+                .body("[0].uuid", notNullValue());
+    }
+
+    @Test
+    void search_emptyKeyword_allCoursesReturned() {
+        var token = SignUpHelper.signUpTeacher();
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .queryParam("keyword", "")
+
+                .when()
+                .get("/courses/search")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("size()", equalTo(1))
+                .body("[0].name", equalTo("course name"));
     }
 }
