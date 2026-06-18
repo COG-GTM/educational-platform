@@ -27,7 +27,7 @@ class SendCourseToApproveIntegrationEventHandlerTest {
     private SendCourseToApproveIntegrationEventHandler sut;
 
     @Test
-    void handleCourseApprovedByAdminEvent_approveCourseCommandExecuted() {
+    void handleSendCourseToApproveEvent_createCourseProposalCommandExecuted() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);

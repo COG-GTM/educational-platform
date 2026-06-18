@@ -93,4 +93,20 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .hasFieldOrPropertyWithValue("rating", -1.0);
     }
 
+    @Test
+    void handleCourseRatingRecalculatedEvent_nullCourseId_propagatedToCommand() {
+        // given - the mapped courseId is forwarded verbatim, the listener performs no validation
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(null, 4.5);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", null)
+                .hasFieldOrPropertyWithValue("rating", 4.5);
+    }
+
 }
