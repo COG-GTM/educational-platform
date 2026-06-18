@@ -136,6 +136,33 @@ public class UpdateCourseRatingCommandHandlerTest {
     }
 
     @Test
+    void handle_negativeRating_courseSavedWithNegativeRatingVerbatim() {
+        // given - the listener forwards an out-of-range recalculated rating verbatim; this confirms the
+        // write layer also applies no validation and persists the negative value as-is
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440005");
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, -1.0);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(-1.0));
+    }
+
+    @Test
     void handle_repositoryThrows_exceptionPropagated() {
         // given - a persistence failure while saving the course must propagate so the async consumer's transaction rolls back
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440004");

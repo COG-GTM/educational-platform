@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -87,6 +88,27 @@ public class IncreaseNumberOfStudentsCommandHandlerTest {
         // then
         final ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
         verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(2));
+    }
+
+    @Test
+    void handle_redeliveredEvent_numberOfStudentsAccumulatesAndIsNotIdempotent() {
+        // given - the StudentEnrolledToCourse event is delivered at-least-once and the handler has no
+        // dedup guard, so two deliveries for the same course increment the count twice (0 -> 1 -> 2)
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440005");
+        final IncreaseNumberOfStudentsCommand command = new IncreaseNumberOfStudentsCommand(uuid);
+
+        final Course correspondingCourse = course();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository, times(2)).save(argument.capture());
         assertThat(argument.getValue())
                 .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(2));
     }

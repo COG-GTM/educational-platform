@@ -84,6 +84,27 @@ class RegisterStudentToCourseCommandHandlerTest {
     }
 
     @Test
+    void handle_currentUserUnresolvedAfterCommit_enrollmentPersistedButNoEventPublished() {
+        // given - the enrollment is saved inside the transaction, but the integration event is built and
+        // published only afterwards from the current user reference; if that reference cannot be resolved
+        // the write is already committed while the event is never emitted (publish is not atomic with the save)
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440004");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+
+        final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+        when(courseEnrollmentFactory.createFrom(command)).thenReturn(enrollment);
+        when(currentUserAsStudent.userAsStudent()).thenReturn(null);
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(NullPointerException.class).isThrownBy(handle);
+        verify(courseEnrollmentRepository).save(enrollment);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
     void handle_courseCannotBeResolved_exceptionPropagatedAndNoEventPublished() {
         // given - enrollment fails inside the transaction, so the integration event must not be published
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
