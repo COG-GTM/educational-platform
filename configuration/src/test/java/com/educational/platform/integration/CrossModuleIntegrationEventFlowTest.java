@@ -21,6 +21,10 @@ import org.springframework.test.context.jdbc.Sql;
 import com.educational.platform.administration.course.CourseProposal;
 import com.educational.platform.administration.course.CourseProposalRepository;
 import com.educational.platform.administration.course.CourseProposalStatus;
+import com.educational.platform.administration.course.approve.ApproveCourseProposalCommand;
+import com.educational.platform.administration.course.approve.ApproveCourseProposalCommandHandler;
+import com.educational.platform.administration.course.create.CreateCourseProposalCommand;
+import com.educational.platform.administration.course.create.CreateCourseProposalCommandHandler;
 import com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent;
 import com.educational.platform.course.enrollments.integration.event.StudentEnrolledToCourseIntegrationEvent;
 import com.educational.platform.course.reviews.integration.event.CourseRatingRecalculatedIntegrationEvent;
@@ -32,7 +36,10 @@ import com.educational.platform.courses.course.NumberOfStudents;
 import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
 import com.educational.platform.courses.teacher.Teacher;
 import com.educational.platform.courses.teacher.TeacherRepository;
+import com.educational.platform.users.RoleDTO;
 import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
+import com.educational.platform.users.registration.UserRegistrationCommand;
+import com.educational.platform.users.registration.UserRegistrationCommandHandler;
 
 /**
  * Verifies that integration events published in one module are routed, within a
@@ -47,7 +54,15 @@ import com.educational.platform.users.integration.event.UserCreatedIntegrationEv
  * since these tests exercise event routing, not authorization. Disabling
  * security removes the {@link PasswordEncoder} and {@link AuthenticationManager}
  * beans that the users module wires unconditionally, so {@link TestSecurityConfig}
- * supplies inert replacements purely to keep the context bootable.
+ * supplies inert replacements purely to keep the context bootable. It also
+ * disables method security, so the {@code @PreAuthorize} guards on the producer
+ * command handlers exercised below are not enforced.
+ *
+ * <p>Most tests publish the integration event directly to verify the consumer in
+ * isolation. The {@code ...PublishesEventAnd...} tests instead invoke the real
+ * producer command handler so the full producer -> event -> consumer chain is
+ * covered end-to-end: a regression in either the producer's publish call or the
+ * event's cross-module payload contract would fail them.
  *
  * <p>TODO: {@code CourseDeclinedByAdminIntegrationEvent} (published by the
  * administration module's {@code DeclineCourseProposalCommandHandler}) has no
@@ -95,6 +110,15 @@ class CrossModuleIntegrationEventFlowTest {
 
     @Autowired
     private TeacherRepository teacherRepository;
+
+    @Autowired
+    private UserRegistrationCommandHandler userRegistrationCommandHandler;
+
+    @Autowired
+    private CreateCourseProposalCommandHandler createCourseProposalCommandHandler;
+
+    @Autowired
+    private ApproveCourseProposalCommandHandler approveCourseProposalCommandHandler;
 
     @Test
     void sendCourseToApproveIntegrationEventCreatesCourseProposal() {
@@ -158,6 +182,49 @@ class CrossModuleIntegrationEventFlowTest {
             final Teacher teacher = teacherRepository.findByUsername("newteacher");
             assertThat(teacher).isNotNull();
             assertThat(teacher).hasFieldOrPropertyWithValue("username", "newteacher");
+        });
+    }
+
+    @Test
+    void userRegistrationCommandPublishesEventAndCreatesTeacher() {
+        // the producer side of flow 5: registering a user must publish a
+        // UserCreatedIntegrationEvent carrying the registered username, which the
+        // courses module turns into a Teacher projection.
+        final UserRegistrationCommand command = UserRegistrationCommand.builder()
+                .role(RoleDTO.ROLE_TEACHER)
+                .username("registered-teacher")
+                .email("registered-teacher@test.com")
+                .password("password")
+                .build();
+
+        userRegistrationCommandHandler.handle(command);
+
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+            final Teacher teacher = teacherRepository.findByUsername("registered-teacher");
+            assertThat(teacher).isNotNull();
+            assertThat(teacher).hasFieldOrPropertyWithValue("username", "registered-teacher");
+        });
+    }
+
+    @Test
+    void approveCourseProposalCommandPublishesEventAndApprovesCourse() {
+        // the producer side of flow 2: approving a proposal must publish a
+        // CourseApprovedByAdminIntegrationEvent carrying the course UUID, which the
+        // courses module uses to move the corresponding Course to APPROVED.
+        createCourseProposalCommandHandler.handle(new CreateCourseProposalCommand(APPROVE_COURSE_UUID));
+
+        approveCourseProposalCommandHandler.handle(new ApproveCourseProposalCommand(APPROVE_COURSE_UUID));
+
+        final Optional<CourseProposal> proposal = courseProposalRepository.findByUuid(APPROVE_COURSE_UUID);
+        assertThat(proposal).isPresent();
+        assertThat(proposal.get())
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED);
+
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+            final Optional<Course> course = courseRepository.findByUuid(APPROVE_COURSE_UUID);
+            assertThat(course).isPresent();
+            assertThat(course.get())
+                    .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
         });
     }
 }
