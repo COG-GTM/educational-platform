@@ -12,6 +12,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,6 +41,20 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         final CreateCourseProposalCommand createCourseProposalCommand = argument.getValue();
         assertThat(createCourseProposalCommand)
                 .hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_commandHandlerThrows_exceptionPropagated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new RuntimeException("course proposal could not be created"))
+                .when(createCourseProposalCommandHandler).handle(any(CreateCourseProposalCommand.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("course proposal could not be created");
     }
 
 }

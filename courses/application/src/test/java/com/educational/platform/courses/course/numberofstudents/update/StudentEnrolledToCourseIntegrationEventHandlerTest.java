@@ -15,6 +15,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,6 +45,36 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         final IncreaseNumberOfStudentsCommand updateNumberOfStudentsCommand = argument.getValue();
         assertThat(updateNumberOfStudentsCommand)
                 .hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_usernameIgnored_courseIdStillMapped() {
+        // given - the handler only enrolls against the course, the event username is not used
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, null);
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> argument = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_commandHandlerThrows_exceptionPropagated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        doThrow(new RuntimeException("number of students could not be increased"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any(IncreaseNumberOfStudentsCommand.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("number of students could not be increased");
     }
 
 }
