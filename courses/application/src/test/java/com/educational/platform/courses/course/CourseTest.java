@@ -153,4 +153,93 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
     }
 
+    @Test
+    void increaseNumberOfStudents_freshCourse_numberOfStudentsIncrementedToOne() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.increaseNumberOfStudents();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(1));
+    }
+
+    @Test
+    void increaseNumberOfStudents_calledMultipleTimes_numberOfStudentsAccumulates() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.increaseNumberOfStudents();
+        course.increaseNumberOfStudents();
+        course.increaseNumberOfStudents();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(3));
+    }
+
+    @Test
+    void updateRating_freshCourse_ratingSetToProvidedValue() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.updateRating(4.5);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(4.5));
+    }
+
+    @Test
+    void updateRating_calledAgain_overwritesPreviousRating() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.updateRating(4.5);
+
+        // when
+        course.updateRating(2.0);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(2.0));
+    }
+
+    @Test
+    void updateRating_zeroValue_ratingSetToZero() {
+        // given - boundary: a recalculation that resets the rating to zero (e.g. all reviews removed)
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.updateRating(4.5);
+
+        // when
+        course.updateRating(0.0);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0.0));
+    }
+
 }
