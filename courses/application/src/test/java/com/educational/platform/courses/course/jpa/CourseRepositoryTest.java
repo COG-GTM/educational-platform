@@ -200,6 +200,37 @@ public class CourseRepositoryTest {
 		assertThat(result).isEmpty();
 	}
 
+	@Test
+	void searchByKeyword_multipleCoursesMatchByName_allReturned() {
+		// given
+		givenCourse("Java Fundamentals", "Introductory programming course");
+		givenCourse("Advanced Java", "JVM internals and tuning");
+		givenCourse("Cooking 101", "Learn to bake bread");
+
+		// when
+		var result = courseRepository.searchByKeyword("Java");
+
+		// then
+		assertThat(result).hasSize(2);
+		assertThat(result).extracting("name").containsExactlyInAnyOrder("Java Fundamentals", "Advanced Java");
+	}
+
+	@Test
+	void searchByKeyword_likeWildcardKeyword_treatedAsWildcardAndMatchesAll() {
+		// given
+		givenCourse("Java Fundamentals", "Introductory programming course");
+		givenCourse("Cooking 101", "Learn to bake bread");
+
+		// when
+		// SQL metacharacters such as quotes are parameterized as literals (see the injection test above),
+		// but LIKE metacharacters are not escaped, so "%" still acts as a wildcard and matches every course.
+		var result = courseRepository.searchByKeyword("%");
+
+		// then
+		assertThat(result).hasSize(2);
+		assertThat(result).extracting("name").containsExactlyInAnyOrder("Java Fundamentals", "Cooking 101");
+	}
+
 	private void givenCourse(String name, String description) {
 		var createTeacherCommand = new CreateTeacherCommand(TEACHER);
 		var teacher = new Teacher(createTeacherCommand);

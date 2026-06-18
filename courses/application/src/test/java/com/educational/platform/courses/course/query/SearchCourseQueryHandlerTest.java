@@ -94,6 +94,19 @@ public class SearchCourseQueryHandlerTest {
     }
 
     @Test
+    void handle_keywordWithSurroundingWhitespace_passedVerbatimToRepository() {
+        // given
+        when(repository.searchByKeyword("  java  ")).thenReturn(List.of());
+
+        // when
+        sut.handle(new SearchCourseQuery("  java  "));
+
+        // then
+        // the handler must not trim or otherwise normalize the keyword before delegating.
+        verify(repository).searchByKeyword("  java  ");
+    }
+
+    @Test
     void handle_query_onlyInteractsWithRepositorySearch() {
         // given
         when(repository.searchByKeyword("java")).thenReturn(List.of());
