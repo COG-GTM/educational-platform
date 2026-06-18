@@ -77,4 +77,19 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
                 .hasMessage("number of students could not be increased");
     }
 
+    @Test
+    void handleStudentEnrolledToCourseEvent_nullCourseId_propagatedToCommand() {
+        // given - the listener performs no validation; a null courseId is forwarded verbatim
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(null, "username");
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> argument = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", null);
+    }
+
 }

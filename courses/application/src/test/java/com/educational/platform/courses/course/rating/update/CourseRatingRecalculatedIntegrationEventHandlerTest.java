@@ -76,4 +76,21 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .hasMessage("course rating could not be updated");
     }
 
+    @Test
+    void handleCourseRatingRecalculatedEvent_negativeRating_propagatedToCommand() {
+        // given - the listener does not validate; an out-of-range (negative) rating is forwarded verbatim
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440004");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, -1.0);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("rating", -1.0);
+    }
+
 }

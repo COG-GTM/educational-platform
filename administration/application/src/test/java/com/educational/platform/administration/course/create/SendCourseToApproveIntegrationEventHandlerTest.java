@@ -57,4 +57,19 @@ class SendCourseToApproveIntegrationEventHandlerTest {
                 .hasMessage("course proposal could not be created");
     }
 
+    @Test
+    void handleSendCourseToApproveEvent_nullCourseId_propagatedToCommand() {
+        // given - the listener performs no validation; a null courseId is forwarded verbatim
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(null);
+
+        // when
+        sut.handleSendCourseToApproveEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateCourseProposalCommand> argument = ArgumentCaptor.forClass(CreateCourseProposalCommand.class);
+        verify(createCourseProposalCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", null);
+    }
+
 }

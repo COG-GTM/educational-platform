@@ -57,4 +57,19 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
                 .hasMessage("course could not be approved");
     }
 
+    @Test
+    void handleCourseApprovedByAdminEvent_nullCourseId_propagatedToCommand() {
+        // given - the listener performs no validation; a null courseId is forwarded verbatim
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(null);
+
+        // when
+        sut.handleCourseApprovedByAdminEvent(event);
+
+        // then
+        final ArgumentCaptor<ApproveCourseCommand> argument = ArgumentCaptor.forClass(ApproveCourseCommand.class);
+        verify(approveCourseCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", null);
+    }
+
 }
