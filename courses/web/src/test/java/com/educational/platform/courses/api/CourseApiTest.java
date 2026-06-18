@@ -14,6 +14,7 @@ import org.springframework.test.context.jdbc.Sql;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
@@ -153,5 +154,60 @@ public class CourseApiTest {
                 .statusCode(HttpStatus.OK.value())
                 .body("size()", equalTo(1))
                 .body("[0].name", equalTo("course name"));
+    }
+
+    @Test
+    void search_keywordMatchesNewlyCreatedCourse_courseReturned() {
+        var token = SignUpHelper.signUpTeacher();
+        createCourse(token, "Quantum Computing", "Qubits and entanglement");
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .queryParam("keyword", "Quantum")
+
+                .when()
+                .get("/courses/search")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("size()", equalTo(1))
+                .body("[0].name", equalTo("Quantum Computing"))
+                .body("[0].description", equalTo("Qubits and entanglement"))
+                .body("[0].numberOfStudents", equalTo(0))
+                .body("[0].uuid", notNullValue());
+    }
+
+    @Test
+    void search_keywordMatchesMultipleCourses_allMatchingCoursesReturned() {
+        var token = SignUpHelper.signUpTeacher();
+        createCourse(token, "Advanced course", "Deep dive");
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .queryParam("keyword", "course")
+
+                .when()
+                .get("/courses/search")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("size()", equalTo(2))
+                .body("name", containsInAnyOrder("course name", "Advanced course"));
+    }
+
+    private void createCourse(String token, String name, String description) {
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .body("{\n" +
+                        "  \"name\": \"" + name + "\",\n" +
+                        "  \"description\": \"" + description + "\"\n" +
+                        "}")
+
+                .when()
+                .post("/courses")
+
+                .then()
+                .statusCode(HttpStatus.CREATED.value());
     }
 }
