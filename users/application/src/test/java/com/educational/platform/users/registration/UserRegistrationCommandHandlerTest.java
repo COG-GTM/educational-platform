@@ -28,6 +28,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -216,5 +217,26 @@ public class UserRegistrationCommandHandlerTest {
         // then
         assertThat(token).isEqualTo("jwt-token");
         verify(jwtTokenProvider).createToken("username", List.of(Role.ROLE_STUDENT));
+    }
+
+    @Test
+    void handle_repositoryThrows_userCreatedIntegrationEventNotPublished() {
+        // given - a persistence failure rolls back the transaction, so the event published only after a
+        // successful write must not be emitted
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        doThrow(new RuntimeException("db error")).when(repository).save(any(User.class));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(handle);
+        verify(eventPublisher, never()).publishEvent(any());
     }
 }

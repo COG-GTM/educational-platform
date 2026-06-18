@@ -25,6 +25,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -95,6 +96,25 @@ class RegisterStudentToCourseCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(RelatedResourceIsNotResolvedException.class).isThrownBy(handle);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void handle_repositoryThrows_exceptionPropagatedAndNoEventPublished() {
+        // given - the enrollment is built but persistence fails inside the transaction, so the event
+        // published only after a successful write must not be emitted
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+
+        final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+        when(courseEnrollmentFactory.createFrom(command)).thenReturn(enrollment);
+        doThrow(new RuntimeException("db error")).when(courseEnrollmentRepository).save(enrollment);
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(handle);
         verify(eventPublisher, never()).publishEvent(any());
     }
 

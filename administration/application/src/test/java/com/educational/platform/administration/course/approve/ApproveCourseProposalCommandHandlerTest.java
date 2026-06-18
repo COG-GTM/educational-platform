@@ -25,6 +25,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -124,6 +125,25 @@ class ApproveCourseProposalCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(CourseProposalAlreadyApprovedException.class).isThrownBy(handle);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void handle_repositoryThrows_exceptionPropagatedAndNoEventPublished() {
+        // given - a persistence failure rolls back the transaction, so the event published only after a
+        // successful write must not be emitted
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440004");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(proposal));
+        doThrow(new RuntimeException("db error")).when(repository).save(any(CourseProposal.class));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(handle);
         verify(eventPublisher, never()).publishEvent(any());
     }
 }
