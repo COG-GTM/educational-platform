@@ -70,6 +70,18 @@ public class PasswordConstraintValidatorTest {
     }
 
     @Test
+    void isValid_emptyPassword_invalid() {
+        // given - unlike null (which is delegated), an empty string is validated and its zero length
+        // falls below LengthRule(8, 30)'s lower bound
+
+        // when
+        final boolean valid = sut.isValid("", context);
+
+        // then
+        assertThat(valid).isFalse();
+    }
+
+    @Test
     void isValid_tooShortPassword_invalid() {
         // given - seven characters is one below the inclusive lower bound
 

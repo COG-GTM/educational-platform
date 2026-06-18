@@ -353,6 +353,26 @@ public class CourseTest {
     }
 
     @Test
+    void decline_approvedCourse_declinedStatus() {
+        // given - decline() is unconditional, so an already-approved course can still be moved to declined
+        // (the symmetric counterpart of approve_declinedCourse_approvedStatus; relevant to a future
+        // CourseDeclinedByAdmin consumer that would call Course.decline())
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.approve();
+
+        // when
+        course.decline();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.DECLINED);
+    }
+
+    @Test
     void publish_declinedCourse_courseCannotBePublishedException() {
         // given - the publish guard rejects any non-approved status, including a declined course
         final CreateCourseCommand command = CreateCourseCommand.builder()
