@@ -23,6 +23,8 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
@@ -194,5 +196,25 @@ public class UserRegistrationCommandHandlerTest {
         // then
         assertThatExceptionOfType(UnprocessableEntityException.class).isThrownBy(handle);
         verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void handle_validCommand_jwtTokenReturnedForRole() {
+        // given - the handler returns the token created for the new user's username and granted role
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("jwt-token");
+
+        // when
+        final String token = sut.handle(userRegistrationCommand);
+
+        // then
+        assertThat(token).isEqualTo("jwt-token");
+        verify(jwtTokenProvider).createToken("username", List.of(Role.ROLE_STUDENT));
     }
 }

@@ -294,4 +294,24 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.ARCHIVED);
     }
 
+    @Test
+    void publish_archivedApprovedCourse_republished() {
+        // given - archiving is not terminal; an approved course can be published again after being archived
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.approve();
+        course.publish();
+        course.archive();
+
+        // when
+        course.publish();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED);
+    }
+
 }
