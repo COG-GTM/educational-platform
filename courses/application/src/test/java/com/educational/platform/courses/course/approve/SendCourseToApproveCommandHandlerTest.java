@@ -106,4 +106,29 @@ public class SendCourseToApproveCommandHandlerTest {
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
         verify(eventPublisher, never()).publishEvent(any());
     }
+
+    @Test
+    void handle_courseAlreadyApproved_integrationEventNotPublished() {
+        // given - sending an already approved course to approve must fail before emitting the event
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+        final SendCourseToApproveCommand command = new SendCourseToApproveCommand(uuid);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course alreadyApprovedCourse = courseFactory.createFrom(createCourseCommand);
+        alreadyApprovedCourse.approve();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(alreadyApprovedCourse));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(CourseAlreadyApprovedException.class).isThrownBy(handle);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
 }

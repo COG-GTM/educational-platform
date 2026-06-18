@@ -3,6 +3,7 @@ package com.educational.platform.administration.course.approve;
 import com.educational.platform.administration.course.CourseProposal;
 import com.educational.platform.administration.course.CourseProposalRepository;
 import com.educational.platform.administration.course.CourseProposalStatus;
+import com.educational.platform.administration.course.CourseProposalAlreadyApprovedException;
 import com.educational.platform.administration.course.create.CreateCourseProposalCommand;
 import com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent;
 import com.educational.platform.common.exception.ResourceNotFoundException;
@@ -105,6 +106,24 @@ class ApproveCourseProposalCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void handle_courseProposalAlreadyApproved_integrationEventNotPublished() {
+        // given - approving an already approved proposal must fail inside the transaction before emitting the event
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+
+        final CourseProposal alreadyApproved = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        alreadyApproved.approve();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(alreadyApproved));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(CourseProposalAlreadyApprovedException.class).isThrownBy(handle);
         verify(eventPublisher, never()).publishEvent(any());
     }
 }
