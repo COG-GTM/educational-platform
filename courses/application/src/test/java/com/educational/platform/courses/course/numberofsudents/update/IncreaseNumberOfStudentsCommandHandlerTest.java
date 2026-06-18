@@ -21,7 +21,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -116,6 +118,23 @@ public class IncreaseNumberOfStudentsCommandHandlerTest {
         // then
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
         verify(repository, never()).save(any());
+    }
+
+    @Test
+    void handle_repositoryThrows_exceptionPropagated() {
+        // given - a persistence failure while saving the course must propagate so the async consumer's transaction rolls back
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440004");
+        final IncreaseNumberOfStudentsCommand command = new IncreaseNumberOfStudentsCommand(uuid);
+
+        final Course correspondingCourse = course();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+        doThrow(new RuntimeException("number of students could not be saved"))
+                .when(repository).save(any(Course.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(command))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("number of students could not be saved");
     }
 
     private Course course() {
