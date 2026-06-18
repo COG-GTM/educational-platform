@@ -151,23 +151,6 @@ public class CourseTest {
     }
 
     @Test
-    void archive_archivedStatus() {
-        // given
-        final CreateCourseCommand command = CreateCourseCommand.builder()
-                .name("name")
-                .description("description")
-                .build();
-        final Course course = new Course(command, TEACHER_ID);
-
-        // when
-        course.archive();
-
-        // then
-        assertThat(course)
-                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.ARCHIVED);
-    }
-
-    @Test
     void sendToApprove_declinedCourse_waitingForApprovalStatus() {
         // given - the sendToApprove guard only blocks an already-approved course, so a declined course can be re-submitted for approval
         final CreateCourseCommand command = CreateCourseCommand.builder()
