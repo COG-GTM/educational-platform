@@ -2,12 +2,16 @@ package com.educational.platform.courses.course;
 
 
 import com.educational.platform.courses.course.create.CreateCourseCommand;
+import com.educational.platform.courses.course.create.CreateLectureCommand;
+import com.educational.platform.courses.course.create.CreateQuestionCommand;
+import com.educational.platform.courses.course.create.CreateQuizCommand;
 import com.educational.platform.courses.teacher.Teacher;
 import com.educational.platform.courses.teacher.create.CreateTeacherCommand;
 import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -387,6 +391,53 @@ public class CourseTest {
 
         // then
         assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(publish);
+    }
+
+    @Test
+    void create_withCurriculumItems_itemsMappedAndAttachedToCourse() {
+        // given - when the command carries curriculum items the constructor maps each one onto the course
+        final CreateLectureCommand lecture = CreateLectureCommand.builder()
+                .title("Lecture 1")
+                .description("lecture description")
+                .serialNumber(1)
+                .text("lecture body")
+                .build();
+        final CreateQuizCommand quiz = CreateQuizCommand.builder()
+                .title("Quiz 1")
+                .description("quiz description")
+                .serialNumber(2)
+                .text("quiz body")
+                .questions(List.of(new CreateQuestionCommand("Q1")))
+                .build();
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .curriculumItems(List.of(lecture, quiz))
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat((List<?>) ReflectionTestUtils.getField(course, "curriculumItems"))
+                .hasSize(2)
+                .extracting("title")
+                .containsExactly("Lecture 1", "Quiz 1");
+    }
+
+    @Test
+    void create_withoutCurriculumItems_curriculumItemsNotInitialised() {
+        // given - the constructor only maps curriculum items when the command supplies them
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(ReflectionTestUtils.getField(course, "curriculumItems")).isNull();
     }
 
     @Test
