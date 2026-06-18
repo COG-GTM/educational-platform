@@ -231,12 +231,55 @@ public class CourseRepositoryTest {
 		assertThat(result).extracting("name").containsExactlyInAnyOrder("Java Fundamentals", "Cooking 101");
 	}
 
+	@Test
+	void searchByKeyword_underscoreWildcardKeyword_treatedAsSingleCharWildcardAndMatchesAll() {
+		// given
+		givenCourse("Java Fundamentals", "Introductory programming course");
+		givenCourse("Cooking 101", "Learn to bake bread");
+
+		// when
+		// "_" is a single-character LIKE wildcard and, like "%", is not escaped, so "%_%" matches every non-empty course.
+		var result = courseRepository.searchByKeyword("_");
+
+		// then
+		assertThat(result).hasSize(2);
+		assertThat(result).extracting("name").containsExactlyInAnyOrder("Java Fundamentals", "Cooking 101");
+	}
+
+	@Test
+	void searchByKeyword_courseWithStudents_numberOfStudentsMappedInLightDto() {
+		// given
+		// every other test only ever observes the default count of 0; this guards the NumberOfStudents -> int
+		// mapping in the CourseLightDTO projection for a non-zero value.
+		givenCourseWithStudents("Java Fundamentals", "Introductory programming course", 3);
+
+		// when
+		var result = courseRepository.searchByKeyword("Java");
+
+		// then
+		assertThat(result).hasSize(1);
+		assertThat(result.get(0)).hasFieldOrPropertyWithValue("name", "Java Fundamentals")
+				.hasFieldOrPropertyWithValue("numberOfStudents", 3);
+	}
+
 	private void givenCourse(String name, String description) {
 		var createTeacherCommand = new CreateTeacherCommand(TEACHER);
 		var teacher = new Teacher(createTeacherCommand);
 		teacherRepository.save(teacher);
 		var createCourseCommand = CreateCourseCommand.builder().name(name).description(description).build();
 		var course = new Course(createCourseCommand, teacher.getId());
+		courseRepository.save(course);
+	}
+
+	private void givenCourseWithStudents(String name, String description, int students) {
+		var createTeacherCommand = new CreateTeacherCommand(TEACHER);
+		var teacher = new Teacher(createTeacherCommand);
+		teacherRepository.save(teacher);
+		var createCourseCommand = CreateCourseCommand.builder().name(name).description(description).build();
+		var course = new Course(createCourseCommand, teacher.getId());
+		for (int i = 0; i < students; i++) {
+			course.increaseNumberOfStudents();
+		}
 		courseRepository.save(course);
 	}
 
