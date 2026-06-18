@@ -14,6 +14,7 @@ import org.springframework.test.context.jdbc.Sql;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
@@ -225,6 +226,39 @@ public class CourseApiTest {
                 .then()
                 .statusCode(HttpStatus.OK.value())
                 .body("size()", equalTo(0));
+    }
+
+    @Test
+    void search_keywordMatchesNameOfOneCourseAndDescriptionOfAnother_bothCoursesReturned() {
+        var token = SignUpHelper.signUpTeacher();
+        // the seeded course matches "course" by its name ("course name"); this one matches only by its description.
+        createCourse(token, "Backend Engineering", "Deep dive into course design");
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .queryParam("keyword", "course")
+
+                .when()
+                .get("/courses/search")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("size()", equalTo(2))
+                .body("name", containsInAnyOrder("course name", "Backend Engineering"));
+    }
+
+    @Test
+    void search_withoutAuthentication_requestRejected() {
+        // the search endpoint exposes course data and is not in the security permit-list,
+        // so an anonymous request must be rejected rather than returning results.
+        given()
+                .queryParam("keyword", "course")
+
+                .when()
+                .get("/courses/search")
+
+                .then()
+                .statusCode(anyOf(equalTo(HttpStatus.UNAUTHORIZED.value()), equalTo(HttpStatus.FORBIDDEN.value())));
     }
 
     private void createCourse(String token, String name, String description) {
