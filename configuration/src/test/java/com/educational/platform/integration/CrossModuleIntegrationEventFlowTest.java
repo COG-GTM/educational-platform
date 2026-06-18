@@ -33,6 +33,8 @@ import com.educational.platform.courses.course.Course;
 import com.educational.platform.courses.course.CourseRating;
 import com.educational.platform.courses.course.CourseRepository;
 import com.educational.platform.courses.course.NumberOfStudents;
+import com.educational.platform.courses.course.approve.SendCourseToApproveCommand;
+import com.educational.platform.courses.course.approve.SendCourseToApproveCommandHandler;
 import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
 import com.educational.platform.courses.teacher.Teacher;
 import com.educational.platform.courses.teacher.TeacherRepository;
@@ -120,6 +122,9 @@ class CrossModuleIntegrationEventFlowTest {
     @Autowired
     private ApproveCourseProposalCommandHandler approveCourseProposalCommandHandler;
 
+    @Autowired
+    private SendCourseToApproveCommandHandler sendCourseToApproveCommandHandler;
+
     @Test
     void sendCourseToApproveIntegrationEventCreatesCourseProposal() {
         applicationEventPublisher.publishEvent(
@@ -203,6 +208,22 @@ class CrossModuleIntegrationEventFlowTest {
             final Teacher teacher = teacherRepository.findByUsername("registered-teacher");
             assertThat(teacher).isNotNull();
             assertThat(teacher).hasFieldOrPropertyWithValue("username", "registered-teacher");
+        });
+    }
+
+    @Test
+    void sendCourseToApproveCommandPublishesEventAndCreatesProposal() {
+        // the producer side of flow 1: sending a course to approve must publish a
+        // SendCourseToApproveIntegrationEvent carrying the course UUID, which the
+        // administration module turns into a CourseProposal awaiting approval.
+        sendCourseToApproveCommandHandler.handle(new SendCourseToApproveCommand(SEND_TO_APPROVE_COURSE_UUID));
+
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+            final Optional<CourseProposal> proposal =
+                    courseProposalRepository.findByUuid(SEND_TO_APPROVE_COURSE_UUID);
+            assertThat(proposal).isPresent();
+            assertThat(proposal.get())
+                    .hasFieldOrPropertyWithValue("status", CourseProposalStatus.WAITING_FOR_APPROVAL);
         });
     }
 

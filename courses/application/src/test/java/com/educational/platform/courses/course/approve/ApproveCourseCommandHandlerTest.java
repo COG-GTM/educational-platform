@@ -109,6 +109,61 @@ public class ApproveCourseCommandHandlerTest {
     }
 
     @Test
+    void handle_alreadyApprovedCourse_savedStillApproved() {
+        // given - Course.approve() has no guard, so a re-delivered async CourseApprovedByAdmin event
+        // for an already-approved course must remain APPROVED and still be persisted (idempotent consumer)
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440004");
+        final ApproveCourseCommand command = new ApproveCourseCommand(uuid);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course alreadyApprovedCourse = courseFactory.createFrom(createCourseCommand);
+        alreadyApprovedCourse.approve();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(alreadyApprovedCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+    }
+
+    @Test
+    void handle_declinedCourse_savedAsApproved() {
+        // given - approve() is unconditional, so the consumer moves a previously declined course to APPROVED
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440005");
+        final ApproveCourseCommand command = new ApproveCourseCommand(uuid);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course declinedCourse = courseFactory.createFrom(createCourseCommand);
+        declinedCourse.decline();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(declinedCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+    }
+
+    @Test
     void handle_repositoryThrows_exceptionPropagated() {
         // given - a persistence failure while saving the approved course must propagate so the async consumer's transaction rolls back
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
