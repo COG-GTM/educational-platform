@@ -134,6 +134,58 @@ public class CourseTest {
     }
 
     @Test
+    void create_validCommand_zeroRatingAndZeroNumberOfStudents() {
+        // given - a freshly created course is the baseline the enrollment and rating flows build on: zero students and zero rating
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(0))
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(0));
+    }
+
+    @Test
+    void archive_archivedStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.archive();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.ARCHIVED);
+    }
+
+    @Test
+    void sendToApprove_declinedCourse_waitingForApprovalStatus() {
+        // given - the sendToApprove guard only blocks an already-approved course, so a declined course can be re-submitted for approval
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.decline();
+
+        // when
+        course.sendToApprove();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
     void sendToApprove_waitingForApprovalStatus() {
         // given
         final CreateCourseCommand command = CreateCourseCommand.builder()

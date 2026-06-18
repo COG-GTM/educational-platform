@@ -90,6 +90,36 @@ public class CourseProposalTest {
     }
 
     @Test
+    void approve_declinedProposal_approvedStatus() {
+        // given - the approve guard only blocks an already-approved proposal, so a declined proposal can still be approved
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        proposal.decline();
+
+        // when
+        proposal.approve();
+
+        // then
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED);
+    }
+
+    @Test
+    void decline_approvedProposal_declinedStatus() {
+        // given - the decline guard only blocks an already-declined proposal, so an approved proposal can still be declined
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        proposal.approve();
+
+        // when
+        proposal.decline();
+
+        // then
+        assertThat(proposal)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatus.DECLINED);
+    }
+
+    @Test
     void toDTO_correspondingDTOCreated() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -103,6 +133,38 @@ public class CourseProposalTest {
         assertThat(dto)
                 .hasFieldOrPropertyWithValue("uuid", uuid)
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.WAITING_FOR_APPROVAL);
+    }
+
+    @Test
+    void toDTO_approvedProposal_statusMappedToApproved() {
+        // given - the approve command flow calls toDTO() after approving, so the APPROVED status must map to its DTO
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        proposal.approve();
+
+        // when
+        final CourseProposalDTO dto = proposal.toDTO();
+
+        // then
+        assertThat(dto)
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.APPROVED);
+    }
+
+    @Test
+    void toDTO_declinedProposal_statusMappedToDeclined() {
+        // given - the decline command flow calls toDTO() after declining, so the DECLINED status must map to its DTO
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        proposal.decline();
+
+        // when
+        final CourseProposalDTO dto = proposal.toDTO();
+
+        // then
+        assertThat(dto)
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.DECLINED);
     }
 
 }
