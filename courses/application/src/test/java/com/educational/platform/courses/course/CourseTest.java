@@ -314,4 +314,57 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED);
     }
 
+    @Test
+    void approve_alreadyApprovedCourse_remainsApproved() {
+        // given - approve() has no guard, so re-delivery of the async CourseApprovedByAdmin event keeps the course approved
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.approve();
+
+        // when
+        course.approve();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+    }
+
+    @Test
+    void approve_declinedCourse_approvedStatus() {
+        // given - approve() is unconditional, so a previously declined course can still be approved
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.decline();
+
+        // when
+        course.approve();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.APPROVED);
+    }
+
+    @Test
+    void publish_declinedCourse_courseCannotBePublishedException() {
+        // given - the publish guard rejects any non-approved status, including a declined course
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        course.decline();
+
+        // when
+        final ThrowableAssert.ThrowingCallable publish = course::publish;
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(publish);
+    }
+
 }
