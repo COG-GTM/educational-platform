@@ -103,6 +103,25 @@ class JwtTokenFilterTest {
         verify(jwtTokenProvider, never()).getAuthentication(anyString());
     }
 
+    @Test
+    void doFilterInternal_tokenPresentButRejectedByValidation_chainContinuesWithoutAuthentication() throws Exception {
+        // given - a token is resolved but validateToken reports it invalid by returning false (the other
+        // negative outcome of the boolean contract, distinct from throwing); the filter must treat a falsy
+        // result as "not authenticated", never load an Authentication, leave the context untouched, and
+        // still let the request proceed down the chain without sending an error
+        when(jwtTokenProvider.resolveToken(request)).thenReturn("present-token");
+        when(jwtTokenProvider.validateToken("present-token")).thenReturn(false);
+
+        // when
+        sut.doFilterInternal(request, response, filterChain);
+
+        // then
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(jwtTokenProvider, never()).getAuthentication(anyString());
+        verify(filterChain).doFilter(request, response);
+        verify(response, never()).sendError(anyInt(), anyString());
+    }
+
     private Authentication authenticationFor(String username) {
         final UserDetails principal = User.withUsername(username)
                 .password("password")
