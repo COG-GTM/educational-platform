@@ -3,6 +3,7 @@ package com.educational.platform.users;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 public class RoleTest {
 
@@ -52,6 +53,15 @@ public class RoleTest {
 
         // then
         assertThat(dto).isNull();
+    }
+
+    @Test
+    void from_nullDto_throwsNullPointerException() {
+        // given - Role.from is not null-safe; registration relies on upstream @NotNull validation of the role,
+        // so a null DTO reaching the mapping is a programming error rather than a silently-mapped value
+
+        // then
+        assertThatExceptionOfType(NullPointerException.class).isThrownBy(() -> Role.from(null));
     }
 
     @Test
