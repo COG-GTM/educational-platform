@@ -8,6 +8,8 @@ import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
@@ -365,6 +367,24 @@ public class CourseTest {
 
         // then
         assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(publish);
+    }
+
+    @Test
+    void toIdentity_returnsCourseUuid() {
+        // given - the course uuid is the natural key every cross-module event consumer uses to look the course up (repository.findByUuid)
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440005");
+        ReflectionTestUtils.setField(course, "uuid", uuid);
+
+        // when
+        final UUID identity = course.toIdentity();
+
+        // then
+        assertThat(identity).isEqualTo(uuid);
     }
 
 }
