@@ -195,6 +195,38 @@ public class CourseApiTest {
                 .body("name", containsInAnyOrder("course name", "Advanced course"));
     }
 
+    @Test
+    void search_sqlInjectionStyleKeyword_emptyArrayReturned() {
+        var token = SignUpHelper.signUpTeacher();
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .queryParam("keyword", "' OR '1'='1")
+
+                .when()
+                .get("/courses/search")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("size()", equalTo(0));
+    }
+
+    @Test
+    void search_keywordDifferentCase_emptyArrayReturned() {
+        var token = SignUpHelper.signUpTeacher();
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .queryParam("keyword", "COURSE")
+
+                .when()
+                .get("/courses/search")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("size()", equalTo(0));
+    }
+
     private void createCourse(String token, String name, String description) {
         given()
                 .contentType(ContentType.JSON)

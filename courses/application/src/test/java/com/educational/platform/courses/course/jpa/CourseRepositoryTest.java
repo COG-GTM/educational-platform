@@ -262,6 +262,22 @@ public class CourseRepositoryTest {
 				.hasFieldOrPropertyWithValue("numberOfStudents", 3);
 	}
 
+	@Test
+	void searchByKeyword_multiWordKeyword_matchesPhraseAsSubstringNotTokens() {
+		// given
+		// the keyword is wrapped in a single LIKE pattern, so a multi-word keyword is matched as one
+		// contiguous substring rather than being split into independent tokens.
+		givenCourse("Java Fundamentals", "Introductory programming course");
+		givenCourse("Java Basics", "Another Java course");
+
+		// when
+		var result = courseRepository.searchByKeyword("Java Fundamentals");
+
+		// then
+		assertThat(result).hasSize(1);
+		assertThat(result.get(0)).hasFieldOrPropertyWithValue("name", "Java Fundamentals");
+	}
+
 	private void givenCourse(String name, String description) {
 		var createTeacherCommand = new CreateTeacherCommand(TEACHER);
 		var teacher = new Teacher(createTeacherCommand);
