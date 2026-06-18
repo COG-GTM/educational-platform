@@ -122,6 +122,23 @@ public class CourseApiTest {
     }
 
     @Test
+    void search_partialKeyword_courseReturned() {
+        var token = SignUpHelper.signUpTeacher();
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .queryParam("keyword", "ourse")
+
+                .when()
+                .get("/courses/search")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("size()", equalTo(1))
+                .body("[0].name", equalTo("course name"));
+    }
+
+    @Test
     void search_emptyKeyword_allCoursesReturned() {
         var token = SignUpHelper.signUpTeacher();
 

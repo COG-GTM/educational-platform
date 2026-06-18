@@ -81,6 +81,19 @@ public class SearchCourseQueryHandlerTest {
     }
 
     @Test
+    void handle_emptyKeyword_delegatesEmptyStringToRepository() {
+        // given
+        when(repository.searchByKeyword("")).thenReturn(List.of());
+
+        // when
+        final List<CourseLightDTO> result = sut.handle(new SearchCourseQuery(""));
+
+        // then
+        assertThat(result).isNotNull().isEmpty();
+        verify(repository).searchByKeyword("");
+    }
+
+    @Test
     void handle_query_onlyInteractsWithRepositorySearch() {
         // given
         when(repository.searchByKeyword("java")).thenReturn(List.of());

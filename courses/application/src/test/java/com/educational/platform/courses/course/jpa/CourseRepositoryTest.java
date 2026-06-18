@@ -178,6 +178,28 @@ public class CourseRepositoryTest {
 		assertThat(result).isEmpty();
 	}
 
+	@Test
+	void searchByKeyword_noCourses_emptyList() {
+		// when
+		var result = courseRepository.searchByKeyword("Java");
+
+		// then
+		assertThat(result).isEmpty();
+	}
+
+	@Test
+	void searchByKeyword_nullKeyword_treatedAsLiteralAndReturnsNothing() {
+		// given
+		givenCourse("Java Fundamentals", "Introductory programming course");
+
+		// when
+		// null is concatenated into the LIKE pattern as the literal "%null%", so it matches nothing rather than throwing.
+		var result = courseRepository.searchByKeyword(null);
+
+		// then
+		assertThat(result).isEmpty();
+	}
+
 	private void givenCourse(String name, String description) {
 		var createTeacherCommand = new CreateTeacherCommand(TEACHER);
 		var teacher = new Teacher(createTeacherCommand);
