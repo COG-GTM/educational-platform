@@ -458,4 +458,45 @@ public class CourseTest {
         assertThat(identity).isEqualTo(uuid);
     }
 
+    @Test
+    void sendToApprove_courseAlreadyApproved_exceptionMessageIdentifiesCourse() {
+        // given - the moderation guard's message embeds the offending course uuid so the failure is diagnosable from logs
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440010");
+        ReflectionTestUtils.setField(course, "uuid", uuid);
+        ReflectionTestUtils.setField(course, "approvalStatus", ApprovalStatus.APPROVED);
+
+        // when
+        final ThrowableAssert.ThrowingCallable sendToApprove = course::sendToApprove;
+
+        // then
+        assertThatExceptionOfType(CourseAlreadyApprovedException.class)
+                .isThrownBy(sendToApprove)
+                .withMessageContaining(uuid.toString());
+    }
+
+    @Test
+    void publish_notApprovedCourse_exceptionMessageIdentifiesCourse() {
+        // given - the publish guard rejection carries the course uuid in its message
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440011");
+        ReflectionTestUtils.setField(course, "uuid", uuid);
+
+        // when
+        final ThrowableAssert.ThrowingCallable publish = course::publish;
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class)
+                .isThrownBy(publish)
+                .withMessageContaining(uuid.toString());
+    }
+
 }

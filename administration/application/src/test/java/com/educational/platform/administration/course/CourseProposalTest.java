@@ -167,4 +167,36 @@ public class CourseProposalTest {
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatusDTO.DECLINED);
     }
 
+    @Test
+    void approve_courseProposalAlreadyApproved_exceptionMessageIdentifiesProposal() {
+        // given - the already-approved guard message embeds the proposal uuid for traceability across the approve flow
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440021");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        ReflectionTestUtils.setField(proposal, "status", CourseProposalStatus.APPROVED);
+
+        // when
+        final ThrowableAssert.ThrowingCallable approve = proposal::approve;
+
+        // then
+        assertThatExceptionOfType(CourseProposalAlreadyApprovedException.class)
+                .isThrownBy(approve)
+                .withMessageContaining(uuid.toString());
+    }
+
+    @Test
+    void decline_courseProposalAlreadyDeclined_exceptionMessageIdentifiesProposal() {
+        // given - the already-declined guard message embeds the proposal uuid for traceability across the decline flow
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440022");
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        ReflectionTestUtils.setField(proposal, "status", CourseProposalStatus.DECLINED);
+
+        // when
+        final ThrowableAssert.ThrowingCallable decline = proposal::decline;
+
+        // then
+        assertThatExceptionOfType(CourseProposalAlreadyDeclinedException.class)
+                .isThrownBy(decline)
+                .withMessageContaining(uuid.toString());
+    }
+
 }
