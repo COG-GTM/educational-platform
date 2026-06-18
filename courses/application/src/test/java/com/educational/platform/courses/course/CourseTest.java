@@ -242,4 +242,21 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(0.0));
     }
 
+    @Test
+    void archive_archivedStatus() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.archive();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.ARCHIVED);
+    }
+
 }
