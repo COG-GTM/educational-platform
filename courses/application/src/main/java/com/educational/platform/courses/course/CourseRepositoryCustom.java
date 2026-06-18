@@ -1,5 +1,6 @@
 package com.educational.platform.courses.course;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,5 +16,13 @@ public interface CourseRepositoryCustom {
 	 * @throws IllegalArgumentException if {@literal uuid} is {@literal null}.
 	 */
 	Optional<CourseDTO> findDTOByUuid(@Param("uuid") UUID uuid);
+
+	/**
+	 * Retrieves courses whose name or description matches the given keyword.
+	 *
+	 * @param keyword search keyword.
+	 * @return the list of matching course dtos.
+	 */
+	List<CourseLightDTO> searchByKeyword(@Param("keyword") String keyword);
 
 }

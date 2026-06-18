@@ -1,5 +1,6 @@
 package com.educational.platform.courses.course;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,5 +25,17 @@ public class CourseRepositoryCustomImpl implements CourseRepositoryCustom {
 				.getSingleResult();
 
 		return Optional.ofNullable(result);
+	}
+
+	@Override
+	public List<CourseLightDTO> searchByKeyword(String keyword) {
+		return entityManager
+				.createQuery(
+						"SELECT new com.educational.platform.courses.course.CourseLightDTO(c.uuid, c.name, c.description, c.numberOfStudents) "
+								+ "FROM com.educational.platform.courses.course.Course c "
+								+ "WHERE c.name LIKE :keyword OR c.description LIKE :keyword",
+						CourseLightDTO.class)
+				.setParameter("keyword", "%" + keyword + "%")
+				.getResultList();
 	}
 }
