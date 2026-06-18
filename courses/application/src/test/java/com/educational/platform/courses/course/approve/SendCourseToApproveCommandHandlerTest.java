@@ -23,7 +23,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -88,5 +90,20 @@ public class SendCourseToApproveCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_invalidId_integrationEventNotPublished() {
+        // given - when the course cannot be resolved the handler must fail before emitting the event
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final SendCourseToApproveCommand command = new SendCourseToApproveCommand(uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verify(eventPublisher, never()).publishEvent(any());
     }
 }
