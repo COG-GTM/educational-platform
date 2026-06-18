@@ -3,6 +3,7 @@ package com.educational.platform.administration.course.decline;
 import com.educational.platform.administration.course.CourseProposal;
 import com.educational.platform.administration.course.CourseProposalRepository;
 import com.educational.platform.administration.course.CourseProposalStatus;
+import com.educational.platform.administration.course.CourseProposalAlreadyDeclinedException;
 import com.educational.platform.administration.course.create.CreateCourseProposalCommand;
 import com.educational.platform.administration.integration.event.CourseDeclinedByAdminIntegrationEvent;
 import com.educational.platform.common.exception.ResourceNotFoundException;
@@ -23,6 +24,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -89,5 +93,57 @@ public class DeclineCourseProposalCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_invalidId_integrationEventNotPublished() {
+        // given - the integration event must not be emitted when the proposal cannot be found
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void handle_courseProposalAlreadyDeclined_integrationEventNotPublished() {
+        // given - declining an already declined proposal must fail inside the transaction before emitting the event
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+
+        final CourseProposal alreadyDeclined = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        alreadyDeclined.decline();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(alreadyDeclined));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(CourseProposalAlreadyDeclinedException.class).isThrownBy(handle);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void handle_repositoryThrows_exceptionPropagatedAndNoEventPublished() {
+        // given - a persistence failure rolls back the transaction, so the event published only after a
+        // successful write must not be emitted
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440004");
+        final DeclineCourseProposalCommand command = new DeclineCourseProposalCommand(uuid);
+
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(proposal));
+        doThrow(new RuntimeException("db error")).when(repository).save(any(CourseProposal.class));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(handle);
+        verify(eventPublisher, never()).publishEvent(any());
     }
 }

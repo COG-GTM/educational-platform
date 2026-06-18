@@ -12,6 +12,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,6 +41,35 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         final ApproveCourseCommand approveCourseCommand = argument.getValue();
         assertThat(approveCourseCommand)
                 .hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_commandHandlerThrows_exceptionPropagated() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new RuntimeException("course could not be approved"))
+                .when(approveCourseCommandHandler).handle(any(ApproveCourseCommand.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("course could not be approved");
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_nullCourseId_propagatedToCommand() {
+        // given - the listener performs no validation; a null courseId is forwarded verbatim
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(null);
+
+        // when
+        sut.handleCourseApprovedByAdminEvent(event);
+
+        // then
+        final ArgumentCaptor<ApproveCourseCommand> argument = ArgumentCaptor.forClass(ApproveCourseCommand.class);
+        verify(approveCourseCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", null);
     }
 
 }

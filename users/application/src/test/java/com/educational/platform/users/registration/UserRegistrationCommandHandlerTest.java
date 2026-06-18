@@ -23,9 +23,13 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -174,5 +178,65 @@ public class UserRegistrationCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_usernameAlreadyExists_userCreatedIntegrationEventNotPublished() {
+        // given - a failed registration must not emit a UserCreatedIntegrationEvent
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(true);
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(UnprocessableEntityException.class).isThrownBy(handle);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void handle_validCommand_jwtTokenReturnedForRole() {
+        // given - the handler returns the token created for the new user's username and granted role
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        when(jwtTokenProvider.createToken(any(), any())).thenReturn("jwt-token");
+
+        // when
+        final String token = sut.handle(userRegistrationCommand);
+
+        // then
+        assertThat(token).isEqualTo("jwt-token");
+        verify(jwtTokenProvider).createToken("username", List.of(Role.ROLE_STUDENT));
+    }
+
+    @Test
+    void handle_repositoryThrows_userCreatedIntegrationEventNotPublished() {
+        // given - a persistence failure rolls back the transaction, so the event published only after a
+        // successful write must not be emitted
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        doThrow(new RuntimeException("db error")).when(repository).save(any(User.class));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(RuntimeException.class).isThrownBy(handle);
+        verify(eventPublisher, never()).publishEvent(any());
     }
 }

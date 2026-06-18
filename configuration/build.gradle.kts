@@ -31,6 +31,12 @@ dependencies {
     testImplementation("org.junit.platform", "junit-platform-launcher")
     testImplementation("org.mockito", "mockito-junit-jupiter", libs.versions.mockito.get())
     testImplementation("com.tngtech.archunit", "archunit-junit5", libs.versions.archunit.get())
+
+    testImplementation("org.springframework.boot", "spring-boot-starter-test")
+    testImplementation("org.springframework.boot", "spring-boot-starter-data-jpa")
+    testImplementation("org.springframework.security", "spring-security-test")
+    testImplementation("org.awaitility", "awaitility")
+    testImplementation("org.assertj", "assertj-core", libs.versions.assertj.get())
 }
 
 tasks.test {

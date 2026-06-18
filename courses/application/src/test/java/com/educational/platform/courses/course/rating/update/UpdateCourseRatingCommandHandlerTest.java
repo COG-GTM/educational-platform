@@ -21,7 +21,11 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -87,5 +91,98 @@ public class UpdateCourseRatingCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+    }
+
+    @Test
+    void handle_invalidId_courseNotSaved() {
+        // given - a missing course must throw before any persistence write happens
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 3.2);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void handle_courseWithExistingRating_ratingOverwritten() {
+        // given - the recalculated-rating flow replaces the previously stored rating, it does not combine with it
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 2.0);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        correspondingCourse.updateRating(4.5);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(2.0));
+    }
+
+    @Test
+    void handle_negativeRating_courseSavedWithNegativeRatingVerbatim() {
+        // given - the listener forwards an out-of-range recalculated rating verbatim; this confirms the
+        // write layer also applies no validation and persists the negative value as-is
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440005");
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, -1.0);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final ArgumentCaptor<Course> argument = ArgumentCaptor.forClass(Course.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(-1.0));
+    }
+
+    @Test
+    void handle_repositoryThrows_exceptionPropagated() {
+        // given - a persistence failure while saving the course must propagate so the async consumer's transaction rolls back
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440004");
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 3.2);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+        doThrow(new RuntimeException("course rating could not be saved"))
+                .when(repository).save(any(Course.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handle(command))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("course rating could not be saved");
     }
 }
