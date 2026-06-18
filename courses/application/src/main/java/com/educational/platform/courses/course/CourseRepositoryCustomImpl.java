@@ -1,5 +1,7 @@
 package com.educational.platform.courses.course;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,5 +26,22 @@ public class CourseRepositoryCustomImpl implements CourseRepositoryCustom {
 				.getSingleResult();
 
 		return Optional.ofNullable(result);
+	}
+
+	@Override
+	@SuppressWarnings("unchecked")
+	public List<CourseLightDTO> searchByKeyword(String keyword) {
+		final String sql = "SELECT uuid, name, description, number_of_students FROM course "
+				+ "WHERE name LIKE '%" + keyword + "%' OR description LIKE '%" + keyword + "%'";
+
+		final List<Object[]> rows = entityManager.createNativeQuery(sql).getResultList();
+
+		final List<CourseLightDTO> results = new ArrayList<>();
+		for (Object[] row : rows) {
+			results.add(new CourseLightDTO((UUID) row[0], (String) row[1], (String) row[2],
+					((Number) row[3]).intValue()));
+		}
+
+		return results;
 	}
 }
