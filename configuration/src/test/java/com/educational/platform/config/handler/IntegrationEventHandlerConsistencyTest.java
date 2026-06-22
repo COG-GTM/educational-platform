@@ -14,7 +14,11 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
+import com.educational.platform.common.event.FailedIntegrationEventRepository;
+
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
 
@@ -185,6 +189,58 @@ class IntegrationEventHandlerConsistencyTest {
             assertThat(maxAttempts)
                     .as("MAX_ATTEMPTS value in %s", handlerClass.getSimpleName())
                     .isEqualTo(3);
+        }
+    }
+
+    @Test
+    void allHandlers_areNotFinal() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            assertThat(Modifier.isFinal(handlerClass.getModifiers()))
+                    .as("Handler %s must not be final — Spring creates CGLIB proxies for @Async and @Retryable",
+                            handlerClass.getSimpleName())
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void allHandlers_recoverEventParameterMatchesHandlerEventParameter() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method handler = findEventListenerMethod(handlerClass);
+            Method recover = findRecoverMethod(handlerClass);
+            Class<?> handlerEventType = handler.getParameterTypes()[0];
+            Class<?> recoverEventType = recover.getParameterTypes()[1];
+            assertThat(recoverEventType)
+                    .as("@Recover second param in %s must match @EventListener event type for convention-based discovery",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(handlerEventType);
+        }
+    }
+
+    @Test
+    void allHandlers_constructorSecondParameterIsFailedIntegrationEventRepository() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            assertThat(handlerClass.getConstructors()).hasSize(1);
+            Class<?>[] paramTypes = handlerClass.getConstructors()[0].getParameterTypes();
+            assertThat(paramTypes[paramTypes.length - 1])
+                    .as("Last constructor param in %s should be FailedIntegrationEventRepository",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(FailedIntegrationEventRepository.class);
+        }
+    }
+
+    @Test
+    void allHandlers_logFieldIsPrivateStaticFinal() throws Exception {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Field logField = handlerClass.getDeclaredField("log");
+            assertThat(Modifier.isPrivate(logField.getModifiers()))
+                    .as("log in %s should be private", handlerClass.getSimpleName())
+                    .isTrue();
+            assertThat(Modifier.isStatic(logField.getModifiers()))
+                    .as("log in %s should be static", handlerClass.getSimpleName())
+                    .isTrue();
+            assertThat(Modifier.isFinal(logField.getModifiers()))
+                    .as("log in %s should be final", handlerClass.getSimpleName())
+                    .isTrue();
         }
     }
 
