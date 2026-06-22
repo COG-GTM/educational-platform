@@ -946,6 +946,51 @@ class UserCreatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_eventClassName_isNotSimpleName() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must be package-qualified, not a simple class name
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String eventClassName = (String) getField(captor.getValue(), "eventClassName");
+        assertThat(eventClassName).contains(".");
+        assertThat(eventClassName).isNotEqualTo(event.getClass().getSimpleName());
+    }
+
+    @Test
+    void recover_exceptionClassNameIsFullyQualified() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.DataAccessResourceFailureException");
+    }
+
+    @Test
+    void handleUserCreatedEvent_checkedExceptionFromCommandHandler_preservesExceptionIdentity() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final IllegalArgumentException originalException = new IllegalArgumentException("invalid username");
+        doThrow(originalException).when(createTeacherCommandHandler).handle(any());
+
+        // when/then — catch(Exception e) { throw e; } must not wrap the exception
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
     void recover_eventPayloadContainsBothUsernameAndEmail() throws Exception {
         // given — event.toString() should include both fields even though handler only uses username
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("admin", "admin@edu.com");
