@@ -13,6 +13,7 @@ import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.educational.platform.common.event.FailedIntegrationEventRepository;
 
@@ -822,6 +823,66 @@ class IntegrationEventHandlerConsistencyTest {
                     .as("Public constructor in %s should accept exactly 2 parameters (commandHandler + repository)",
                             handlerClass.getSimpleName())
                     .isEqualTo(2);
+        }
+    }
+
+    @Test
+    void allHandlers_classDoesNotHaveTransactionalAnnotation() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            assertThat(handlerClass.getAnnotation(Transactional.class))
+                    .as("Handler %s should NOT have class-level @Transactional — @Async runs in a new thread "
+                            + "where the caller's transaction context is unavailable", handlerClass.getSimpleName())
+                    .isNull();
+        }
+    }
+
+    @Test
+    void allHandlers_handlerMethodDoesNotHaveTransactionalAnnotation() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            assertThat(method.getAnnotation(Transactional.class))
+                    .as("@EventListener in %s should NOT have @Transactional — the command handler manages "
+                            + "its own transaction boundary", handlerClass.getSimpleName())
+                    .isNull();
+        }
+    }
+
+    @Test
+    void allHandlers_recoverMethodDoesNotHaveTransactionalAnnotation() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findRecoverMethod(handlerClass);
+            assertThat(method.getAnnotation(Transactional.class))
+                    .as("@Recover in %s should NOT have @Transactional — recovery persists the dead-letter "
+                            + "record via its own repository.save() call", handlerClass.getSimpleName())
+                    .isNull();
+        }
+    }
+
+    @Test
+    void allHandlers_maxAttemptsFieldValue_isConsistentAcrossAllHandlers() throws Exception {
+        Integer firstValue = null;
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Field field = handlerClass.getDeclaredField("MAX_ATTEMPTS");
+            field.setAccessible(true);
+            int value = (int) field.get(null);
+            if (firstValue == null) {
+                firstValue = value;
+            }
+            assertThat(value)
+                    .as("MAX_ATTEMPTS field value in %s should be consistent across all handlers",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(firstValue);
+        }
+    }
+
+    @Test
+    void allHandlers_constructorFirstParameterIsNotFailedIntegrationEventRepository() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Class<?>[] paramTypes = handlerClass.getConstructors()[0].getParameterTypes();
+            assertThat(paramTypes[0])
+                    .as("First constructor param in %s should be the command handler, not the repository",
+                            handlerClass.getSimpleName())
+                    .isNotEqualTo(FailedIntegrationEventRepository.class);
         }
     }
 

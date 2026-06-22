@@ -846,6 +846,76 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
                 .isEqualTo("Optimistic lock failure");
     }
 
+    @Test
+    void recover_withDifferentExceptionSubtypes_persistsCorrectClassForEach() throws Exception {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseApprovedByAdminIntegrationEvent event1 = new CourseApprovedByAdminIntegrationEvent(uuid1);
+        final CourseApprovedByAdminIntegrationEvent event2 = new CourseApprovedByAdminIntegrationEvent(uuid2);
+
+        // when
+        sut.recover(new DataAccessResourceFailureException("transient error"), event1);
+        sut.recover(new DataIntegrityViolationException("constraint error"), event2);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository, times(2)).save(captor.capture());
+        assertThat(getField(captor.getAllValues().get(0), "exceptionClassName"))
+                .isEqualTo(DataAccessResourceFailureException.class.getName());
+        assertThat(getField(captor.getAllValues().get(1), "exceptionClassName"))
+                .isEqualTo(DataIntegrityViolationException.class.getName());
+    }
+
+    @Test
+    void recover_withEmptyExceptionMessage_persistsEmptyString() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("");
+    }
+
+    @Test
+    void recover_eventClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventClassName"))
+                .contains(".")
+                .endsWith("CourseApprovedByAdminIntegrationEvent");
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_checkedExceptionWrapped_rethrows() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final RuntimeException wrappedException = new RuntimeException("wrapped",
+                new java.io.IOException("disk full"));
+        doThrow(wrappedException).when(approveCourseCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isSameAs(wrappedException)
+                .hasCauseInstanceOf(java.io.IOException.class);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
