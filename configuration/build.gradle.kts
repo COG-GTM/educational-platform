@@ -28,6 +28,7 @@ dependencies {
     implementation("org.springframework", "spring-aspects")
     implementation("org.liquibase", "liquibase-core")
 
+    testImplementation("org.springframework.boot", "spring-boot-starter-test")
     testImplementation("org.junit.jupiter", "junit-jupiter-api")
     testImplementation("org.junit.jupiter", "junit-jupiter-engine")
     testImplementation("org.junit.platform", "junit-platform-engine")

@@ -579,6 +579,66 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(method.getParameterTypes()[1]).isEqualTo(UserCreatedIntegrationEvent.class);
     }
 
+    @Test
+    void recover_doesNotInvokeCommandHandler() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        verifyNoInteractions(createTeacherCommandHandler);
+    }
+
+    @Test
+    void recover_calledMultipleTimes_savesIndependentRecords() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event1 = new UserCreatedIntegrationEvent("teacher1", "t1@test.com");
+        final UserCreatedIntegrationEvent event2 = new UserCreatedIntegrationEvent("teacher2", "t2@test.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event1);
+        sut.recover(exception, event2);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).hasSize(2);
+        assertThat(getField(captor.getAllValues().get(0), "eventPayload")).isEqualTo(event1.toString());
+        assertThat(getField(captor.getAllValues().get(1), "eventPayload")).isEqualTo(event2.toString());
+    }
+
+    @Test
+    void handleUserCreatedEvent_dataIntegrityViolationException_rethrowsForRetry() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        doThrow(new DataIntegrityViolationException("duplicate username"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessage("duplicate username");
+    }
+
+    @Test
+    void handleUserCreatedEvent_longUsername_commandReceivedCorrectValue() {
+        // given — usernames at boundary lengths
+        final String longUsername = "a".repeat(255);
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(longUsername, "long@test.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> captor = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("username", longUsername);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

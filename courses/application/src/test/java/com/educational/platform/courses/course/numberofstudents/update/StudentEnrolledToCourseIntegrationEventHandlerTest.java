@@ -577,6 +577,70 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(method.getParameterTypes()[1]).isEqualTo(StudentEnrolledToCourseIntegrationEvent.class);
     }
 
+    @Test
+    void recover_doesNotInvokeCommandHandler() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        verifyNoInteractions(increaseNumberOfStudentsCommandHandler);
+    }
+
+    @Test
+    void recover_calledMultipleTimes_savesIndependentRecords() throws Exception {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final StudentEnrolledToCourseIntegrationEvent event1 = new StudentEnrolledToCourseIntegrationEvent(uuid1, "user1");
+        final StudentEnrolledToCourseIntegrationEvent event2 = new StudentEnrolledToCourseIntegrationEvent(uuid2, "user2");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event1);
+        sut.recover(exception, event2);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).hasSize(2);
+        assertThat(getField(captor.getAllValues().get(0), "eventPayload")).isEqualTo(event1.toString());
+        assertThat(getField(captor.getAllValues().get(1), "eventPayload")).isEqualTo(event2.toString());
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_dataIntegrityViolationException_rethrowsForRetry() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        doThrow(new DataIntegrityViolationException("constraint violation"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessage("constraint violation");
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_usesOnlyCourseIdNotUsername() {
+        // given — the handler only passes courseId to the command, not username
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(courseId, "irrelevant-username");
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> captor = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", courseId);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

@@ -559,6 +559,55 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(method.getParameterTypes()[1]).isEqualTo(SendCourseToApproveIntegrationEvent.class);
     }
 
+    @Test
+    void recover_doesNotInvokeCommandHandler() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        verifyNoInteractions(createCourseProposalCommandHandler);
+    }
+
+    @Test
+    void recover_calledMultipleTimes_savesIndependentRecords() throws Exception {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final SendCourseToApproveIntegrationEvent event1 = new SendCourseToApproveIntegrationEvent(uuid1);
+        final SendCourseToApproveIntegrationEvent event2 = new SendCourseToApproveIntegrationEvent(uuid2);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event1);
+        sut.recover(exception, event2);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).hasSize(2);
+        assertThat(getField(captor.getAllValues().get(0), "eventPayload")).isEqualTo(event1.toString());
+        assertThat(getField(captor.getAllValues().get(1), "eventPayload")).isEqualTo(event2.toString());
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_dataIntegrityViolationException_rethrowsForRetry() {
+        // given — DataIntegrityViolationException is a DataAccessException subclass
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new DataIntegrityViolationException("constraint violation"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessage("constraint violation");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

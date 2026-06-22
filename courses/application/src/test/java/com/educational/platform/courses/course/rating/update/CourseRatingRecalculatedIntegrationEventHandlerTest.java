@@ -667,6 +667,41 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_doesNotInvokeCommandHandler() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        verifyNoInteractions(updateCourseRatingCommandHandler);
+    }
+
+    @Test
+    void recover_calledMultipleTimes_savesIndependentRecords() throws Exception {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseRatingRecalculatedIntegrationEvent event1 = new CourseRatingRecalculatedIntegrationEvent(uuid1, 3.5);
+        final CourseRatingRecalculatedIntegrationEvent event2 = new CourseRatingRecalculatedIntegrationEvent(uuid2, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event1);
+        sut.recover(exception, event2);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).hasSize(2);
+        assertThat(getField(captor.getAllValues().get(0), "eventPayload")).isEqualTo(event1.toString());
+        assertThat(getField(captor.getAllValues().get(1), "eventPayload")).isEqualTo(event2.toString());
+    }
+
+    @Test
     void handleCourseRatingRecalculatedEvent_negativeInfinityRating_commandReceivedCorrectValue() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -681,6 +716,23 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThat(captor.getValue())
                 .hasFieldOrPropertyWithValue("uuid", uuid)
                 .hasFieldOrPropertyWithValue("rating", Double.NEGATIVE_INFINITY);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_minValueRating_commandReceivedCorrectValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.MIN_VALUE);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> captor = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("rating", Double.MIN_VALUE);
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {
