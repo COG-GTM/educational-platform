@@ -399,4 +399,34 @@ class AsyncConfigTest {
         assertThat(executor.getThreadPoolExecutor().getQueue()).isEmpty();
         executor.shutdown();
     }
+
+    @Test
+    void getAsyncExecutor_overridesAsyncConfigurerMethod() throws NoSuchMethodException {
+        Method configMethod = AsyncConfig.class.getMethod("getAsyncExecutor");
+        Method interfaceMethod = AsyncConfigurer.class.getMethod("getAsyncExecutor");
+        assertThat(configMethod.getName()).isEqualTo(interfaceMethod.getName());
+        assertThat(configMethod.getReturnType()).isEqualTo(interfaceMethod.getReturnType());
+        assertThat(configMethod.getParameterCount()).isEqualTo(interfaceMethod.getParameterCount());
+    }
+
+    @Test
+    void getAsyncUncaughtExceptionHandler_overridesAsyncConfigurerMethod() throws NoSuchMethodException {
+        Method configMethod = AsyncConfig.class.getMethod("getAsyncUncaughtExceptionHandler");
+        Method interfaceMethod = AsyncConfigurer.class.getMethod("getAsyncUncaughtExceptionHandler");
+        assertThat(configMethod.getName()).isEqualTo(interfaceMethod.getName());
+        assertThat(configMethod.getReturnType()).isEqualTo(interfaceMethod.getReturnType());
+        assertThat(configMethod.getParameterCount()).isEqualTo(interfaceMethod.getParameterCount());
+    }
+
+    @Test
+    void getAsyncUncaughtExceptionHandler_returnTypeIsCorrect() throws NoSuchMethodException {
+        Method method = AsyncConfig.class.getMethod("getAsyncUncaughtExceptionHandler");
+        assertThat(method.getReturnType()).isEqualTo(AsyncUncaughtExceptionHandler.class);
+    }
+
+    @Test
+    void getAsyncExecutor_returnTypeIsExecutor() throws NoSuchMethodException {
+        Method method = AsyncConfig.class.getMethod("getAsyncExecutor");
+        assertThat(method.getReturnType()).isEqualTo(Executor.class);
+    }
 }

@@ -808,6 +808,43 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .hasMessage("unique constraint violated");
     }
 
+    @Test
+    void handlerClass_isPublic() {
+        assertThat(Modifier.isPublic(CourseRatingRecalculatedIntegrationEventHandler.class.getModifiers())).isTrue();
+    }
+
+    @Test
+    void handlerAndRecoverMethods_haveMatchingReturnType() throws NoSuchMethodException {
+        Method handler = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+        Method recover = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, CourseRatingRecalculatedIntegrationEvent.class);
+
+        assertThat(handler.getReturnType()).isEqualTo(recover.getReturnType());
+    }
+
+    @Test
+    void handlerMethod_backoffMaxDelayIsUnlimited() throws NoSuchMethodException {
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+        Backoff backoff = method.getAnnotation(Retryable.class).backoff();
+        assertThat(backoff.maxDelay()).isEqualTo(0L);
+    }
+
+    @Test
+    void handlerMethod_retryableListenersIsEmpty() throws NoSuchMethodException {
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+        Retryable retryable = method.getAnnotation(Retryable.class);
+        assertThat(retryable.listeners()).isEmpty();
+    }
+
+    @Test
+    void handler_constructorRequiresBothDependencies() {
+        assertThat(CourseRatingRecalculatedIntegrationEventHandler.class.getConstructors()).hasSize(1);
+        assertThat(CourseRatingRecalculatedIntegrationEventHandler.class.getConstructors()[0].getParameterCount()).isEqualTo(2);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

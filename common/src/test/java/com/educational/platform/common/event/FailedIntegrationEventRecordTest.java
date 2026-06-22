@@ -523,6 +523,36 @@ class FailedIntegrationEventRecordTest {
         assertThat((int) getField(record, "retryCount")).isEqualTo(Integer.MIN_VALUE);
     }
 
+    @Test
+    void idField_isBoxedLongType() throws NoSuchFieldException {
+        Field idField = FailedIntegrationEventRecord.class.getDeclaredField("id");
+        assertThat(idField.getType()).isEqualTo(Long.class);
+    }
+
+    @Test
+    void statusEnum_hasExactlyTwoValues() {
+        assertThat(FailedIntegrationEventRecord.Status.values()).hasSize(2);
+    }
+
+    @Test
+    void createdAtField_isInstantType() throws NoSuchFieldException {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("createdAt");
+        assertThat(field.getType()).isEqualTo(Instant.class);
+    }
+
+    @Test
+    void retryCountField_isPrimitiveIntType() throws NoSuchFieldException {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("retryCount");
+        assertThat(field.getType()).isEqualTo(int.class);
+    }
+
+    @Test
+    void statusField_isEnumType() throws NoSuchFieldException {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("status");
+        assertThat(field.getType().isEnum()).isTrue();
+        assertThat(field.getType()).isEqualTo(FailedIntegrationEventRecord.Status.class);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

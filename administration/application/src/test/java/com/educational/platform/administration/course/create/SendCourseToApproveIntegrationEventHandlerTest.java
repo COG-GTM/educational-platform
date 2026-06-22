@@ -667,6 +667,43 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         verify(failedIntegrationEventRepository).save(any(FailedIntegrationEventRecord.class));
     }
 
+    @Test
+    void handlerClass_isPublic() {
+        assertThat(Modifier.isPublic(SendCourseToApproveIntegrationEventHandler.class.getModifiers())).isTrue();
+    }
+
+    @Test
+    void handlerAndRecoverMethods_haveMatchingReturnType() throws NoSuchMethodException {
+        Method handler = SendCourseToApproveIntegrationEventHandler.class
+                .getMethod("handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+        Method recover = SendCourseToApproveIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, SendCourseToApproveIntegrationEvent.class);
+
+        assertThat(handler.getReturnType()).isEqualTo(recover.getReturnType());
+    }
+
+    @Test
+    void handlerMethod_backoffMaxDelayIsUnlimited() throws NoSuchMethodException {
+        Method method = SendCourseToApproveIntegrationEventHandler.class
+                .getMethod("handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+        Backoff backoff = method.getAnnotation(Retryable.class).backoff();
+        assertThat(backoff.maxDelay()).isEqualTo(0L);
+    }
+
+    @Test
+    void handlerMethod_retryableListenersIsEmpty() throws NoSuchMethodException {
+        Method method = SendCourseToApproveIntegrationEventHandler.class
+                .getMethod("handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+        Retryable retryable = method.getAnnotation(Retryable.class);
+        assertThat(retryable.listeners()).isEmpty();
+    }
+
+    @Test
+    void handler_constructorRequiresBothDependencies() {
+        assertThat(SendCourseToApproveIntegrationEventHandler.class.getConstructors()).hasSize(1);
+        assertThat(SendCourseToApproveIntegrationEventHandler.class.getConstructors()[0].getParameterCount()).isEqualTo(2);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

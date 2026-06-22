@@ -61,4 +61,14 @@ class RetryConfigTest {
     void retryConfig_hasNoDeclaredMethods() {
         assertThat(RetryConfig.class.getDeclaredMethods()).as("Pure config class should have no methods").isEmpty();
     }
+
+    @Test
+    void retryConfig_doesNotExtendCustomBaseClass() {
+        assertThat(RetryConfig.class.getSuperclass()).isEqualTo(Object.class);
+    }
+
+    @Test
+    void retryConfig_hasNoDeclaredFields() {
+        assertThat(RetryConfig.class.getDeclaredFields()).as("Pure config class should have no fields").isEmpty();
+    }
 }
