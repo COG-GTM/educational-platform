@@ -473,7 +473,6 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
     void handlerMethod_isPublic() throws NoSuchMethodException {
         Method method = StudentEnrolledToCourseIntegrationEventHandler.class
                 .getMethod("handleStudentEnrolledToCourseEvent", StudentEnrolledToCourseIntegrationEvent.class);
-
         assertThat(Modifier.isPublic(method.getModifiers())).isTrue();
     }
 
@@ -481,8 +480,43 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
     void recoverMethod_isPublic() throws NoSuchMethodException {
         Method method = StudentEnrolledToCourseIntegrationEventHandler.class
                 .getMethod("recover", DataAccessException.class, StudentEnrolledToCourseIntegrationEvent.class);
-
         assertThat(Modifier.isPublic(method.getModifiers())).isTrue();
+    }
+
+    @Test
+    void handlerMethod_returnTypeIsVoid() throws NoSuchMethodException {
+        Method method = StudentEnrolledToCourseIntegrationEventHandler.class
+                .getMethod("handleStudentEnrolledToCourseEvent", StudentEnrolledToCourseIntegrationEvent.class);
+        assertThat(method.getReturnType()).isEqualTo(void.class);
+    }
+
+    @Test
+    void handler_hasSingleEventListenerMethod() {
+        long count = Arrays.stream(StudentEnrolledToCourseIntegrationEventHandler.class.getDeclaredMethods())
+                .filter(m -> m.getAnnotation(EventListener.class) != null)
+                .count();
+        assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void handler_hasSingleRecoverMethod() {
+        long count = Arrays.stream(StudentEnrolledToCourseIntegrationEventHandler.class.getDeclaredMethods())
+                .filter(m -> m.getAnnotation(Recover.class) != null)
+                .count();
+        assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void maxAttemptsConstant_matchesRetryableAnnotation() throws Exception {
+        Field maxAttemptsField = StudentEnrolledToCourseIntegrationEventHandler.class.getDeclaredField("MAX_ATTEMPTS");
+        maxAttemptsField.setAccessible(true);
+        int maxAttempts = (int) maxAttemptsField.get(null);
+
+        Method method = StudentEnrolledToCourseIntegrationEventHandler.class
+                .getMethod("handleStudentEnrolledToCourseEvent", StudentEnrolledToCourseIntegrationEvent.class);
+        Retryable retryable = method.getAnnotation(Retryable.class);
+
+        assertThat(retryable.maxAttempts()).isEqualTo(maxAttempts);
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {

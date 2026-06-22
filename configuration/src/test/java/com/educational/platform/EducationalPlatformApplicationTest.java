@@ -31,4 +31,9 @@ class EducationalPlatformApplicationTest {
         assertThat(propertySource).isNotNull();
         assertThat(propertySource.value()).contains("application-security.properties");
     }
+
+    @Test
+    void applicationClass_doesNotHaveEnableRetry() {
+        assertThat(EducationalPlatformApplication.class.getAnnotation(EnableRetry.class)).isNull();
+    }
 }

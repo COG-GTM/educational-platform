@@ -51,4 +51,9 @@ class RetryConfigTest {
         EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
         assertThat(enableRetry.order()).isGreaterThan(enableAsync.order());
     }
+
+    @Test
+    void retryConfig_doesNotHaveEnableAsync() {
+        assertThat(RetryConfig.class.getAnnotation(EnableAsync.class)).isNull();
+    }
 }

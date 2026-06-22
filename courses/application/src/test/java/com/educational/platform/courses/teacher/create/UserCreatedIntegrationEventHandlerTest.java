@@ -476,7 +476,6 @@ class UserCreatedIntegrationEventHandlerTest {
     void handlerMethod_isPublic() throws NoSuchMethodException {
         Method method = UserCreatedIntegrationEventHandler.class
                 .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
-
         assertThat(Modifier.isPublic(method.getModifiers())).isTrue();
     }
 
@@ -484,8 +483,43 @@ class UserCreatedIntegrationEventHandlerTest {
     void recoverMethod_isPublic() throws NoSuchMethodException {
         Method method = UserCreatedIntegrationEventHandler.class
                 .getMethod("recover", DataAccessException.class, UserCreatedIntegrationEvent.class);
-
         assertThat(Modifier.isPublic(method.getModifiers())).isTrue();
+    }
+
+    @Test
+    void handlerMethod_returnTypeIsVoid() throws NoSuchMethodException {
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+        assertThat(method.getReturnType()).isEqualTo(void.class);
+    }
+
+    @Test
+    void handler_hasSingleEventListenerMethod() {
+        long count = Arrays.stream(UserCreatedIntegrationEventHandler.class.getDeclaredMethods())
+                .filter(m -> m.getAnnotation(EventListener.class) != null)
+                .count();
+        assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void handler_hasSingleRecoverMethod() {
+        long count = Arrays.stream(UserCreatedIntegrationEventHandler.class.getDeclaredMethods())
+                .filter(m -> m.getAnnotation(Recover.class) != null)
+                .count();
+        assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void maxAttemptsConstant_matchesRetryableAnnotation() throws Exception {
+        Field maxAttemptsField = UserCreatedIntegrationEventHandler.class.getDeclaredField("MAX_ATTEMPTS");
+        maxAttemptsField.setAccessible(true);
+        int maxAttempts = (int) maxAttemptsField.get(null);
+
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+        Retryable retryable = method.getAnnotation(Retryable.class);
+
+        assertThat(retryable.maxAttempts()).isEqualTo(maxAttempts);
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {
