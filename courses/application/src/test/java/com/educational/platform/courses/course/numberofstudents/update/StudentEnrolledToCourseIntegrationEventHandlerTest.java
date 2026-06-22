@@ -881,6 +881,38 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
                 .isEqualTo("Optimistic lock failure");
     }
 
+    @Test
+    void recover_withNullUsername_persistsEventPayload() throws Exception {
+        // given — username is part of event toString() but not used by handler; null must not break recover
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, null);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+        assertThat(getField(captor.getValue(), "eventClassName")).isEqualTo(event.getClass().getName());
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_withNullUsername_commandHandlerStillInvoked() {
+        // given — handler only uses courseId; null username should not affect behavior
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, null);
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> captor = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

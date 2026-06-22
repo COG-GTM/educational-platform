@@ -1117,6 +1117,37 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .hasMessage("invalid rating value");
     }
 
+    @Test
+    void recover_withMinDoubleRating_persistsEventPayload() throws Exception {
+        // given — Double.MIN_VALUE is the smallest positive nonzero double
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.MIN_VALUE);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_nullCourseIdWithZeroRating_bothArgumentsPassedToCommand() {
+        // given — verifies both null courseId and zero rating are passed correctly to the command
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(null, 0.0);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> captor = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", null);
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("rating", 0.0);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

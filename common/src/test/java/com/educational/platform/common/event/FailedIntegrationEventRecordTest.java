@@ -714,6 +714,19 @@ class FailedIntegrationEventRecordTest {
         assertThat(FailedIntegrationEventRecord.Status.class.isEnum()).isTrue();
     }
 
+    @Test
+    void constructor_withVeryLongExceptionClassName_acceptedAtJavaLevel() throws Exception {
+        // given — deeply nested inner class names can produce very long fully qualified names
+        String longClassName = "com.educational.platform." + "a".repeat(200) + ".SomeException";
+
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", longClassName, 3);
+
+        // then — Java level accepts any string; DB column constraint enforced at persistence
+        assertThat(getField(record, "exceptionClassName")).isEqualTo(longClassName);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

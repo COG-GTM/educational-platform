@@ -801,6 +801,30 @@ class IntegrationEventHandlerConsistencyTest {
         }
     }
 
+    @Test
+    void allHandlers_retryableAnnotation_includesObjectOptimisticLockingFailureExceptionExplicitly() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(Arrays.asList(retryable.retryFor()))
+                    .as("retryFor in %s must explicitly include ObjectOptimisticLockingFailureException for optimistic locking support",
+                            handlerClass.getSimpleName())
+                    .contains(ObjectOptimisticLockingFailureException.class);
+        }
+    }
+
+    @Test
+    void allHandlers_publicConstructor_hasExactlyTwoParameters() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Constructor<?>[] constructors = handlerClass.getConstructors();
+            assertThat(constructors).as("Handler %s should have exactly one public constructor", handlerClass.getSimpleName()).hasSize(1);
+            assertThat(constructors[0].getParameterCount())
+                    .as("Public constructor in %s should accept exactly 2 parameters (commandHandler + repository)",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(2);
+        }
+    }
+
     private Method findRecoverMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.getAnnotation(Recover.class) != null)
