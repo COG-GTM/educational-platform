@@ -508,6 +508,45 @@ class IntegrationEventHandlerConsistencyTest {
         }
     }
 
+    @Test
+    void allHandlers_loggerReferencesOwnClass() throws Exception {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Field logField = handlerClass.getDeclaredField("log");
+            logField.setAccessible(true);
+            org.slf4j.Logger logger = (org.slf4j.Logger) logField.get(null);
+            assertThat(logger.getName())
+                    .as("Logger in %s should reference its own class (catches copy-paste errors)",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(handlerClass.getName());
+        }
+    }
+
+    @Test
+    void allHandlers_haveExactlyTwoDeclaredPublicMethods() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            long publicMethodCount = Arrays.stream(handlerClass.getDeclaredMethods())
+                    .filter(m -> Modifier.isPublic(m.getModifiers()))
+                    .count();
+            assertThat(publicMethodCount)
+                    .as("Handler %s should have exactly 2 public methods (handler + recover)",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(2);
+        }
+    }
+
+    @Test
+    void allHandlers_constructorNotAnnotatedWithAutowired() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Constructor<?>[] constructors = handlerClass.getConstructors();
+            assertThat(constructors).hasSize(1);
+            assertThat(constructors[0]
+                    .getAnnotation(org.springframework.beans.factory.annotation.Autowired.class))
+                    .as("Constructor in %s should not need @Autowired (single-constructor auto-injection)",
+                            handlerClass.getSimpleName())
+                    .isNull();
+        }
+    }
+
     private Method findEventListenerMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.getAnnotation(EventListener.class) != null)

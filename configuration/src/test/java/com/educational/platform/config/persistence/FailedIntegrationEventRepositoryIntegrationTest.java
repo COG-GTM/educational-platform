@@ -280,6 +280,26 @@ class FailedIntegrationEventRepositoryIntegrationTest {
     }
 
     @Test
+    void save_withEmptyStrings_persistsAndRetrievesCorrectly() throws Exception {
+        // given
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "", "", "", "", 0);
+
+        // when
+        FailedIntegrationEventRecord saved = repository.save(record);
+        Long id = (Long) getField(saved, "id");
+        Optional<FailedIntegrationEventRecord> found = repository.findById(id);
+
+        // then
+        assertThat(found).isPresent();
+        assertThat(getField(found.get(), "eventClassName")).isEqualTo("");
+        assertThat(getField(found.get(), "eventPayload")).isEqualTo("");
+        assertThat(getField(found.get(), "exceptionMessage")).isEqualTo("");
+        assertThat(getField(found.get(), "exceptionClassName")).isEqualTo("");
+        assertThat((int) getField(found.get(), "retryCount")).isZero();
+    }
+
+    @Test
     void delete_afterSave_removesRecord() throws Exception {
         // given
         FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(

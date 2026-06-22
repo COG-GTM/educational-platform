@@ -592,6 +592,49 @@ class FailedIntegrationEventRecordTest {
         assertThat(FailedIntegrationEventRecord.Status.RESOLVED.ordinal()).isEqualTo(1);
     }
 
+    @Test
+    void constructor_payloadExceedingColumnLimit_acceptedAtJavaLevel() throws Exception {
+        String overLimitPayload = "x".repeat(5000);
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", overLimitPayload, "error", "java.lang.RuntimeException", 3);
+
+        assertThat(getField(record, "eventPayload")).isEqualTo(overLimitPayload);
+        assertThat(((String) getField(record, "eventPayload")).length()).isEqualTo(5000);
+    }
+
+    @Test
+    void constructor_exceptionMessageExceedingColumnLimit_acceptedAtJavaLevel() throws Exception {
+        String overLimitMessage = "x".repeat(3000);
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", overLimitMessage, "java.lang.RuntimeException", 3);
+
+        assertThat(getField(record, "exceptionMessage")).isEqualTo(overLimitMessage);
+        assertThat(((String) getField(record, "exceptionMessage")).length()).isEqualTo(3000);
+    }
+
+    @Test
+    void allFieldsExceptId_haveColumnAnnotation() throws Exception {
+        String[] fieldsWithColumn = {"eventClassName", "eventPayload", "exceptionMessage",
+                "exceptionClassName", "createdAt", "retryCount", "status"};
+        for (String fieldName : fieldsWithColumn) {
+            Field field = FailedIntegrationEventRecord.class.getDeclaredField(fieldName);
+            assertThat(field.getAnnotation(Column.class))
+                    .as("Field '%s' should have @Column annotation", fieldName)
+                    .isNotNull();
+        }
+    }
+
+    @Test
+    void constructor_whitespaceOnlyStrings_accepted() throws Exception {
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "   ", "\t\n", " ", "  ", 3);
+
+        assertThat(getField(record, "eventClassName")).isEqualTo("   ");
+        assertThat(getField(record, "eventPayload")).isEqualTo("\t\n");
+        assertThat(getField(record, "exceptionMessage")).isEqualTo(" ");
+        assertThat(getField(record, "exceptionClassName")).isEqualTo("  ");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
