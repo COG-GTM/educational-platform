@@ -982,6 +982,20 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
                 .hasCauseInstanceOf(java.io.IOException.class);
     }
 
+    @Test
+    void handleStudentEnrolledToCourseEvent_checkedExceptionFromCommandHandler_rethrows() {
+        // given — direct unchecked exception (not wrapped)
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        doThrow(new IllegalArgumentException("invalid course id"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("invalid course id");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

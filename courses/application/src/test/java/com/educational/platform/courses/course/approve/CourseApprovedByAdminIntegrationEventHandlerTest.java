@@ -916,6 +916,20 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
                 .hasCauseInstanceOf(java.io.IOException.class);
     }
 
+    @Test
+    void handleCourseApprovedByAdminEvent_checkedExceptionFromCommandHandler_rethrows() {
+        // given — direct unchecked exception (not wrapped)
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new IllegalArgumentException("invalid course id"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("invalid course id");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
