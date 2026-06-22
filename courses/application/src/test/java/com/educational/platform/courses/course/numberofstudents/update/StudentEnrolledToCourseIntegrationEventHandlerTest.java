@@ -912,6 +912,54 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
                 .hasMessage("invalid enrollment");
     }
 
+    @Test
+    void recover_eventClassName_isNotSimpleName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must be package-qualified, not a simple class name
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String eventClassName = (String) getField(captor.getValue(), "eventClassName");
+        assertThat(eventClassName).contains(".");
+        assertThat(eventClassName).isNotEqualTo(event.getClass().getSimpleName());
+    }
+
+    @Test
+    void recover_exceptionClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.DataAccessResourceFailureException");
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_checkedExceptionFromCommandHandler_preservesExceptionIdentity() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final IllegalArgumentException originalException = new IllegalArgumentException("invalid enrollment");
+        doThrow(originalException).when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when/then — catch(Exception e) { throw e; } must not wrap the exception
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isSameAs(originalException);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
