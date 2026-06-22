@@ -36,4 +36,11 @@ class RetryConfigTest {
         assertThat(enableRetry).isNotNull();
         assertThat(enableRetry.order()).isEqualTo(Ordered.LOWEST_PRECEDENCE);
     }
+
+    @Test
+    void enableRetry_proxyTargetClassDefaultIsFalse() {
+        EnableRetry enableRetry = RetryConfig.class.getAnnotation(EnableRetry.class);
+        assertThat(enableRetry).isNotNull();
+        assertThat(enableRetry.proxyTargetClass()).isFalse();
+    }
 }

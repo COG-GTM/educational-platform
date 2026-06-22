@@ -422,6 +422,36 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(retryable.noRetryFor()).isEmpty();
     }
 
+    @Test
+    void handleStudentEnrolledToCourseEvent_rethrowsExactSameExceptionInstance() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        final DataAccessResourceFailureException originalException = new DataAccessResourceFailureException("DB error");
+        doThrow(originalException).when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_transientException_passesCorrectCourseIdToCommand() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        doThrow(new DataAccessResourceFailureException("DB error"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when
+        try { sut.handleStudentEnrolledToCourseEvent(event); } catch (Exception ignored) { }
+
+        // then
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> captor = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

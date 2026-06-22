@@ -404,6 +404,36 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         assertThat(retryable.noRetryFor()).isEmpty();
     }
 
+    @Test
+    void handleCourseApprovedByAdminEvent_rethrowsExactSameExceptionInstance() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException originalException = new DataAccessResourceFailureException("DB error");
+        doThrow(originalException).when(approveCourseCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_transientException_passesCorrectCourseIdToCommand() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new DataAccessResourceFailureException("DB error"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when
+        try { sut.handleCourseApprovedByAdminEvent(event); } catch (Exception ignored) { }
+
+        // then
+        final ArgumentCaptor<ApproveCourseCommand> captor = ArgumentCaptor.forClass(ApproveCourseCommand.class);
+        verify(approveCourseCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

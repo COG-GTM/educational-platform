@@ -509,6 +509,38 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThat(retryable.noRetryFor()).isEmpty();
     }
 
+    @Test
+    void handleCourseRatingRecalculatedEvent_rethrowsExactSameExceptionInstance() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException originalException = new DataAccessResourceFailureException("DB error");
+        doThrow(originalException).when(updateCourseRatingCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_transientException_passesCorrectArgumentsToCommand() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.7);
+        doThrow(new DataAccessResourceFailureException("DB error"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when
+        try { sut.handleCourseRatingRecalculatedEvent(event); } catch (Exception ignored) { }
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> captor = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("rating", 3.7);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

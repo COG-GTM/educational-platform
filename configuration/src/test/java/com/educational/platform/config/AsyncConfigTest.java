@@ -239,4 +239,43 @@ class AsyncConfigTest {
         assertThat((long) field.get(executor)).isEqualTo(30_000L);
         executor.shutdown();
     }
+
+    @Test
+    void getAsyncExecutor_supportsConcurrentTaskExecution() throws Exception {
+        // given
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        int taskCount = 4;
+        CountDownLatch allStarted = new CountDownLatch(taskCount);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch allDone = new CountDownLatch(taskCount);
+
+        // when
+        for (int i = 0; i < taskCount; i++) {
+            executor.submit(() -> {
+                allStarted.countDown();
+                try { release.await(5, TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+                allDone.countDown();
+            });
+        }
+
+        // then — all tasks started concurrently within the core pool
+        assertThat(allStarted.await(5, TimeUnit.SECONDS)).isTrue();
+        release.countDown();
+        assertThat(allDone.await(5, TimeUnit.SECONDS)).isTrue();
+        executor.shutdown();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_handlesNestedCauseChainWithoutThrowing() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        RuntimeException rootCause = new RuntimeException("root");
+        RuntimeException mid = new RuntimeException("mid", rootCause);
+        RuntimeException top = new RuntimeException("top", mid);
+        var method = AsyncConfigTest.class
+                .getDeclaredMethod("asyncUncaughtExceptionHandler_handlesNestedCauseChainWithoutThrowing");
+
+        // when/then — should not throw
+        handler.handleUncaughtException(top, method, "param1");
+    }
 }

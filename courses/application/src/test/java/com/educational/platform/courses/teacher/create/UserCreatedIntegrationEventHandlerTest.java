@@ -413,6 +413,48 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(retryable.noRetryFor()).isEmpty();
     }
 
+    @Test
+    void handleUserCreatedEvent_rethrowsExactSameExceptionInstance() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataAccessResourceFailureException originalException = new DataAccessResourceFailureException("DB error");
+        doThrow(originalException).when(createTeacherCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleUserCreatedEvent_usesUsernameNotEmail() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("the-username", "totally-different-email@test.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> captor = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("username", "the-username");
+    }
+
+    @Test
+    void handleUserCreatedEvent_transientException_passesCorrectUsernameToCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        doThrow(new DataAccessResourceFailureException("DB error"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when
+        try { sut.handleUserCreatedEvent(event); } catch (Exception ignored) { }
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> captor = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("username", "teacher1");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

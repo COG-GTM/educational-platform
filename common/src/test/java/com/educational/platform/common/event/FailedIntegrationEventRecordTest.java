@@ -335,6 +335,7 @@ class FailedIntegrationEventRecordTest {
                 "com.example.Event", exactLimitPayload, "error", "java.lang.RuntimeException", 3);
 
         // then
+        assertThat(getField(record, "eventPayload")).isEqualTo(exactLimitPayload);
         assertThat(((String) getField(record, "eventPayload")).length()).isEqualTo(4000);
     }
 
@@ -348,6 +349,7 @@ class FailedIntegrationEventRecordTest {
                 "com.example.Event", "payload", exactLimitMessage, "java.lang.RuntimeException", 3);
 
         // then
+        assertThat(getField(record, "exceptionMessage")).isEqualTo(exactLimitMessage);
         assertThat(((String) getField(record, "exceptionMessage")).length()).isEqualTo(2000);
     }
 
@@ -369,6 +371,19 @@ class FailedIntegrationEventRecordTest {
         assertThat(getField(record, "exceptionClassName")).isNull();
         assertThat(getField(record, "createdAt")).isNull();
         assertThat(getField(record, "status")).isNull();
+    }
+
+    @Test
+    void constructor_multipleInstancesHaveIndependentState() throws Exception {
+        FailedIntegrationEventRecord record1 = new FailedIntegrationEventRecord(
+                "com.example.EventA", "payloadA", "errorA", "java.lang.RuntimeException", 1);
+        FailedIntegrationEventRecord record2 = new FailedIntegrationEventRecord(
+                "com.example.EventB", "payloadB", "errorB", "java.lang.IllegalStateException", 5);
+
+        assertThat(getField(record1, "eventClassName")).isEqualTo("com.example.EventA");
+        assertThat(getField(record2, "eventClassName")).isEqualTo("com.example.EventB");
+        assertThat((int) getField(record1, "retryCount")).isEqualTo(1);
+        assertThat((int) getField(record2, "retryCount")).isEqualTo(5);
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {
