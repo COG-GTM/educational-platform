@@ -13,6 +13,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionHandler;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -116,6 +118,7 @@ class AsyncConfigTest {
     void getAsyncExecutor_executorCanSubmitAndRunTasks() throws Exception {
         // given
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
         CountDownLatch latch = new CountDownLatch(1);
 
         // when
@@ -130,6 +133,7 @@ class AsyncConfigTest {
     void getAsyncExecutor_threadNameStartsWithPrefix() throws Exception {
         // given
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
         String[] threadName = new String[1];
         CountDownLatch latch = new CountDownLatch(1);
 
@@ -245,6 +249,7 @@ class AsyncConfigTest {
     void getAsyncExecutor_supportsConcurrentTaskExecution() throws Exception {
         // given
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
         int taskCount = 4;
         CountDownLatch allStarted = new CountDownLatch(taskCount);
         CountDownLatch release = new CountDownLatch(1);
@@ -270,6 +275,7 @@ class AsyncConfigTest {
     void getAsyncExecutor_executorIsNotShutdownAfterCreation() {
         // when
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
 
         // then
         assertThat(executor.getThreadPoolExecutor().isShutdown()).isFalse();
@@ -281,6 +287,7 @@ class AsyncConfigTest {
     void getAsyncExecutor_activeCountIsZeroInitially() {
         // when
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
 
         // then
         assertThat(executor.getActiveCount()).isZero();
@@ -360,6 +367,7 @@ class AsyncConfigTest {
     @Test
     void getAsyncExecutor_executorIsInitialized() {
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
 
         assertThat(executor.getThreadPoolExecutor()).isNotNull();
         assertThat(executor.getThreadPoolExecutor().getPoolSize()).isGreaterThanOrEqualTo(0);
@@ -376,6 +384,7 @@ class AsyncConfigTest {
     void getAsyncExecutor_returnsInitializedExecutor_thatCanBeShutdown() {
         // given
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
 
         // when
         executor.shutdown();
@@ -394,6 +403,7 @@ class AsyncConfigTest {
     void getAsyncExecutor_queueIsEmptyInitially() {
         // given
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
 
         // then
         assertThat(executor.getThreadPoolExecutor().getQueue()).isEmpty();
@@ -452,5 +462,57 @@ class AsyncConfigTest {
         EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
         assertThat(enableAsync).isNotNull();
         assertThat(enableAsync.annotation()).isEqualTo(java.lang.annotation.Annotation.class);
+    }
+
+    @Test
+    void getAsyncExecutor_rejectedExecutionHandlerIsAbortPolicy() {
+        // given
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
+
+        // then — default abort policy ensures tasks are not silently dropped
+        RejectedExecutionHandler handler = executor.getThreadPoolExecutor().getRejectedExecutionHandler();
+        assertThat(handler).isInstanceOf(ThreadPoolExecutor.AbortPolicy.class);
+        executor.shutdown();
+    }
+
+    @Test
+    void getAsyncExecutor_completedTaskCountIsZeroInitially() {
+        // given
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
+
+        // then
+        assertThat(executor.getThreadPoolExecutor().getCompletedTaskCount()).isZero();
+        executor.shutdown();
+    }
+
+    @Test
+    void getAsyncExecutor_taskCountIsZeroInitially() {
+        // given
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
+
+        // then
+        assertThat(executor.getThreadPoolExecutor().getTaskCount()).isZero();
+        executor.shutdown();
+    }
+
+    @Test
+    void getAsyncExecutor_corePoolSizeFitsTypicalConcurrency() {
+        // given
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then — core size (4) should not exceed max size (8)
+        assertThat(executor.getCorePoolSize()).isLessThanOrEqualTo(executor.getMaxPoolSize());
+    }
+
+    @Test
+    void getAsyncExecutor_queueCapacityExceedsCorePoolSize() {
+        // given
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then — queue capacity should be larger than core pool to buffer bursts
+        assertThat(executor.getQueueCapacity()).isGreaterThan(executor.getCorePoolSize());
     }
 }

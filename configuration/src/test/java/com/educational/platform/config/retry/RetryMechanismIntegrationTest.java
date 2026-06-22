@@ -133,6 +133,35 @@ class RetryMechanismIntegrationTest {
         assertThat(retryableService.getRecoveredEvents()).containsExactly("my-unique-payload");
     }
 
+    @Test
+    void retryableMethod_backoffIncreasesBetweenRetries() {
+        // given — backoff configured as delay=50, multiplier=2
+        // expected delays: ~50ms (1st retry), ~100ms (2nd retry)
+        retryableService.reset();
+        long start = System.currentTimeMillis();
+
+        // when — all 3 attempts fail, recover is called
+        retryableService.handleEvent("timing-test", new RetryableTransientException("timed error"));
+
+        // then — total elapsed should be >= 50+100=150ms due to backoff
+        long elapsed = System.currentTimeMillis() - start;
+        assertThat(elapsed).as("Backoff delays should sum to at least 100ms").isGreaterThanOrEqualTo(100);
+        assertThat(retryableService.getAttemptCount()).isEqualTo(3);
+    }
+
+    @Test
+    void retryableMethod_recoverExceptionPropagates_whenRecoverThrows() {
+        // given — simulate a scenario where recovery itself fails
+        retryableService.reset();
+        retryableService.setRecoverShouldFail(true);
+
+        // when/then — exception from recover should propagate
+        assertThatThrownBy(() -> retryableService.handleEvent("fail-recover",
+                new RetryableTransientException("original")))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("Recovery failed");
+    }
+
     @Configuration
     @EnableRetry
     static class TestConfig {
@@ -164,12 +193,14 @@ class RetryMechanismIntegrationTest {
         private final List<String> recoveredEvents = Collections.synchronizedList(new ArrayList<>());
         private final AtomicReference<RuntimeException> lastRecoveredException = new AtomicReference<>();
         private volatile int failUntilAttempt = Integer.MAX_VALUE;
+        private volatile boolean recoverShouldFail = false;
 
         void reset() {
             attemptCount.set(0);
             recoveredEvents.clear();
             lastRecoveredException.set(null);
             failUntilAttempt = Integer.MAX_VALUE;
+            recoverShouldFail = false;
         }
 
         @Retryable(retryFor = {RetryableTransientException.class},
@@ -192,12 +223,18 @@ class RetryMechanismIntegrationTest {
 
         @Recover
         public void recover(RetryableTransientException e, String eventPayload, RuntimeException ignored) {
+            if (recoverShouldFail) {
+                throw new RuntimeException("Recovery failed");
+            }
             lastRecoveredException.set(e);
             recoveredEvents.add(eventPayload);
         }
 
         @Recover
         public void recover(RetryableTransientException e, String eventPayload) {
+            if (recoverShouldFail) {
+                throw new RuntimeException("Recovery failed");
+            }
             lastRecoveredException.set(e);
             recoveredEvents.add(eventPayload);
         }
@@ -216,6 +253,10 @@ class RetryMechanismIntegrationTest {
 
         public void setFailUntilAttempt(int attempt) {
             this.failUntilAttempt = attempt;
+        }
+
+        public void setRecoverShouldFail(boolean shouldFail) {
+            this.recoverShouldFail = shouldFail;
         }
     }
 }

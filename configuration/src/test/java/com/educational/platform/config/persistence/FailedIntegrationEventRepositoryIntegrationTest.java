@@ -190,6 +190,74 @@ class FailedIntegrationEventRepositoryIntegrationTest {
         assertThat(repository.count()).isEqualTo(2);
     }
 
+    @Test
+    void save_withUnicodePayload_persistsAndRetrievesCorrectly() throws Exception {
+        // given — unicode characters in event payload (e.g., course names in other languages)
+        String unicodePayload = "CourseEvent[name=数学课程, teacher=田中太郎, desc=Ünïcödé]";
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.UnicodeEvent", unicodePayload, "error with émojis 🎉", "java.lang.RuntimeException", 3);
+
+        // when
+        FailedIntegrationEventRecord saved = repository.save(record);
+
+        // then
+        Long id = (Long) getField(saved, "id");
+        Optional<FailedIntegrationEventRecord> found = repository.findById(id);
+        assertThat(found).isPresent();
+        assertThat(getField(found.get(), "eventPayload")).isEqualTo(unicodePayload);
+        assertThat(getField(found.get(), "exceptionMessage")).isEqualTo("error with émojis 🎉");
+    }
+
+    @Test
+    void save_createdAtTimestampIsChronological() throws Exception {
+        // given
+        FailedIntegrationEventRecord record1 = new FailedIntegrationEventRecord(
+                "com.example.Event1", "payload-1", "error", "java.lang.RuntimeException", 3);
+        FailedIntegrationEventRecord saved1 = repository.save(record1);
+        Instant createdAt1 = (Instant) getField(saved1, "createdAt");
+
+        // when — slight delay to ensure different timestamps
+        Thread.sleep(10);
+        FailedIntegrationEventRecord record2 = new FailedIntegrationEventRecord(
+                "com.example.Event2", "payload-2", "error", "java.lang.RuntimeException", 3);
+        FailedIntegrationEventRecord saved2 = repository.save(record2);
+        Instant createdAt2 = (Instant) getField(saved2, "createdAt");
+
+        // then
+        assertThat(createdAt2).isAfterOrEqualTo(createdAt1);
+    }
+
+    @Test
+    void save_withZeroRetryCount_persistsSuccessfully() throws Exception {
+        // given — edge case: 0 retries (immediate failure)
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.TestEvent", "payload", "error", "java.lang.RuntimeException", 0);
+
+        // when
+        FailedIntegrationEventRecord saved = repository.save(record);
+
+        // then
+        Long id = (Long) getField(saved, "id");
+        Optional<FailedIntegrationEventRecord> found = repository.findById(id);
+        assertThat(found).isPresent();
+        assertThat((int) getField(found.get(), "retryCount")).isZero();
+    }
+
+    @Test
+    void delete_afterSave_removesRecord() throws Exception {
+        // given
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.TestEvent", "payload", "error", "java.lang.RuntimeException", 3);
+        FailedIntegrationEventRecord saved = repository.save(record);
+        Long id = (Long) getField(saved, "id");
+
+        // when
+        repository.deleteById(id);
+
+        // then
+        assertThat(repository.findById(id)).isEmpty();
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
