@@ -2,6 +2,7 @@ package com.educational.platform.courses.teacher.create;
 
 import com.educational.platform.common.event.FailedIntegrationEventRecord;
 import com.educational.platform.common.event.FailedIntegrationEventRepository;
+import com.educational.platform.common.exception.ResourceNotFoundException;
 import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
 
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+
+import java.lang.reflect.Field;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -57,7 +61,7 @@ class UserCreatedIntegrationEventHandlerTest {
     }
 
     @Test
-    void recover_persistsFailedEvent() {
+    void recover_persistsFailedEvent() throws Exception {
         // given
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
         final Exception exception = new DataAccessResourceFailureException("DB connection lost");
@@ -66,6 +70,56 @@ class UserCreatedIntegrationEventHandlerTest {
         sut.recover(exception, event);
 
         // then
-        verify(failedIntegrationEventRepository).save(any(FailedIntegrationEventRecord.class));
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final FailedIntegrationEventRecord failedEvent = captor.getValue();
+        assertThat(failedEvent).isNotNull();
+        assertThat(getField(failedEvent, "eventClassName")).isEqualTo(event.getClass().getName());
+        assertThat(getField(failedEvent, "eventPayload")).isEqualTo(event.toString());
+        assertThat(getField(failedEvent, "exceptionMessage")).isEqualTo("DB connection lost");
+        assertThat(getField(failedEvent, "exceptionClassName")).isEqualTo(DataAccessResourceFailureException.class.getName());
+        assertThat((int) getField(failedEvent, "retryCount")).isEqualTo(3);
+    }
+
+    @Test
+    void handleUserCreatedEvent_businessException_rethrowsForRetry() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        doThrow(new ResourceNotFoundException("User not found"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void handleUserCreatedEvent_optimisticLockException_rethrowsForRetry() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        doThrow(new ObjectOptimisticLockingFailureException("Optimistic lock conflict", new RuntimeException()))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+    }
+
+    @Test
+    void handleUserCreatedEvent_successPath_doesNotInteractWithFailedEventRepository() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    private Object getField(Object obj, String fieldName) throws Exception {
+        Field field = obj.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return field.get(obj);
     }
 }

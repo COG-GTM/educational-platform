@@ -24,6 +24,27 @@ class AsyncConfigTest {
     }
 
     @Test
+    void getAsyncExecutor_returnsThreadPoolWithCorrectPoolSizes() {
+        // when
+        Executor executor = asyncConfig.getAsyncExecutor();
+
+        // then
+        ThreadPoolTaskExecutor taskExecutor = (ThreadPoolTaskExecutor) executor;
+        assertThat(taskExecutor.getCorePoolSize()).isEqualTo(4);
+        assertThat(taskExecutor.getMaxPoolSize()).isEqualTo(8);
+    }
+
+    @Test
+    void getAsyncExecutor_returnsThreadPoolWithCorrectQueueCapacity() {
+        // when
+        Executor executor = asyncConfig.getAsyncExecutor();
+
+        // then
+        ThreadPoolTaskExecutor taskExecutor = (ThreadPoolTaskExecutor) executor;
+        assertThat(taskExecutor.getQueueCapacity()).isEqualTo(100);
+    }
+
+    @Test
     void getAsyncUncaughtExceptionHandler_returnsNonNullHandler() {
         // when
         AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
@@ -41,5 +62,26 @@ class AsyncConfigTest {
 
         // when/then - should not throw
         handler.handleUncaughtException(exception, method, "param1", "param2");
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_handlesNullException() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        var method = AsyncConfigTest.class.getDeclaredMethod("asyncUncaughtExceptionHandler_handlesNullException");
+
+        // when/then - should not throw even with null throwable
+        handler.handleUncaughtException(new NullPointerException(), method);
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_handlesEmptyParams() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        RuntimeException exception = new RuntimeException("test");
+        var method = AsyncConfigTest.class.getDeclaredMethod("asyncUncaughtExceptionHandler_handlesEmptyParams");
+
+        // when/then - should not throw with no params
+        handler.handleUncaughtException(exception, method);
     }
 }
