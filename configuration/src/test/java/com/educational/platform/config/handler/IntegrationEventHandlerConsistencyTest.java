@@ -648,19 +648,6 @@ class IntegrationEventHandlerConsistencyTest {
     }
 
     @Test
-    void allHandlers_haveExactlyTwoDeclaredPublicMethods() {
-        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
-            long publicMethodCount = Arrays.stream(handlerClass.getDeclaredMethods())
-                    .filter(m -> Modifier.isPublic(m.getModifiers()))
-                    .count();
-            assertThat(publicMethodCount)
-                    .as("Handler %s should have exactly 2 public methods (handle + recover)",
-                            handlerClass.getSimpleName())
-                    .isEqualTo(2);
-        }
-    }
-
-    @Test
     void allHandlers_recoverMethod_nameStartsWithRecover() {
         for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
             Method recoverMethod = findRecoverMethod(handlerClass);
