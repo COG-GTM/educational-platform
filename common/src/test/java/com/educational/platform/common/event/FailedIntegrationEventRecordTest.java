@@ -494,6 +494,26 @@ class FailedIntegrationEventRecordTest {
         assertThat(getField(record, "eventClassName")).isEqualTo("com.example.Event");
     }
 
+    @Test
+    void class_hasExpectedNumberOfFields() {
+        Field[] fields = FailedIntegrationEventRecord.class.getDeclaredFields();
+        assertThat(fields).as("Guard against accidental field additions/removals").hasSize(8);
+    }
+
+    @Test
+    void publicConstructor_hasFiveParameters() throws NoSuchMethodException {
+        java.lang.reflect.Constructor<FailedIntegrationEventRecord> ctor =
+                FailedIntegrationEventRecord.class.getConstructor(
+                        String.class, String.class, String.class, String.class, int.class);
+        assertThat(ctor.getParameterCount()).isEqualTo(5);
+    }
+
+    @Test
+    void class_hasExactlyTwoConstructors() {
+        java.lang.reflect.Constructor<?>[] constructors = FailedIntegrationEventRecord.class.getDeclaredConstructors();
+        assertThat(constructors).as("One protected no-arg (JPA) + one public 5-arg").hasSize(2);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

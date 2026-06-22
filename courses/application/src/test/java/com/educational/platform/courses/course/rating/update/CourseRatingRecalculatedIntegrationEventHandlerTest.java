@@ -735,6 +735,65 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .hasFieldOrPropertyWithValue("rating", Double.MIN_VALUE);
     }
 
+    @Test
+    void handleCourseRatingRecalculatedEvent_onDataAccessException_doesNotInteractWithFailedEventRepository() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        doThrow(new DataAccessResourceFailureException("DB connection lost"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when
+        try { sut.handleCourseRatingRecalculatedEvent(event); } catch (Exception ignored) { }
+
+        // then — only recover() should persist dead-letter records, never the handler itself
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_onBusinessException_doesNotInteractWithFailedEventRepository() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        doThrow(new ResourceNotFoundException("Course not found"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when
+        try { sut.handleCourseRatingRecalculatedEvent(event); } catch (Exception ignored) { }
+
+        // then — non-retryable exceptions propagate to AsyncUncaughtExceptionHandler, not to the repository
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_onOptimisticLockException_doesNotInteractWithFailedEventRepository() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        doThrow(new ObjectOptimisticLockingFailureException("Optimistic lock", new RuntimeException()))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when
+        try { sut.handleCourseRatingRecalculatedEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_completesNormally_whenRepositorySaveSucceeds() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when — should complete without throwing
+        sut.recover(exception, event);
+
+        // then
+        verify(failedIntegrationEventRepository).save(any(FailedIntegrationEventRecord.class));
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

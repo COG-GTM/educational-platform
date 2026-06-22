@@ -639,6 +639,61 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(captor.getValue()).hasFieldOrPropertyWithValue("username", longUsername);
     }
 
+    @Test
+    void handleUserCreatedEvent_onDataAccessException_doesNotInteractWithFailedEventRepository() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        doThrow(new DataAccessResourceFailureException("DB connection lost"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when
+        try { sut.handleUserCreatedEvent(event); } catch (Exception ignored) { }
+
+        // then — only recover() should persist dead-letter records, never the handler itself
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleUserCreatedEvent_onBusinessException_doesNotInteractWithFailedEventRepository() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        doThrow(new ResourceNotFoundException("User not found"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when
+        try { sut.handleUserCreatedEvent(event); } catch (Exception ignored) { }
+
+        // then — non-retryable exceptions propagate to AsyncUncaughtExceptionHandler, not to the repository
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleUserCreatedEvent_onOptimisticLockException_doesNotInteractWithFailedEventRepository() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        doThrow(new ObjectOptimisticLockingFailureException("Optimistic lock", new RuntimeException()))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when
+        try { sut.handleUserCreatedEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_completesNormally_whenRepositorySaveSucceeds() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when — should complete without throwing
+        sut.recover(exception, event);
+
+        // then
+        verify(failedIntegrationEventRepository).save(any(FailedIntegrationEventRecord.class));
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

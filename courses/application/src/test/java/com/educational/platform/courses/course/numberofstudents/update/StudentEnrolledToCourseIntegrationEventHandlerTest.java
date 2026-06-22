@@ -641,6 +641,65 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", courseId);
     }
 
+    @Test
+    void handleStudentEnrolledToCourseEvent_onDataAccessException_doesNotInteractWithFailedEventRepository() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        doThrow(new DataAccessResourceFailureException("DB connection lost"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when
+        try { sut.handleStudentEnrolledToCourseEvent(event); } catch (Exception ignored) { }
+
+        // then — only recover() should persist dead-letter records, never the handler itself
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_onBusinessException_doesNotInteractWithFailedEventRepository() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        doThrow(new ResourceNotFoundException("Course not found"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when
+        try { sut.handleStudentEnrolledToCourseEvent(event); } catch (Exception ignored) { }
+
+        // then — non-retryable exceptions propagate to AsyncUncaughtExceptionHandler, not to the repository
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_onOptimisticLockException_doesNotInteractWithFailedEventRepository() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        doThrow(new ObjectOptimisticLockingFailureException("Optimistic lock", new RuntimeException()))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when
+        try { sut.handleStudentEnrolledToCourseEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_completesNormally_whenRepositorySaveSucceeds() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when — should complete without throwing
+        sut.recover(exception, event);
+
+        // then
+        verify(failedIntegrationEventRepository).save(any(FailedIntegrationEventRecord.class));
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

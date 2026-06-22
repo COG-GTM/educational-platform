@@ -365,4 +365,38 @@ class AsyncConfigTest {
         assertThat(executor.getThreadPoolExecutor().getPoolSize()).isGreaterThanOrEqualTo(0);
         executor.shutdown();
     }
+
+    @Test
+    void getAsyncUncaughtExceptionHandler_isIntegrationEventSpecificImpl() {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        assertThat(handler.getClass().getName()).contains("IntegrationEvent");
+    }
+
+    @Test
+    void getAsyncExecutor_returnsInitializedExecutor_thatCanBeShutdown() {
+        // given
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // when
+        executor.shutdown();
+
+        // then
+        assertThat(executor.getThreadPoolExecutor().isShutdown()).isTrue();
+    }
+
+    @Test
+    void asyncConfig_implementsAllAsyncConfigurerMethods() throws NoSuchMethodException {
+        assertThat(AsyncConfig.class.getDeclaredMethod("getAsyncExecutor")).isNotNull();
+        assertThat(AsyncConfig.class.getDeclaredMethod("getAsyncUncaughtExceptionHandler")).isNotNull();
+    }
+
+    @Test
+    void getAsyncExecutor_queueIsEmptyInitially() {
+        // given
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getThreadPoolExecutor().getQueue()).isEmpty();
+        executor.shutdown();
+    }
 }
