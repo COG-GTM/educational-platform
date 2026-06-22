@@ -519,6 +519,32 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(retryable.maxAttempts()).isEqualTo(maxAttempts);
     }
 
+    @Test
+    void recoverMethod_doesNotAcceptBroadExceptionType() {
+        assertThatThrownBy(() -> StudentEnrolledToCourseIntegrationEventHandler.class
+                .getMethod("recover", Exception.class, StudentEnrolledToCourseIntegrationEvent.class))
+                .isInstanceOf(NoSuchMethodException.class);
+    }
+
+    @Test
+    void retryableMaxAttempts_matchesRecoverRetryCount() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+        Method handlerMethod = StudentEnrolledToCourseIntegrationEventHandler.class
+                .getMethod("handleStudentEnrolledToCourseEvent", StudentEnrolledToCourseIntegrationEvent.class);
+        int annotationMaxAttempts = handlerMethod.getAnnotation(Retryable.class).maxAttempts();
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(annotationMaxAttempts);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

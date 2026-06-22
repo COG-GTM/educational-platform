@@ -522,6 +522,31 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(retryable.maxAttempts()).isEqualTo(maxAttempts);
     }
 
+    @Test
+    void recoverMethod_doesNotAcceptBroadExceptionType() {
+        assertThatThrownBy(() -> UserCreatedIntegrationEventHandler.class
+                .getMethod("recover", Exception.class, UserCreatedIntegrationEvent.class))
+                .isInstanceOf(NoSuchMethodException.class);
+    }
+
+    @Test
+    void retryableMaxAttempts_matchesRecoverRetryCount() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+        Method handlerMethod = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+        int annotationMaxAttempts = handlerMethod.getAnnotation(Retryable.class).maxAttempts();
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(annotationMaxAttempts);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

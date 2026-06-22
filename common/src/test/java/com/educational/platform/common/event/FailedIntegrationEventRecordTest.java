@@ -443,6 +443,30 @@ class FailedIntegrationEventRecordTest {
         }
     }
 
+    @Test
+    void className_doesNotEndWithEvent() {
+        // Named *Record (not *Event) to satisfy the ArchUnit rule
+        // requiring all *Event classes to be immutable.
+        assertThat(FailedIntegrationEventRecord.class.getSimpleName()).endsWith("Record");
+        assertThat(FailedIntegrationEventRecord.class.getSimpleName()).doesNotEndWith("Event");
+    }
+
+    @Test
+    void class_isNotFinal() {
+        // JPA entities should not be final (Hibernate proxy requirement)
+        assertThat(Modifier.isFinal(FailedIntegrationEventRecord.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void class_hasNoPublicGetters() {
+        // Encapsulated entity — no public getters exposed
+        long publicGetterCount = java.util.Arrays.stream(FailedIntegrationEventRecord.class.getDeclaredMethods())
+                .filter(m -> Modifier.isPublic(m.getModifiers()))
+                .filter(m -> m.getName().startsWith("get") || m.getName().startsWith("is"))
+                .count();
+        assertThat(publicGetterCount).isZero();
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

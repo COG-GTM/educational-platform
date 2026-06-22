@@ -305,4 +305,44 @@ class AsyncConfigTest {
     void asyncConfig_doesNotHaveEnableRetry() {
         assertThat(AsyncConfig.class.getAnnotation(EnableRetry.class)).isNull();
     }
+
+    @Test
+    void asyncUncaughtExceptionHandler_handlesCheckedExceptionWithoutThrowing() throws NoSuchMethodException {
+        // given — business exceptions like ResourceNotFoundException propagate here
+        // when @Recover only catches DataAccessException
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Exception checkedException = new Exception("checked business error");
+        var method = AsyncConfigTest.class
+                .getDeclaredMethod("asyncUncaughtExceptionHandler_handlesCheckedExceptionWithoutThrowing");
+
+        // when/then — should not throw
+        handler.handleUncaughtException(checkedException, method, "eventParam");
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_acceptsThrowableParameter() throws NoSuchMethodException {
+        Method handleMethod = asyncConfig.getAsyncUncaughtExceptionHandler().getClass()
+                .getMethod("handleUncaughtException", Throwable.class, Method.class, Object[].class);
+        assertThat(handleMethod).isNotNull();
+        assertThat(handleMethod.getParameterTypes()[0]).isEqualTo(Throwable.class);
+    }
+
+    @Test
+    void enableAsync_proxyTargetClassDefaultIsFalse() {
+        EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
+        assertThat(enableAsync).isNotNull();
+        assertThat(enableAsync.proxyTargetClass()).isFalse();
+    }
+
+    @Test
+    void getAsyncExecutor_isDeclaredInAsyncConfig() throws NoSuchMethodException {
+        Method method = AsyncConfig.class.getDeclaredMethod("getAsyncExecutor");
+        assertThat(method.getDeclaringClass()).isEqualTo(AsyncConfig.class);
+    }
+
+    @Test
+    void getAsyncUncaughtExceptionHandler_isDeclaredInAsyncConfig() throws NoSuchMethodException {
+        Method method = AsyncConfig.class.getDeclaredMethod("getAsyncUncaughtExceptionHandler");
+        assertThat(method.getDeclaringClass()).isEqualTo(AsyncConfig.class);
+    }
 }
