@@ -268,6 +268,34 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(method.getReturnType()).isEqualTo(void.class);
     }
 
+    @Test
+    void handleSendCourseToApproveEvent_genericRuntimeException_rethrows() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new IllegalStateException("unexpected state"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("unexpected state");
+    }
+
+    @Test
+    void recover_savesExactlyOneRecord() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB down");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        verify(failedIntegrationEventRepository, times(1)).save(any(FailedIntegrationEventRecord.class));
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

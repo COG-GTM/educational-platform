@@ -255,6 +255,46 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(method.getReturnType()).isEqualTo(void.class);
     }
 
+    @Test
+    void handleUserCreatedEvent_genericRuntimeException_rethrows() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        doThrow(new IllegalStateException("unexpected state"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("unexpected state");
+    }
+
+    @Test
+    void handleUserCreatedEvent_emptyUsername_commandReceivedCorrectValue() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("", "empty@test.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> captor = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("username", "");
+    }
+
+    @Test
+    void recover_savesExactlyOneRecord() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB down");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        verify(failedIntegrationEventRepository, times(1)).save(any(FailedIntegrationEventRecord.class));
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

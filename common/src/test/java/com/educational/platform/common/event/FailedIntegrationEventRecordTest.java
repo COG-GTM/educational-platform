@@ -223,6 +223,57 @@ class FailedIntegrationEventRecordTest {
         assertThat(getField(record, "eventPayload")).isEqualTo(largePayload);
     }
 
+    @Test
+    void statusEnum_valueOf_fromString() {
+        assertThat(FailedIntegrationEventRecord.Status.valueOf("FAILED"))
+                .isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+        assertThat(FailedIntegrationEventRecord.Status.valueOf("RESOLVED"))
+                .isEqualTo(FailedIntegrationEventRecord.Status.RESOLVED);
+    }
+
+    @Test
+    void eventClassNameField_hasCorrectColumnName() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventClassName");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.name()).isEqualTo("event_class_name");
+        assertThat(column.nullable()).isFalse();
+    }
+
+    @Test
+    void exceptionClassNameField_hasColumnAnnotation() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("exceptionClassName");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.name()).isEqualTo("exception_class_name");
+    }
+
+    @Test
+    void statusField_hasCorrectColumnName() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("status");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.name()).isEqualTo("status");
+        assertThat(column.nullable()).isFalse();
+    }
+
+    @Test
+    void constructor_withMaxIntRetryCount_accepted() throws Exception {
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", "java.lang.RuntimeException", Integer.MAX_VALUE);
+
+        assertThat((int) getField(record, "retryCount")).isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
+    void constructor_longExceptionMessage_nearLimit_accepted() throws Exception {
+        String longMessage = "x".repeat(1999);
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", longMessage, "java.lang.RuntimeException", 3);
+
+        assertThat(getField(record, "exceptionMessage")).isEqualTo(longMessage);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

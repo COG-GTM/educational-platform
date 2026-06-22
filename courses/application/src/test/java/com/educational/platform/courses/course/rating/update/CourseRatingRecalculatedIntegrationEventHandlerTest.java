@@ -286,6 +286,51 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .hasFieldOrPropertyWithValue("rating", 0.0);
     }
 
+    @Test
+    void handleCourseRatingRecalculatedEvent_genericRuntimeException_rethrows() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        doThrow(new IllegalStateException("unexpected state"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("unexpected state");
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_negativeRating_commandReceivedCorrectValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, -1.0);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> captor = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("rating", -1.0);
+    }
+
+    @Test
+    void recover_savesExactlyOneRecord() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB down");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        verify(failedIntegrationEventRepository, times(1)).save(any(FailedIntegrationEventRecord.class));
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

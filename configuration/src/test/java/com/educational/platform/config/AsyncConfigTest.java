@@ -193,4 +193,17 @@ class AsyncConfigTest {
         // then
         assertThat(first).isNotSameAs(second);
     }
+
+    @Test
+    void getAsyncExecutor_awaitTerminationSecondsIs30() throws Exception {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        java.lang.reflect.Field field = org.springframework.scheduling.concurrent.ExecutorConfigurationSupport.class
+                .getDeclaredField("awaitTerminationMillis");
+        field.setAccessible(true);
+        assertThat((long) field.get(executor)).isEqualTo(30_000L);
+        executor.shutdown();
+    }
 }

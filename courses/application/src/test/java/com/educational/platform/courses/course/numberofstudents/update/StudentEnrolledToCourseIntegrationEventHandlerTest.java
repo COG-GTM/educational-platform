@@ -271,6 +271,34 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(method.getReturnType()).isEqualTo(void.class);
     }
 
+    @Test
+    void handleStudentEnrolledToCourseEvent_genericRuntimeException_rethrows() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        doThrow(new IllegalStateException("unexpected state"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("unexpected state");
+    }
+
+    @Test
+    void recover_savesExactlyOneRecord() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB down");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        verify(failedIntegrationEventRepository, times(1)).save(any(FailedIntegrationEventRecord.class));
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
