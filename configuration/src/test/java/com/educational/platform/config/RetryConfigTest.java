@@ -71,4 +71,19 @@ class RetryConfigTest {
     void retryConfig_hasNoDeclaredFields() {
         assertThat(RetryConfig.class.getDeclaredFields()).as("Pure config class should have no fields").isEmpty();
     }
+
+    @Test
+    void retryConfig_isNotAbstract() {
+        assertThat(java.lang.reflect.Modifier.isAbstract(RetryConfig.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void retryConfig_isNotFinal() {
+        assertThat(java.lang.reflect.Modifier.isFinal(RetryConfig.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void retryConfig_isPublic() {
+        assertThat(java.lang.reflect.Modifier.isPublic(RetryConfig.class.getModifiers())).isTrue();
+    }
 }

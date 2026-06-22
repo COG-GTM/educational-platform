@@ -429,4 +429,28 @@ class AsyncConfigTest {
         Method method = AsyncConfig.class.getMethod("getAsyncExecutor");
         assertThat(method.getReturnType()).isEqualTo(Executor.class);
     }
+
+    @Test
+    void enableAsync_modeIsProxy() {
+        EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
+        assertThat(enableAsync).isNotNull();
+        assertThat(enableAsync.mode()).isEqualTo(org.springframework.context.annotation.AdviceMode.PROXY);
+    }
+
+    @Test
+    void asyncConfig_isNotAbstract() {
+        assertThat(java.lang.reflect.Modifier.isAbstract(AsyncConfig.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void asyncConfig_isNotFinal() {
+        assertThat(java.lang.reflect.Modifier.isFinal(AsyncConfig.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void enableAsync_annotationValueIsEmpty() {
+        EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
+        assertThat(enableAsync).isNotNull();
+        assertThat(enableAsync.annotation()).isEqualTo(java.lang.annotation.Annotation.class);
+    }
 }

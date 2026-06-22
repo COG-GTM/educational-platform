@@ -2,6 +2,7 @@ package com.educational.platform.common.event;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.NoRepositoryBean;
 
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
@@ -61,6 +62,18 @@ class FailedIntegrationEventRepositoryTest {
     void repository_hasNoDeclaredMethods() {
         assertThat(FailedIntegrationEventRepository.class.getDeclaredMethods())
                 .as("Repository should inherit all methods from JpaRepository without custom additions")
+                .isEmpty();
+    }
+
+    @Test
+    void repository_doesNotHaveNoRepositoryBeanAnnotation() {
+        assertThat(FailedIntegrationEventRepository.class.getAnnotation(NoRepositoryBean.class)).isNull();
+    }
+
+    @Test
+    void repository_hasNoDeclaredFields() {
+        assertThat(FailedIntegrationEventRepository.class.getDeclaredFields())
+                .as("Repository interface should have no fields")
                 .isEmpty();
     }
 }

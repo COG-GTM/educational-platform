@@ -731,6 +731,43 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(UserCreatedIntegrationEventHandler.class.getConstructors()[0].getParameterCount()).isEqualTo(2);
     }
 
+    @Test
+    void handler_constructorFirstParam_isCommandHandler() {
+        Class<?>[] paramTypes = UserCreatedIntegrationEventHandler.class.getConstructors()[0].getParameterTypes();
+        assertThat(paramTypes[0]).isEqualTo(CreateTeacherCommandHandler.class);
+    }
+
+    @Test
+    void handler_constructorSecondParam_isFailedIntegrationEventRepository() {
+        Class<?>[] paramTypes = UserCreatedIntegrationEventHandler.class.getConstructors()[0].getParameterTypes();
+        assertThat(paramTypes[1]).isEqualTo(FailedIntegrationEventRepository.class);
+    }
+
+    @Test
+    void handlerMethod_asyncAnnotation_usesDefaultExecutor() throws NoSuchMethodException {
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+        Async async = method.getAnnotation(Async.class);
+        assertThat(async.value()).isEmpty();
+    }
+
+    @Test
+    void recoverMethod_returnTypeIsVoid() throws NoSuchMethodException {
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, UserCreatedIntegrationEvent.class);
+        assertThat(method.getReturnType()).isEqualTo(void.class);
+    }
+
+    @Test
+    void handler_isNotAbstract() {
+        assertThat(Modifier.isAbstract(UserCreatedIntegrationEventHandler.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void handler_isNotFinal() {
+        assertThat(Modifier.isFinal(UserCreatedIntegrationEventHandler.class.getModifiers())).isFalse();
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

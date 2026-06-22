@@ -704,6 +704,43 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         assertThat(CourseApprovedByAdminIntegrationEventHandler.class.getConstructors()[0].getParameterCount()).isEqualTo(2);
     }
 
+    @Test
+    void handler_constructorFirstParam_isCommandHandler() {
+        Class<?>[] paramTypes = CourseApprovedByAdminIntegrationEventHandler.class.getConstructors()[0].getParameterTypes();
+        assertThat(paramTypes[0]).isEqualTo(ApproveCourseCommandHandler.class);
+    }
+
+    @Test
+    void handler_constructorSecondParam_isFailedIntegrationEventRepository() {
+        Class<?>[] paramTypes = CourseApprovedByAdminIntegrationEventHandler.class.getConstructors()[0].getParameterTypes();
+        assertThat(paramTypes[1]).isEqualTo(FailedIntegrationEventRepository.class);
+    }
+
+    @Test
+    void handlerMethod_asyncAnnotation_usesDefaultExecutor() throws NoSuchMethodException {
+        Method method = CourseApprovedByAdminIntegrationEventHandler.class
+                .getMethod("handleCourseApprovedByAdminEvent", CourseApprovedByAdminIntegrationEvent.class);
+        Async async = method.getAnnotation(Async.class);
+        assertThat(async.value()).isEmpty();
+    }
+
+    @Test
+    void recoverMethod_returnTypeIsVoid() throws NoSuchMethodException {
+        Method method = CourseApprovedByAdminIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, CourseApprovedByAdminIntegrationEvent.class);
+        assertThat(method.getReturnType()).isEqualTo(void.class);
+    }
+
+    @Test
+    void handler_isNotAbstract() {
+        assertThat(Modifier.isAbstract(CourseApprovedByAdminIntegrationEventHandler.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void handler_isNotFinal() {
+        assertThat(Modifier.isFinal(CourseApprovedByAdminIntegrationEventHandler.class.getModifiers())).isFalse();
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

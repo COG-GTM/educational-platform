@@ -845,6 +845,43 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThat(CourseRatingRecalculatedIntegrationEventHandler.class.getConstructors()[0].getParameterCount()).isEqualTo(2);
     }
 
+    @Test
+    void handler_constructorFirstParam_isCommandHandler() {
+        Class<?>[] paramTypes = CourseRatingRecalculatedIntegrationEventHandler.class.getConstructors()[0].getParameterTypes();
+        assertThat(paramTypes[0]).isEqualTo(UpdateCourseRatingCommandHandler.class);
+    }
+
+    @Test
+    void handler_constructorSecondParam_isFailedIntegrationEventRepository() {
+        Class<?>[] paramTypes = CourseRatingRecalculatedIntegrationEventHandler.class.getConstructors()[0].getParameterTypes();
+        assertThat(paramTypes[1]).isEqualTo(FailedIntegrationEventRepository.class);
+    }
+
+    @Test
+    void handlerMethod_asyncAnnotation_usesDefaultExecutor() throws NoSuchMethodException {
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+        Async async = method.getAnnotation(Async.class);
+        assertThat(async.value()).isEmpty();
+    }
+
+    @Test
+    void recoverMethod_returnTypeIsVoid() throws NoSuchMethodException {
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, CourseRatingRecalculatedIntegrationEvent.class);
+        assertThat(method.getReturnType()).isEqualTo(void.class);
+    }
+
+    @Test
+    void handler_isNotAbstract() {
+        assertThat(Modifier.isAbstract(CourseRatingRecalculatedIntegrationEventHandler.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void handler_isNotFinal() {
+        assertThat(Modifier.isFinal(CourseRatingRecalculatedIntegrationEventHandler.class.getModifiers())).isFalse();
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
