@@ -2,7 +2,9 @@ package com.educational.platform.common.event;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -91,6 +93,62 @@ class FailedIntegrationEventRecordTest {
         // then
         assertThat(FailedIntegrationEventRecord.Status.values())
                 .containsExactly(FailedIntegrationEventRecord.Status.FAILED, FailedIntegrationEventRecord.Status.RESOLVED);
+    }
+
+    @Test
+    void constructor_nullExceptionClassName_accepted() throws Exception {
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", null, 3);
+
+        // then
+        assertThat(getField(record, "exceptionClassName")).isNull();
+        assertThat(getField(record, "eventClassName")).isEqualTo("com.example.Event");
+    }
+
+    @Test
+    void constructor_emptyStrings_accepted() throws Exception {
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "", "", "", "", 3);
+
+        // then
+        assertThat(getField(record, "eventClassName")).isEqualTo("");
+        assertThat(getField(record, "eventPayload")).isEqualTo("");
+        assertThat(getField(record, "exceptionMessage")).isEqualTo("");
+        assertThat(getField(record, "exceptionClassName")).isEqualTo("");
+    }
+
+    @Test
+    void protectedNoArgConstructor_existsForJpa() throws Exception {
+        // JPA requires a no-arg constructor
+        Constructor<FailedIntegrationEventRecord> constructor =
+                FailedIntegrationEventRecord.class.getDeclaredConstructor();
+        assertThat(Modifier.isProtected(constructor.getModifiers())).isTrue();
+
+        constructor.setAccessible(true);
+        FailedIntegrationEventRecord record = constructor.newInstance();
+        assertThat(record).isNotNull();
+    }
+
+    @Test
+    void constructor_negativeRetryCount_accepted() throws Exception {
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", "java.lang.RuntimeException", -1);
+
+        // then
+        assertThat((int) getField(record, "retryCount")).isEqualTo(-1);
+    }
+
+    @Test
+    void constructor_idIsNullBeforePersistence() throws Exception {
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", "java.lang.RuntimeException", 3);
+
+        // then
+        assertThat(getField(record, "id")).isNull();
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {

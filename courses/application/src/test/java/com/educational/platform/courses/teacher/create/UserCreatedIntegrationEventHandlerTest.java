@@ -11,10 +11,18 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.scheduling.annotation.Async;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -115,6 +123,91 @@ class UserCreatedIntegrationEventHandlerTest {
 
         // then
         verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_withOptimisticLockException_persistsFailedEvent() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final Exception exception = new ObjectOptimisticLockingFailureException("Optimistic lock", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final FailedIntegrationEventRecord failedEvent = captor.getValue();
+        assertThat(getField(failedEvent, "exceptionClassName")).isEqualTo(ObjectOptimisticLockingFailureException.class.getName());
+        assertThat(getField(failedEvent, "exceptionMessage")).isEqualTo("Optimistic lock");
+    }
+
+    @Test
+    void recover_withNullExceptionMessage_persistsFailedEvent() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final Exception exception = new RuntimeException((String) null);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
+    }
+
+    @Test
+    void handleUserCreatedEvent_exceptionMessagePreserved() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        doThrow(new DataAccessResourceFailureException("specific error message"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(DataAccessResourceFailureException.class)
+                .hasMessage("specific error message");
+    }
+
+    @Test
+    void handlerMethod_hasRetryableAnnotation_withCorrectConfig() throws NoSuchMethodException {
+        // given
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+
+        // when
+        Retryable retryable = method.getAnnotation(Retryable.class);
+
+        // then
+        assertThat(retryable).isNotNull();
+        assertThat(retryable.retryFor()).containsExactlyInAnyOrder(DataAccessException.class, ObjectOptimisticLockingFailureException.class);
+        assertThat(retryable.maxAttempts()).isEqualTo(3);
+        Backoff backoff = retryable.backoff();
+        assertThat(backoff.delay()).isEqualTo(500);
+        assertThat(backoff.multiplier()).isEqualTo(2.0);
+    }
+
+    @Test
+    void handlerMethod_hasAsyncAndEventListenerAnnotations() throws NoSuchMethodException {
+        // given
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+
+        // then
+        assertThat(method.getAnnotation(Async.class)).isNotNull();
+        assertThat(method.getAnnotation(EventListener.class)).isNotNull();
+    }
+
+    @Test
+    void recoverMethod_hasRecoverAnnotation() {
+        // given
+        boolean hasRecover = Arrays.stream(UserCreatedIntegrationEventHandler.class.getDeclaredMethods())
+                .filter(m -> m.getName().equals("recover"))
+                .anyMatch(m -> m.getAnnotation(Recover.class) != null);
+
+        // then
+        assertThat(hasRecover).isTrue();
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {

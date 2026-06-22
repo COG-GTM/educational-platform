@@ -2,9 +2,14 @@ package com.educational.platform.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.AsyncConfigurer;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -83,5 +88,56 @@ class AsyncConfigTest {
 
         // when/then - should not throw with no params
         handler.handleUncaughtException(exception, method);
+    }
+
+    @Test
+    void asyncConfig_hasEnableAsyncAnnotation() {
+        // then
+        assertThat(AsyncConfig.class.getAnnotation(EnableAsync.class)).isNotNull();
+    }
+
+    @Test
+    void asyncConfig_hasConfigurationAnnotation() {
+        // then
+        assertThat(AsyncConfig.class.getAnnotation(Configuration.class)).isNotNull();
+    }
+
+    @Test
+    void asyncConfig_implementsAsyncConfigurer() {
+        // then
+        assertThat(AsyncConfigurer.class).isAssignableFrom(AsyncConfig.class);
+    }
+
+    @Test
+    void getAsyncExecutor_executorCanSubmitAndRunTasks() throws Exception {
+        // given
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        CountDownLatch latch = new CountDownLatch(1);
+
+        // when
+        executor.submit(latch::countDown);
+
+        // then
+        assertThat(latch.await(5, TimeUnit.SECONDS)).isTrue();
+        executor.shutdown();
+    }
+
+    @Test
+    void getAsyncExecutor_threadNameStartsWithPrefix() throws Exception {
+        // given
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        String[] threadName = new String[1];
+        CountDownLatch latch = new CountDownLatch(1);
+
+        // when
+        executor.submit(() -> {
+            threadName[0] = Thread.currentThread().getName();
+            latch.countDown();
+        });
+        latch.await(5, TimeUnit.SECONDS);
+
+        // then
+        assertThat(threadName[0]).startsWith("integration-event-");
+        executor.shutdown();
     }
 }

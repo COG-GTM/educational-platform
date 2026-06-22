@@ -5,6 +5,8 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.support.RetryTemplate;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Modifier;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -159,5 +161,76 @@ class IntegrationEventRetryHandlerTest {
         // then
         assertThat(result).isEqualTo("recovered");
         assertThat(attempts.get()).isEqualTo(2);
+    }
+
+    @Test
+    void createRetryTemplate_retriesOnOptimisticLockException() {
+        // given
+        Map<Class<? extends Throwable>, Boolean> retryableExceptions = Map.of(
+                ObjectOptimisticLockingFailureException.class, true
+        );
+        RetryTemplate template = IntegrationEventRetryHandler.createRetryTemplate(retryableExceptions);
+        AtomicInteger attempts = new AtomicInteger(0);
+
+        // when
+        assertThatThrownBy(() -> template.execute(context -> {
+            attempts.incrementAndGet();
+            throw new ObjectOptimisticLockingFailureException("lock conflict", new RuntimeException());
+        })).isInstanceOf(ObjectOptimisticLockingFailureException.class);
+
+        // then
+        assertThat(attempts.get()).isEqualTo(3);
+    }
+
+    @Test
+    void createRetryTemplate_retriesWhenCauseChainContainsConfiguredException() {
+        // given — traverseCauses=true means wrapped retryable exceptions in the cause chain trigger retry
+        Map<Class<? extends Throwable>, Boolean> retryableExceptions = Map.of(
+                DataAccessResourceFailureException.class, true
+        );
+        RetryTemplate template = IntegrationEventRetryHandler.createRetryTemplate(retryableExceptions);
+        AtomicInteger attempts = new AtomicInteger(0);
+
+        // when — throw a RuntimeException whose cause is a retryable exception
+        assertThatThrownBy(() -> template.execute(context -> {
+            attempts.incrementAndGet();
+            throw new RuntimeException("wrapper", new DataAccessResourceFailureException("root cause"));
+        })).isInstanceOf(RuntimeException.class);
+
+        // then — should retry because the cause chain contains a retryable exception
+        assertThat(attempts.get()).isEqualTo(3);
+    }
+
+    @Test
+    void constructor_isPrivate_utilityClass() throws NoSuchMethodException {
+        // given
+        Constructor<IntegrationEventRetryHandler> constructor =
+                IntegrationEventRetryHandler.class.getDeclaredConstructor();
+
+        // then
+        assertThat(Modifier.isPrivate(constructor.getModifiers())).isTrue();
+    }
+
+    @Test
+    void createRetryTemplate_multipleExceptionTypes_allRetried() {
+        // given
+        Map<Class<? extends Throwable>, Boolean> retryableExceptions = Map.of(
+                DataAccessResourceFailureException.class, true,
+                ObjectOptimisticLockingFailureException.class, true
+        );
+        RetryTemplate template = IntegrationEventRetryHandler.createRetryTemplate(retryableExceptions);
+        AtomicInteger attempts = new AtomicInteger(0);
+
+        // when — alternate between two retryable exception types
+        assertThatThrownBy(() -> template.execute(context -> {
+            int attempt = attempts.incrementAndGet();
+            if (attempt == 1) {
+                throw new DataAccessResourceFailureException("DB error");
+            }
+            throw new ObjectOptimisticLockingFailureException("lock conflict", new RuntimeException());
+        })).isInstanceOf(ObjectOptimisticLockingFailureException.class);
+
+        // then
+        assertThat(attempts.get()).isEqualTo(3);
     }
 }
