@@ -515,4 +515,51 @@ class AsyncConfigTest {
         // then — queue capacity should be larger than core pool to buffer bursts
         assertThat(executor.getQueueCapacity()).isGreaterThan(executor.getCorePoolSize());
     }
+
+    @Test
+    void getAsyncExecutor_keepAliveSecondsIsDefaultSixty() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
+
+        // then — default keep-alive for excess threads is 60 seconds
+        assertThat(executor.getKeepAliveSeconds()).isEqualTo(60);
+        executor.shutdown();
+    }
+
+    @Test
+    void getAsyncExecutor_allowCoreThreadTimeOutIsFalse() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
+
+        // then — core threads should not time out to keep the pool warm for event handling
+        assertThat(executor.getThreadPoolExecutor().allowsCoreThreadTimeOut()).isFalse();
+        executor.shutdown();
+    }
+
+    @Test
+    void getAsyncExecutor_maxPoolSizeIsDoubleOfCorePoolSize() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then — consistent ratio: max pool = 2x core pool
+        assertThat(executor.getMaxPoolSize()).isEqualTo(executor.getCorePoolSize() * 2);
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_isNotSameAsGetAsyncExecutor() {
+        // then — exception handler and executor are separate concerns
+        Object executor = asyncConfig.getAsyncExecutor();
+        Object handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        assertThat(executor).isNotSameAs(handler);
+    }
+
+    @Test
+    void getAsyncExecutor_hasBeanAnnotation_withExactlyOneName() throws NoSuchMethodException {
+        Method method = AsyncConfig.class.getMethod("getAsyncExecutor");
+        Bean bean = method.getAnnotation(Bean.class);
+        assertThat(bean.name()).hasSize(1);
+        assertThat(bean.name()[0]).isEqualTo("integrationEventExecutor");
+    }
 }

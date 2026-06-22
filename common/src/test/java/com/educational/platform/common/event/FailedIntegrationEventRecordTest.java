@@ -635,6 +635,47 @@ class FailedIntegrationEventRecordTest {
         assertThat(getField(record, "exceptionClassName")).isEqualTo("  ");
     }
 
+    @Test
+    void constructor_allFieldsNull_except_retryCount_accepted() throws Exception {
+        // when — all nullable String fields set to null simultaneously
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                null, null, null, null, 0);
+
+        // then
+        assertThat(getField(record, "eventClassName")).isNull();
+        assertThat(getField(record, "eventPayload")).isNull();
+        assertThat(getField(record, "exceptionMessage")).isNull();
+        assertThat(getField(record, "exceptionClassName")).isNull();
+        assertThat((int) getField(record, "retryCount")).isZero();
+        assertThat(getField(record, "createdAt")).isNotNull();
+        assertThat(getField(record, "status")).isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+    }
+
+    @Test
+    void statusEnum_failedName_matchesExpectedString() {
+        assertThat(FailedIntegrationEventRecord.Status.FAILED.name()).isEqualTo("FAILED");
+    }
+
+    @Test
+    void statusEnum_resolvedName_matchesExpectedString() {
+        assertThat(FailedIntegrationEventRecord.Status.RESOLVED.name()).isEqualTo("RESOLVED");
+    }
+
+    @Test
+    void constructor_specialCharactersInPayload_preserved() throws Exception {
+        // given — payloads may contain record toString() output with brackets, quotes, etc.
+        String payload = "Event[courseId=123e4567-e89b-12d3-a456-426655440001, rating=4.5]";
+        String message = "Error: \"column 'name' cannot be null\" at org.h2.jdbc";
+
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", payload, message, "org.h2.jdbc.JdbcSQLException", 3);
+
+        // then
+        assertThat(getField(record, "eventPayload")).isEqualTo(payload);
+        assertThat(getField(record, "exceptionMessage")).isEqualTo(message);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

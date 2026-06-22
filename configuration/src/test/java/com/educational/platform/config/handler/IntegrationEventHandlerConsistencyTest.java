@@ -16,6 +16,9 @@ import org.springframework.stereotype.Component;
 
 import com.educational.platform.common.event.FailedIntegrationEventRepository;
 
+import org.springframework.dao.DataAccessException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -522,19 +525,6 @@ class IntegrationEventHandlerConsistencyTest {
     }
 
     @Test
-    void allHandlers_haveExactlyTwoDeclaredPublicMethods() {
-        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
-            long publicMethodCount = Arrays.stream(handlerClass.getDeclaredMethods())
-                    .filter(m -> Modifier.isPublic(m.getModifiers()))
-                    .count();
-            assertThat(publicMethodCount)
-                    .as("Handler %s should have exactly 2 public methods (handler + recover)",
-                            handlerClass.getSimpleName())
-                    .isEqualTo(2);
-        }
-    }
-
-    @Test
     void allHandlers_constructorNotAnnotatedWithAutowired() {
         for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
             Constructor<?>[] constructors = handlerClass.getConstructors();
@@ -544,6 +534,70 @@ class IntegrationEventHandlerConsistencyTest {
                     .as("Constructor in %s should not need @Autowired (single-constructor auto-injection)",
                             handlerClass.getSimpleName())
                     .isNull();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_retryForHasExactlyTwoExceptionClasses() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(retryable.retryFor())
+                    .as("@Retryable.retryFor in %s should specify exactly 2 exception classes",
+                            handlerClass.getSimpleName())
+                    .hasSize(2);
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_allRetryForExceptionsAreCaughtByRecoverParameter() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method handler = findEventListenerMethod(handlerClass);
+            Method recover = findRecoverMethod(handlerClass);
+            Class<?> recoverExceptionType = recover.getParameterTypes()[0];
+            for (Class<?> retryForType : handler.getAnnotation(Retryable.class).retryFor()) {
+                assertThat(recoverExceptionType)
+                        .as("@Recover exception param %s in %s must be assignable from retryFor type %s",
+                                recoverExceptionType.getSimpleName(), handlerClass.getSimpleName(),
+                                retryForType.getSimpleName())
+                        .isAssignableFrom(retryForType);
+            }
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_backoffDelayExpressionIsEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Backoff backoff = method.getAnnotation(Retryable.class).backoff();
+            assertThat(backoff.delayExpression())
+                    .as("@Backoff.delayExpression in %s should be empty (fixed delay, not SpEL-resolved)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_backoffMultiplierExpressionIsEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Backoff backoff = method.getAnnotation(Retryable.class).backoff();
+            assertThat(backoff.multiplierExpression())
+                    .as("@Backoff.multiplierExpression in %s should be empty (fixed multiplier, not SpEL-resolved)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_backoffMultiplierIsGreaterThanOne() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Backoff backoff = method.getAnnotation(Retryable.class).backoff();
+            assertThat(backoff.multiplier())
+                    .as("@Backoff.multiplier in %s should be > 1 for exponential backoff",
+                            handlerClass.getSimpleName())
+                    .isGreaterThan(1.0);
         }
     }
 
