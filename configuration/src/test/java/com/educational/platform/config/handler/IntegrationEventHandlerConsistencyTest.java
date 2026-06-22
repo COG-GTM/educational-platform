@@ -409,6 +409,105 @@ class IntegrationEventHandlerConsistencyTest {
         }
     }
 
+    @Test
+    void allHandlers_retryableAnnotation_statefulIsFalse() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(retryable.stateful())
+                    .as("@Retryable.stateful in %s should be false (stateless retry within single invocation)",
+                            handlerClass.getSimpleName())
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_backoffRandomIsFalse() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Backoff backoff = method.getAnnotation(Retryable.class).backoff();
+            assertThat(backoff.random())
+                    .as("@Backoff.random in %s should be false (deterministic backoff)",
+                            handlerClass.getSimpleName())
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_exceptionExpressionIsEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(retryable.exceptionExpression())
+                    .as("@Retryable.exceptionExpression in %s should be empty (no SpEL conditional retry)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_maxAttemptsExpressionIsEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(retryable.maxAttemptsExpression())
+                    .as("@Retryable.maxAttemptsExpression in %s should be empty (maxAttempts is fixed, not SpEL-resolved)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_labelIsEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(retryable.label())
+                    .as("@Retryable.label in %s should be empty (no custom label set)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_backoffDelayIsPositive() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Backoff backoff = method.getAnnotation(Retryable.class).backoff();
+            assertThat(backoff.delay())
+                    .as("@Backoff.delay in %s should be positive to prevent tight retry loops",
+                            handlerClass.getSimpleName())
+                    .isGreaterThan(0);
+        }
+    }
+
+    @Test
+    void allHandlers_nonStaticFieldsArePrivateAndFinal() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            for (Field field : handlerClass.getDeclaredFields()) {
+                if (Modifier.isStatic(field.getModifiers())) continue;
+                assertThat(Modifier.isPrivate(field.getModifiers()))
+                        .as("Non-static field '%s' in %s should be private",
+                                field.getName(), handlerClass.getSimpleName())
+                        .isTrue();
+                assertThat(Modifier.isFinal(field.getModifiers()))
+                        .as("Non-static field '%s' in %s should be final (constructor-injected)",
+                                field.getName(), handlerClass.getSimpleName())
+                        .isTrue();
+            }
+        }
+    }
+
+    @Test
+    void allHandlers_haveExactlyFourDeclaredFields() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            assertThat(handlerClass.getDeclaredFields())
+                    .as("Handler %s should have exactly 4 fields (log, MAX_ATTEMPTS, commandHandler, repository)",
+                            handlerClass.getSimpleName())
+                    .hasSize(4);
+        }
+    }
+
     private Method findEventListenerMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.getAnnotation(EventListener.class) != null)

@@ -244,6 +244,42 @@ class FailedIntegrationEventRepositoryIntegrationTest {
     }
 
     @Test
+    void save_withBothNullableFieldsNull_persistsSuccessfully() throws Exception {
+        // given — both exceptionMessage and exceptionClassName are nullable
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.TestEvent", "payload", null, null, 3);
+
+        // when
+        FailedIntegrationEventRecord saved = repository.save(record);
+
+        // then
+        Long id = (Long) getField(saved, "id");
+        Optional<FailedIntegrationEventRecord> found = repository.findById(id);
+        assertThat(found).isPresent();
+        assertThat(getField(found.get(), "exceptionMessage")).isNull();
+        assertThat(getField(found.get(), "exceptionClassName")).isNull();
+        assertThat(getField(found.get(), "eventClassName")).isEqualTo("com.example.TestEvent");
+        assertThat(getField(found.get(), "eventPayload")).isEqualTo("payload");
+    }
+
+    @Test
+    void save_longExceptionMessage_nearColumnLimit_persistsSuccessfully() throws Exception {
+        // given — exceptionMessage column length is 2000
+        String longMessage = "x".repeat(2000);
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.TestEvent", "payload", longMessage, "java.lang.RuntimeException", 3);
+
+        // when
+        FailedIntegrationEventRecord saved = repository.save(record);
+
+        // then
+        Long id = (Long) getField(saved, "id");
+        Optional<FailedIntegrationEventRecord> found = repository.findById(id);
+        assertThat(found).isPresent();
+        assertThat(getField(found.get(), "exceptionMessage")).isEqualTo(longMessage);
+    }
+
+    @Test
     void delete_afterSave_removesRecord() throws Exception {
         // given
         FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
