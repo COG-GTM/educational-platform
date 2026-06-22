@@ -658,6 +658,30 @@ class IntegrationEventHandlerConsistencyTest {
     }
 
     @Test
+    void allHandlers_doNotImplementInterfaces() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            assertThat(handlerClass.getInterfaces())
+                    .as("Handler %s should not implement interfaces (CGLIB proxy compatibility)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_allRetryForExceptionsExtendRuntimeException() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            for (Class<? extends Throwable> exType : retryable.retryFor()) {
+                assertThat(RuntimeException.class)
+                        .as("retryFor type %s in %s must extend RuntimeException for @Async void compatibility",
+                                exType.getSimpleName(), handlerClass.getSimpleName())
+                        .isAssignableFrom(exType);
+            }
+        }
+    }
+
+    @Test
     void allHandlers_failedIntegrationEventRepositoryFieldExists() {
         for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
             boolean hasRepoField = Arrays.stream(handlerClass.getDeclaredFields())

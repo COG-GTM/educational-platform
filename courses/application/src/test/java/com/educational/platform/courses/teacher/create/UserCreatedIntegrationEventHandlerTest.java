@@ -883,6 +883,39 @@ class UserCreatedIntegrationEventHandlerTest {
                 .contains("teacher1@test.com");
     }
 
+    @Test
+    void recover_repositorySaveFails_exceptionPropagates() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataAccessResourceFailureException originalException = new DataAccessResourceFailureException("DB error");
+        doThrow(new RuntimeException("Repository save failed"))
+                .when(failedIntegrationEventRepository).save(any(FailedIntegrationEventRecord.class));
+
+        // when/then — if dead-letter persistence fails, the exception must propagate
+        assertThatThrownBy(() -> sut.recover(originalException, event))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("Repository save failed");
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_persistsCorrectClassName() throws Exception {
+        // given — OOLFE is explicitly listed in retryFor and is a DataAccessException subclass
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("Optimistic lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo(ObjectOptimisticLockingFailureException.class.getName());
+        assertThat(getField(captor.getValue(), "exceptionMessage"))
+                .isEqualTo("Optimistic lock failure");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
