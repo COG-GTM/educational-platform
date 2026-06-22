@@ -582,4 +582,12 @@ class AsyncConfigTest {
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
         assertThat(executor.getThreadNamePrefix()).endsWith("-");
     }
+
+    @Test
+    void asyncUncaughtExceptionHandler_innerClass_isDeclaredInsideAsyncConfig() {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        assertThat(handler.getClass().getDeclaringClass())
+                .as("Exception handler should be an inner class of AsyncConfig")
+                .isEqualTo(AsyncConfig.class);
+    }
 }

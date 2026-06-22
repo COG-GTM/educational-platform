@@ -741,6 +741,66 @@ class IntegrationEventHandlerConsistencyTest {
         }
     }
 
+    @Test
+    void allHandlers_eventListenerAnnotation_conditionIsEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            EventListener eventListener = method.getAnnotation(EventListener.class);
+            assertThat(eventListener.condition())
+                    .as("@EventListener.condition in %s should be empty (unconditional event handling)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_eventListenerAnnotation_classesIsEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            EventListener eventListener = method.getAnnotation(EventListener.class);
+            assertThat(eventListener.classes())
+                    .as("@EventListener.classes in %s should be empty (event type inferred from parameter)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_eventListenerAnnotation_idIsEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            EventListener eventListener = method.getAnnotation(EventListener.class);
+            assertThat(eventListener.id())
+                    .as("@EventListener.id in %s should be empty (no custom listener id)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_interceptorIsDefault() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(retryable.interceptor())
+                    .as("@Retryable.interceptor in %s should be empty (uses default retry interceptor)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_backoffMaxDelayExpressionIsEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Backoff backoff = method.getAnnotation(Retryable.class).backoff();
+            assertThat(backoff.maxDelayExpression())
+                    .as("@Backoff.maxDelayExpression in %s should be empty (fixed max delay, not SpEL-resolved)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
     private Method findRecoverMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.getAnnotation(Recover.class) != null)
