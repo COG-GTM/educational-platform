@@ -913,6 +913,24 @@ class SendCourseToApproveIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_exceptionClassName_isNotSimpleName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must be package-qualified, not a simple class name
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String exceptionClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(exceptionClassName).contains(".");
+        assertThat(exceptionClassName).isNotEqualTo(exception.getClass().getSimpleName());
+    }
+
+    @Test
     void handleSendCourseToApproveEvent_checkedExceptionFromCommandHandler_preservesExceptionIdentity() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

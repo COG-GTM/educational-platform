@@ -979,6 +979,23 @@ class UserCreatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_exceptionClassName_isNotSimpleName() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must be package-qualified, not a simple class name
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String exceptionClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(exceptionClassName).contains(".");
+        assertThat(exceptionClassName).isNotEqualTo(exception.getClass().getSimpleName());
+    }
+
+    @Test
     void handleUserCreatedEvent_checkedExceptionFromCommandHandler_preservesExceptionIdentity() {
         // given
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
