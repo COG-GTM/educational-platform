@@ -353,6 +353,32 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Top-level message");
     }
 
+    @Test
+    void handlerMethod_retryableAnnotation_noRetryForIsEmpty() throws NoSuchMethodException {
+        // given
+        Method method = StudentEnrolledToCourseIntegrationEventHandler.class
+                .getMethod("handleStudentEnrolledToCourseEvent", StudentEnrolledToCourseIntegrationEvent.class);
+
+        // then
+        Retryable retryable = method.getAnnotation(Retryable.class);
+        assertThat(retryable.noRetryFor()).isEmpty();
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_commandReceivesCourseIdFromEvent() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(courseId, "some-student");
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> captor = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", courseId);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

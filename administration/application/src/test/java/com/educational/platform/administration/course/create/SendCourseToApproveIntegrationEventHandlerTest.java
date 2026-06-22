@@ -350,6 +350,17 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Top-level message");
     }
 
+    @Test
+    void handlerMethod_retryableAnnotation_noRetryForIsEmpty() throws NoSuchMethodException {
+        // given
+        Method method = SendCourseToApproveIntegrationEventHandler.class
+                .getMethod("handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        Retryable retryable = method.getAnnotation(Retryable.class);
+        assertThat(retryable.noRetryFor()).isEmpty();
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

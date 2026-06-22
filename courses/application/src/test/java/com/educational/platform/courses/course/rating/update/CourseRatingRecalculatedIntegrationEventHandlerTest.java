@@ -402,6 +402,34 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .hasFieldOrPropertyWithValue("rating", Double.MAX_VALUE);
     }
 
+    @Test
+    void handlerMethod_retryableAnnotation_noRetryForIsEmpty() throws NoSuchMethodException {
+        // given
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+
+        // then
+        Retryable retryable = method.getAnnotation(Retryable.class);
+        assertThat(retryable.noRetryFor()).isEmpty();
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_maxRating_commandReceivedCorrectValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 5.0);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> captor = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("rating", 5.0);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
