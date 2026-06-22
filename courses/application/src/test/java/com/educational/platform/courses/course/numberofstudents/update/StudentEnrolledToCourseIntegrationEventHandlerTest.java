@@ -80,7 +80,7 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
-        final Exception exception = new DataAccessResourceFailureException("DB connection lost");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB connection lost");
 
         // when
         sut.recover(exception, event);
@@ -141,7 +141,7 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
-        final Exception exception = new ObjectOptimisticLockingFailureException("Optimistic lock", new RuntimeException());
+        final ObjectOptimisticLockingFailureException exception = new ObjectOptimisticLockingFailureException("Optimistic lock", new RuntimeException());
 
         // when
         sut.recover(exception, event);
@@ -159,7 +159,7 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
-        final Exception exception = new RuntimeException((String) null);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException((String) null);
 
         // when
         sut.recover(exception, event);

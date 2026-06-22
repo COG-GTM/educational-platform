@@ -72,7 +72,7 @@ class UserCreatedIntegrationEventHandlerTest {
     void recover_persistsFailedEvent() throws Exception {
         // given
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
-        final Exception exception = new DataAccessResourceFailureException("DB connection lost");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB connection lost");
 
         // when
         sut.recover(exception, event);
@@ -129,7 +129,7 @@ class UserCreatedIntegrationEventHandlerTest {
     void recover_withOptimisticLockException_persistsFailedEvent() throws Exception {
         // given
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
-        final Exception exception = new ObjectOptimisticLockingFailureException("Optimistic lock", new RuntimeException());
+        final ObjectOptimisticLockingFailureException exception = new ObjectOptimisticLockingFailureException("Optimistic lock", new RuntimeException());
 
         // when
         sut.recover(exception, event);
@@ -146,7 +146,7 @@ class UserCreatedIntegrationEventHandlerTest {
     void recover_withNullExceptionMessage_persistsFailedEvent() throws Exception {
         // given
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
-        final Exception exception = new RuntimeException((String) null);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException((String) null);
 
         // when
         sut.recover(exception, event);

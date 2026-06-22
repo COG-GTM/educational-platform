@@ -22,6 +22,7 @@ import org.springframework.stereotype.Component;
 public class UserCreatedIntegrationEventHandler {
 
     private static final Logger log = LoggerFactory.getLogger(UserCreatedIntegrationEventHandler.class);
+    private static final int MAX_ATTEMPTS = 3;
 
     private final CreateTeacherCommandHandler createTeacherCommandHandler;
     private final FailedIntegrationEventRepository failedIntegrationEventRepository;
@@ -34,7 +35,7 @@ public class UserCreatedIntegrationEventHandler {
 
     @Async
     @Retryable(retryFor = {DataAccessException.class, ObjectOptimisticLockingFailureException.class},
-               maxAttempts = 3, backoff = @Backoff(delay = 500, multiplier = 2))
+               maxAttempts = MAX_ATTEMPTS, backoff = @Backoff(delay = 500, multiplier = 2))
     @EventListener
     public void handleUserCreatedEvent(UserCreatedIntegrationEvent event) {
         log.info("Received integration event: {}", event);
@@ -47,14 +48,14 @@ public class UserCreatedIntegrationEventHandler {
     }
 
     @Recover
-    public void recover(Exception e, UserCreatedIntegrationEvent event) {
+    public void recover(DataAccessException e, UserCreatedIntegrationEvent event) {
         log.error("All retries exhausted for event: {}. Error: {}", event, e.getMessage(), e);
         failedIntegrationEventRepository.save(new FailedIntegrationEventRecord(
                 event.getClass().getName(),
                 event.toString(),
                 e.getMessage(),
                 e.getClass().getName(),
-                3
+                MAX_ATTEMPTS
         ));
     }
 }
