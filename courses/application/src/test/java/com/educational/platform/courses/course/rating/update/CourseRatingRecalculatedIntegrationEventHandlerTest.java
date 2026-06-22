@@ -1086,6 +1086,37 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .isEqualTo("Optimistic lock failure");
     }
 
+    @Test
+    void recover_eventClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo("com.educational.platform.course.reviews.integration.event.CourseRatingRecalculatedIntegrationEvent");
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_checkedExceptionFromCommandHandler_rethrows() {
+        // given — unchecked wrapper of a checked exception
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        doThrow(new IllegalArgumentException("invalid rating value"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("invalid rating value");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

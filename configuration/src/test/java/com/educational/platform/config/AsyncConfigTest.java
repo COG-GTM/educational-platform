@@ -562,4 +562,24 @@ class AsyncConfigTest {
         assertThat(bean.name()).hasSize(1);
         assertThat(bean.name()[0]).isEqualTo("integrationEventExecutor");
     }
+
+    @Test
+    void asyncConfig_hasLogField_privateStaticFinal() throws NoSuchFieldException {
+        java.lang.reflect.Field logField = AsyncConfig.class.getDeclaredField("log");
+        assertThat(java.lang.reflect.Modifier.isPrivate(logField.getModifiers())).isTrue();
+        assertThat(java.lang.reflect.Modifier.isStatic(logField.getModifiers())).isTrue();
+        assertThat(java.lang.reflect.Modifier.isFinal(logField.getModifiers())).isTrue();
+        assertThat(logField.getType()).isEqualTo(org.slf4j.Logger.class);
+    }
+
+    @Test
+    void asyncConfig_isPublic() {
+        assertThat(java.lang.reflect.Modifier.isPublic(AsyncConfig.class.getModifiers())).isTrue();
+    }
+
+    @Test
+    void getAsyncExecutor_threadNamePrefixEndsWithHyphen() {
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        assertThat(executor.getThreadNamePrefix()).endsWith("-");
+    }
 }

@@ -86,4 +86,15 @@ class RetryConfigTest {
     void retryConfig_isPublic() {
         assertThat(java.lang.reflect.Modifier.isPublic(RetryConfig.class.getModifiers())).isTrue();
     }
+
+    @Test
+    void retryConfig_doesNotImplementAnyInterface() {
+        assertThat(RetryConfig.class.getInterfaces()).isEmpty();
+    }
+
+    @Test
+    void retryConfig_hasNoDeclaredConstructors_besideDefault() {
+        assertThat(RetryConfig.class.getDeclaredConstructors()).hasSize(1);
+        assertThat(RetryConfig.class.getDeclaredConstructors()[0].getParameterCount()).isZero();
+    }
 }

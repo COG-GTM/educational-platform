@@ -693,6 +693,54 @@ class IntegrationEventHandlerConsistencyTest {
         }
     }
 
+    @Test
+    void allHandlers_logFieldTypeIsSLF4JLogger() throws Exception {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Field logField = handlerClass.getDeclaredField("log");
+            assertThat(logField.getType())
+                    .as("log field in %s should be org.slf4j.Logger", handlerClass.getSimpleName())
+                    .isEqualTo(org.slf4j.Logger.class);
+        }
+    }
+
+    @Test
+    void allHandlers_eventListenerMethodNameStartsWithHandle() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            assertThat(method.getName())
+                    .as("@EventListener method name in %s should start with 'handle'", handlerClass.getSimpleName())
+                    .startsWith("handle");
+        }
+    }
+
+    @Test
+    void allHandlers_eventListenerMethodNameContainsEvent() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            assertThat(method.getName())
+                    .as("@EventListener method name in %s should contain 'Event'", handlerClass.getSimpleName())
+                    .contains("Event");
+        }
+    }
+
+    @Test
+    void allHandlers_areNotAbstract() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            assertThat(Modifier.isAbstract(handlerClass.getModifiers()))
+                    .as("Handler %s must not be abstract", handlerClass.getSimpleName())
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void allHandlers_doNotImplementAnyInterface() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            assertThat(handlerClass.getInterfaces())
+                    .as("Handler %s should not implement any interface", handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
     private Method findRecoverMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.getAnnotation(Recover.class) != null)

@@ -916,6 +916,51 @@ class UserCreatedIntegrationEventHandlerTest {
                 .isEqualTo("Optimistic lock failure");
     }
 
+    @Test
+    void recover_eventClassNameIsFullyQualified() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo("com.educational.platform.users.integration.event.UserCreatedIntegrationEvent");
+    }
+
+    @Test
+    void handleUserCreatedEvent_checkedExceptionFromCommandHandler_rethrows() {
+        // given — unchecked wrapper of a checked exception
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        doThrow(new IllegalArgumentException("invalid username"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("invalid username");
+    }
+
+    @Test
+    void recover_eventPayloadContainsBothUsernameAndEmail() throws Exception {
+        // given — event.toString() should include both fields even though handler only uses username
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("admin", "admin@edu.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        String payload = (String) getField(captor.getValue(), "eventPayload");
+        assertThat(payload).contains("admin").contains("admin@edu.com");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

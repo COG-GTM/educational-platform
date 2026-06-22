@@ -31,4 +31,18 @@ class EducationalPlatformApplicationTest {
         assertThat(propertySource).isNotNull();
         assertThat(propertySource.value()).contains("application-security.properties");
     }
+
+    @Test
+    void applicationClass_hasMainMethod() throws NoSuchMethodException {
+        java.lang.reflect.Method main = EducationalPlatformApplication.class.getMethod("main", String[].class);
+        assertThat(main).isNotNull();
+        assertThat(java.lang.reflect.Modifier.isStatic(main.getModifiers())).isTrue();
+        assertThat(java.lang.reflect.Modifier.isPublic(main.getModifiers())).isTrue();
+        assertThat(main.getReturnType()).isEqualTo(void.class);
+    }
+
+    @Test
+    void applicationClass_isPublic() {
+        assertThat(java.lang.reflect.Modifier.isPublic(EducationalPlatformApplication.class.getModifiers())).isTrue();
+    }
 }

@@ -676,6 +676,44 @@ class FailedIntegrationEventRecordTest {
         assertThat(getField(record, "exceptionMessage")).isEqualTo(message);
     }
 
+    @Test
+    void class_isPublic() {
+        assertThat(Modifier.isPublic(FailedIntegrationEventRecord.class.getModifiers())).isTrue();
+    }
+
+    @Test
+    void constructor_longEventClassName_nearDefaultColumnLimit_accepted() throws Exception {
+        // given — eventClassName column uses default length 255
+        String longClassName = "com.educational.platform." + "a".repeat(230);
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                longClassName, "payload", "error", "java.lang.RuntimeException", 3);
+
+        assertThat(getField(record, "eventClassName")).isEqualTo(longClassName);
+        assertThat(((String) getField(record, "eventClassName")).length()).isEqualTo(255);
+    }
+
+    @Test
+    void constructor_longExceptionClassName_nearDefaultColumnLimit_accepted() throws Exception {
+        // given — exceptionClassName column uses default length 255
+        String longExceptionClass = "org.springframework.dao." + "a".repeat(231);  // 24 + 231 = 255
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", longExceptionClass, 3);
+
+        assertThat(getField(record, "exceptionClassName")).isEqualTo(longExceptionClass);
+        assertThat(((String) getField(record, "exceptionClassName")).length()).isEqualTo(255);
+    }
+
+    @Test
+    void class_isNotAbstract() {
+        assertThat(Modifier.isAbstract(FailedIntegrationEventRecord.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void statusEnum_isPublicInnerEnum() {
+        assertThat(Modifier.isPublic(FailedIntegrationEventRecord.Status.class.getModifiers())).isTrue();
+        assertThat(FailedIntegrationEventRecord.Status.class.isEnum()).isTrue();
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
