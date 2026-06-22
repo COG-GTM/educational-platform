@@ -345,4 +345,24 @@ class AsyncConfigTest {
         Method method = AsyncConfig.class.getDeclaredMethod("getAsyncUncaughtExceptionHandler");
         assertThat(method.getDeclaringClass()).isEqualTo(AsyncConfig.class);
     }
+
+    @Test
+    void asyncUncaughtExceptionHandler_handlesMultipleParams() throws NoSuchMethodException {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        RuntimeException exception = new RuntimeException("Integration event handler failure");
+        var method = AsyncConfigTest.class
+                .getDeclaredMethod("asyncUncaughtExceptionHandler_handlesMultipleParams");
+
+        // when/then — should not throw with varargs params
+        handler.handleUncaughtException(exception, method, "event1", "event2", "event3");
+    }
+
+    @Test
+    void getAsyncExecutor_executorIsInitialized() {
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        assertThat(executor.getThreadPoolExecutor()).isNotNull();
+        assertThat(executor.getThreadPoolExecutor().getPoolSize()).isGreaterThanOrEqualTo(0);
+        executor.shutdown();
+    }
 }

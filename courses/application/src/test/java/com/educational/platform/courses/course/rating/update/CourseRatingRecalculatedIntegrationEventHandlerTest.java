@@ -634,6 +634,55 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(annotationMaxAttempts);
     }
 
+    @Test
+    void recoverMethod_doesNotHaveRetryableAnnotation() throws NoSuchMethodException {
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, CourseRatingRecalculatedIntegrationEvent.class);
+
+        assertThat(method.getAnnotation(Retryable.class)).isNull();
+    }
+
+    @Test
+    void maxAttemptsField_isStaticFinal() throws NoSuchFieldException {
+        Field field = CourseRatingRecalculatedIntegrationEventHandler.class.getDeclaredField("MAX_ATTEMPTS");
+        assertThat(Modifier.isStatic(field.getModifiers())).isTrue();
+        assertThat(Modifier.isFinal(field.getModifiers())).isTrue();
+    }
+
+    @Test
+    void handlerMethod_hasExactlyOneParameter() throws NoSuchMethodException {
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+        assertThat(method.getParameterCount()).isEqualTo(1);
+        assertThat(method.getParameterTypes()[0]).isEqualTo(CourseRatingRecalculatedIntegrationEvent.class);
+    }
+
+    @Test
+    void recoverMethod_hasExactlyTwoParameters() throws NoSuchMethodException {
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, CourseRatingRecalculatedIntegrationEvent.class);
+        assertThat(method.getParameterCount()).isEqualTo(2);
+        assertThat(method.getParameterTypes()[0]).isEqualTo(DataAccessException.class);
+        assertThat(method.getParameterTypes()[1]).isEqualTo(CourseRatingRecalculatedIntegrationEvent.class);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_negativeInfinityRating_commandReceivedCorrectValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.NEGATIVE_INFINITY);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> captor = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("rating", Double.NEGATIVE_INFINITY);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

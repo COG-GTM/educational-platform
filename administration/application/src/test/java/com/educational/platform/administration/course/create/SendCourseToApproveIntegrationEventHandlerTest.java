@@ -527,6 +527,38 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(annotationMaxAttempts);
     }
 
+    @Test
+    void recoverMethod_doesNotHaveRetryableAnnotation() throws NoSuchMethodException {
+        Method method = SendCourseToApproveIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, SendCourseToApproveIntegrationEvent.class);
+
+        assertThat(method.getAnnotation(Retryable.class)).isNull();
+    }
+
+    @Test
+    void maxAttemptsField_isStaticFinal() throws NoSuchFieldException {
+        Field field = SendCourseToApproveIntegrationEventHandler.class.getDeclaredField("MAX_ATTEMPTS");
+        assertThat(Modifier.isStatic(field.getModifiers())).isTrue();
+        assertThat(Modifier.isFinal(field.getModifiers())).isTrue();
+    }
+
+    @Test
+    void handlerMethod_hasExactlyOneParameter() throws NoSuchMethodException {
+        Method method = SendCourseToApproveIntegrationEventHandler.class
+                .getMethod("handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+        assertThat(method.getParameterCount()).isEqualTo(1);
+        assertThat(method.getParameterTypes()[0]).isEqualTo(SendCourseToApproveIntegrationEvent.class);
+    }
+
+    @Test
+    void recoverMethod_hasExactlyTwoParameters() throws NoSuchMethodException {
+        Method method = SendCourseToApproveIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, SendCourseToApproveIntegrationEvent.class);
+        assertThat(method.getParameterCount()).isEqualTo(2);
+        assertThat(method.getParameterTypes()[0]).isEqualTo(DataAccessException.class);
+        assertThat(method.getParameterTypes()[1]).isEqualTo(SendCourseToApproveIntegrationEvent.class);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

@@ -547,6 +547,38 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(annotationMaxAttempts);
     }
 
+    @Test
+    void recoverMethod_doesNotHaveRetryableAnnotation() throws NoSuchMethodException {
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, UserCreatedIntegrationEvent.class);
+
+        assertThat(method.getAnnotation(Retryable.class)).isNull();
+    }
+
+    @Test
+    void maxAttemptsField_isStaticFinal() throws NoSuchFieldException {
+        Field field = UserCreatedIntegrationEventHandler.class.getDeclaredField("MAX_ATTEMPTS");
+        assertThat(Modifier.isStatic(field.getModifiers())).isTrue();
+        assertThat(Modifier.isFinal(field.getModifiers())).isTrue();
+    }
+
+    @Test
+    void handlerMethod_hasExactlyOneParameter() throws NoSuchMethodException {
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+        assertThat(method.getParameterCount()).isEqualTo(1);
+        assertThat(method.getParameterTypes()[0]).isEqualTo(UserCreatedIntegrationEvent.class);
+    }
+
+    @Test
+    void recoverMethod_hasExactlyTwoParameters() throws NoSuchMethodException {
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, UserCreatedIntegrationEvent.class);
+        assertThat(method.getParameterCount()).isEqualTo(2);
+        assertThat(method.getParameterTypes()[0]).isEqualTo(DataAccessException.class);
+        assertThat(method.getParameterTypes()[1]).isEqualTo(UserCreatedIntegrationEvent.class);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

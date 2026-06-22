@@ -56,4 +56,9 @@ class RetryConfigTest {
     void retryConfig_doesNotHaveEnableAsync() {
         assertThat(RetryConfig.class.getAnnotation(EnableAsync.class)).isNull();
     }
+
+    @Test
+    void retryConfig_hasNoDeclaredMethods() {
+        assertThat(RetryConfig.class.getDeclaredMethods()).as("Pure config class should have no methods").isEmpty();
+    }
 }

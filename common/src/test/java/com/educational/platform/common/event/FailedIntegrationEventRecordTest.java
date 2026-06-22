@@ -467,6 +467,33 @@ class FailedIntegrationEventRecordTest {
         assertThat(publicGetterCount).isZero();
     }
 
+    @Test
+    void class_hasNoPublicSetters() {
+        long publicSetterCount = java.util.Arrays.stream(FailedIntegrationEventRecord.class.getDeclaredMethods())
+                .filter(m -> Modifier.isPublic(m.getModifiers()))
+                .filter(m -> m.getName().startsWith("set"))
+                .count();
+        assertThat(publicSetterCount).as("Dead-letter records should be immutable — no public setters").isZero();
+    }
+
+    @Test
+    void constructor_nullEventClassName_doesNotThrowAtJavaLevel() throws Exception {
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                null, "payload", "error", "java.lang.RuntimeException", 3);
+
+        assertThat(getField(record, "eventClassName")).isNull();
+        assertThat(getField(record, "eventPayload")).isEqualTo("payload");
+    }
+
+    @Test
+    void constructor_nullEventPayload_doesNotThrowAtJavaLevel() throws Exception {
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", null, "error", "java.lang.RuntimeException", 3);
+
+        assertThat(getField(record, "eventPayload")).isNull();
+        assertThat(getField(record, "eventClassName")).isEqualTo("com.example.Event");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
