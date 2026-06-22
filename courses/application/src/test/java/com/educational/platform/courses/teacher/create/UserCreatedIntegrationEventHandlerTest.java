@@ -961,6 +961,84 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(payload).contains("admin").contains("admin@edu.com");
     }
 
+    @Test
+    void recover_withNullEmail_persistsEventPayload() throws Exception {
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", null);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+        assertThat(getField(captor.getValue(), "eventClassName")).isEqualTo(event.getClass().getName());
+    }
+
+    @Test
+    void handleUserCreatedEvent_withNullEmail_commandReceivedCorrectUsername() {
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", null);
+
+        sut.handleUserCreatedEvent(event);
+
+        final ArgumentCaptor<CreateTeacherCommand> captor = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("username", "teacher1");
+    }
+
+    @Test
+    void recover_withBothNullFields_persistsEventPayload() throws Exception {
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(null, null);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+        assertThat(getField(captor.getValue(), "eventClassName")).isEqualTo(event.getClass().getName());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("DB error");
+    }
+
+    @Test
+    void recover_withDifferentExceptionSubtypes_persistsCorrectClassForEach() throws Exception {
+        final UserCreatedIntegrationEvent event1 = new UserCreatedIntegrationEvent("user1", "user1@edu.com");
+        final UserCreatedIntegrationEvent event2 = new UserCreatedIntegrationEvent("user2", "user2@edu.com");
+
+        sut.recover(new DataAccessResourceFailureException("transient error"), event1);
+        sut.recover(new DataIntegrityViolationException("constraint error"), event2);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository, times(2)).save(captor.capture());
+        assertThat(getField(captor.getAllValues().get(0), "exceptionClassName"))
+                .isEqualTo(DataAccessResourceFailureException.class.getName());
+        assertThat(getField(captor.getAllValues().get(1), "exceptionClassName"))
+                .isEqualTo(DataIntegrityViolationException.class.getName());
+    }
+
+    @Test
+    void recover_withEmptyExceptionMessage_persistsEmptyString() throws Exception {
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("student", "student@edu.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("");
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("");
+    }
+
+    @Test
+    void handleUserCreatedEvent_checkedExceptionWrapped_rethrows() {
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher", "teacher@edu.com");
+        final RuntimeException wrappedException = new RuntimeException("wrapped",
+                new java.io.IOException("disk full"));
+        doThrow(wrappedException).when(createTeacherCommandHandler).handle(any());
+
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isSameAs(wrappedException)
+                .hasCauseInstanceOf(java.io.IOException.class);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

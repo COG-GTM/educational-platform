@@ -582,4 +582,50 @@ class AsyncConfigTest {
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
         assertThat(executor.getThreadNamePrefix()).endsWith("-");
     }
+
+    @Test
+    void asyncUncaughtExceptionHandler_innerClass_isDeclaredInsideAsyncConfig() {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        assertThat(handler.getClass().getDeclaringClass())
+                .as("Exception handler should be an inner class of AsyncConfig")
+                .isEqualTo(AsyncConfig.class);
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_innerClass_isPrivate() {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        assertThat(java.lang.reflect.Modifier.isPrivate(handler.getClass().getModifiers()))
+                .as("Exception handler inner class should be private to prevent direct instantiation")
+                .isTrue();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_innerClass_isStatic() {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        assertThat(java.lang.reflect.Modifier.isStatic(handler.getClass().getModifiers()))
+                .as("Exception handler inner class should be static (no reference to enclosing instance)")
+                .isTrue();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_innerClass_implementsAsyncUncaughtExceptionHandler() {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        assertThat(handler).isInstanceOf(AsyncUncaughtExceptionHandler.class);
+        assertThat(AsyncUncaughtExceptionHandler.class.isAssignableFrom(handler.getClass())).isTrue();
+    }
+
+    @Test
+    void asyncConfig_doesNotHaveTransactionalAnnotation() {
+        assertThat(AsyncConfig.class.getAnnotation(
+                org.springframework.transaction.annotation.Transactional.class)).isNull();
+    }
+
+    @Test
+    void getAsyncExecutor_returnType_isThreadPoolTaskExecutor() {
+        Executor executor = asyncConfig.getAsyncExecutor();
+        assertThat(executor)
+                .as("getAsyncExecutor should return ThreadPoolTaskExecutor for monitoring and lifecycle management")
+                .isInstanceOf(ThreadPoolTaskExecutor.class);
+        ((ThreadPoolTaskExecutor) executor).shutdown();
+    }
 }

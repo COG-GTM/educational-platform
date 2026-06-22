@@ -13,6 +13,7 @@ import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.educational.platform.common.event.FailedIntegrationEventRepository;
 
@@ -738,6 +739,150 @@ class IntegrationEventHandlerConsistencyTest {
             assertThat(handlerClass.getInterfaces())
                     .as("Handler %s should not implement any interface", handlerClass.getSimpleName())
                     .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_eventListenerAnnotation_conditionIsEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            EventListener eventListener = method.getAnnotation(EventListener.class);
+            assertThat(eventListener.condition())
+                    .as("@EventListener.condition in %s should be empty (unconditional event handling)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_eventListenerAnnotation_classesIsEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            EventListener eventListener = method.getAnnotation(EventListener.class);
+            assertThat(eventListener.classes())
+                    .as("@EventListener.classes in %s should be empty (event type inferred from parameter)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_eventListenerAnnotation_idIsEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            EventListener eventListener = method.getAnnotation(EventListener.class);
+            assertThat(eventListener.id())
+                    .as("@EventListener.id in %s should be empty (no custom listener id)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_interceptorIsDefault() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(retryable.interceptor())
+                    .as("@Retryable.interceptor in %s should be empty (uses default retry interceptor)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_backoffMaxDelayExpressionIsEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Backoff backoff = method.getAnnotation(Retryable.class).backoff();
+            assertThat(backoff.maxDelayExpression())
+                    .as("@Backoff.maxDelayExpression in %s should be empty (fixed max delay, not SpEL-resolved)",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_retryableAnnotation_includesObjectOptimisticLockingFailureExceptionExplicitly() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(Arrays.asList(retryable.retryFor()))
+                    .as("retryFor in %s must explicitly include ObjectOptimisticLockingFailureException for optimistic locking support",
+                            handlerClass.getSimpleName())
+                    .contains(ObjectOptimisticLockingFailureException.class);
+        }
+    }
+
+    @Test
+    void allHandlers_publicConstructor_hasExactlyTwoParameters() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Constructor<?>[] constructors = handlerClass.getConstructors();
+            assertThat(constructors).as("Handler %s should have exactly one public constructor", handlerClass.getSimpleName()).hasSize(1);
+            assertThat(constructors[0].getParameterCount())
+                    .as("Public constructor in %s should accept exactly 2 parameters (commandHandler + repository)",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(2);
+        }
+    }
+
+    @Test
+    void allHandlers_classDoesNotHaveTransactionalAnnotation() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            assertThat(handlerClass.getAnnotation(Transactional.class))
+                    .as("Handler %s should NOT have class-level @Transactional — @Async runs in a new thread "
+                            + "where the caller's transaction context is unavailable", handlerClass.getSimpleName())
+                    .isNull();
+        }
+    }
+
+    @Test
+    void allHandlers_handlerMethodDoesNotHaveTransactionalAnnotation() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            assertThat(method.getAnnotation(Transactional.class))
+                    .as("@EventListener in %s should NOT have @Transactional — the command handler manages "
+                            + "its own transaction boundary", handlerClass.getSimpleName())
+                    .isNull();
+        }
+    }
+
+    @Test
+    void allHandlers_recoverMethodDoesNotHaveTransactionalAnnotation() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findRecoverMethod(handlerClass);
+            assertThat(method.getAnnotation(Transactional.class))
+                    .as("@Recover in %s should NOT have @Transactional — recovery persists the dead-letter "
+                            + "record via its own repository.save() call", handlerClass.getSimpleName())
+                    .isNull();
+        }
+    }
+
+    @Test
+    void allHandlers_maxAttemptsFieldValue_isConsistentAcrossAllHandlers() throws Exception {
+        Integer firstValue = null;
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Field field = handlerClass.getDeclaredField("MAX_ATTEMPTS");
+            field.setAccessible(true);
+            int value = (int) field.get(null);
+            if (firstValue == null) {
+                firstValue = value;
+            }
+            assertThat(value)
+                    .as("MAX_ATTEMPTS field value in %s should be consistent across all handlers",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(firstValue);
+        }
+    }
+
+    @Test
+    void allHandlers_constructorFirstParameterIsNotFailedIntegrationEventRepository() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Class<?>[] paramTypes = handlerClass.getConstructors()[0].getParameterTypes();
+            assertThat(paramTypes[0])
+                    .as("First constructor param in %s should be the command handler, not the repository",
+                            handlerClass.getSimpleName())
+                    .isNotEqualTo(FailedIntegrationEventRepository.class);
         }
     }
 
