@@ -881,6 +881,37 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
                 .isEqualTo("Optimistic lock failure");
     }
 
+    @Test
+    void recover_eventClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo("com.educational.platform.course.enrollments.integration.event.StudentEnrolledToCourseIntegrationEvent");
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_checkedExceptionFromCommandHandler_rethrows() {
+        // given — unchecked wrapper of a checked exception
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        doThrow(new IllegalArgumentException("invalid enrollment"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("invalid enrollment");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

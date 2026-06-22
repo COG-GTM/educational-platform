@@ -846,6 +846,37 @@ class SendCourseToApproveIntegrationEventHandlerTest {
                 .isEqualTo("Optimistic lock failure");
     }
 
+    @Test
+    void recover_eventClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo("com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent");
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_checkedExceptionFromCommandHandler_rethrows() {
+        // given — unchecked wrapper of a checked exception
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new IllegalArgumentException("invalid course id"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("invalid course id");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
