@@ -30,7 +30,6 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setThreadNamePrefix("integration-event-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);
-        executor.initialize();
         return executor;
     }
 
