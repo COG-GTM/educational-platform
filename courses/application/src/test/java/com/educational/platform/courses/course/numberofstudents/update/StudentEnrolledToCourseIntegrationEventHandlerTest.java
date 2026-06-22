@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
@@ -354,17 +355,6 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
     }
 
     @Test
-    void handlerMethod_retryableAnnotation_noRetryForIsEmpty() throws NoSuchMethodException {
-        // given
-        Method method = StudentEnrolledToCourseIntegrationEventHandler.class
-                .getMethod("handleStudentEnrolledToCourseEvent", StudentEnrolledToCourseIntegrationEvent.class);
-
-        // then
-        Retryable retryable = method.getAnnotation(Retryable.class);
-        assertThat(retryable.noRetryFor()).isEmpty();
-    }
-
-    @Test
     void handleStudentEnrolledToCourseEvent_commandReceivesCourseIdFromEvent() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -377,6 +367,59 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         final ArgumentCaptor<IncreaseNumberOfStudentsCommand> captor = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
         verify(increaseNumberOfStudentsCommandHandler).handle(captor.capture());
         assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", courseId);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_nullCourseId_commandHandlerStillInvoked() {
+        // given
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(null, "username");
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> captor = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", null);
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_persistsFailedEvent() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("Unique constraint violated");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName")).isEqualTo(DataIntegrityViolationException.class.getName());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Unique constraint violated");
+    }
+
+    @Test
+    void handlerMethod_retryableAnnotation_recoverAttributeIsDefault() throws NoSuchMethodException {
+        // given
+        Method method = StudentEnrolledToCourseIntegrationEventHandler.class
+                .getMethod("handleStudentEnrolledToCourseEvent", StudentEnrolledToCourseIntegrationEvent.class);
+
+        // then
+        Retryable retryable = method.getAnnotation(Retryable.class);
+        assertThat(retryable.recover()).isEmpty();
+    }
+
+    @Test
+    void handlerMethod_retryableAnnotation_noRetryForIsEmpty() throws NoSuchMethodException {
+        // given
+        Method method = StudentEnrolledToCourseIntegrationEventHandler.class
+                .getMethod("handleStudentEnrolledToCourseEvent", StudentEnrolledToCourseIntegrationEvent.class);
+
+        // then
+        Retryable retryable = method.getAnnotation(Retryable.class);
+        assertThat(retryable.noRetryFor()).isEmpty();
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {

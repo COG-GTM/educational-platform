@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
@@ -358,6 +359,47 @@ class UserCreatedIntegrationEventHandlerTest {
         final ArgumentCaptor<CreateTeacherCommand> captor = ArgumentCaptor.forClass(CreateTeacherCommand.class);
         verify(createTeacherCommandHandler).handle(captor.capture());
         assertThat(captor.getValue()).hasFieldOrPropertyWithValue("username", null);
+    }
+
+    @Test
+    void handleUserCreatedEvent_specialCharactersUsername_commandReceivedCorrectValue() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("\u00fc\u00e9\u00e7\u00f1", "unicode@test.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> captor = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("username", "\u00fc\u00e9\u00e7\u00f1");
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_persistsFailedEvent() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("Unique constraint violated");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName")).isEqualTo(DataIntegrityViolationException.class.getName());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Unique constraint violated");
+    }
+
+    @Test
+    void handlerMethod_retryableAnnotation_recoverAttributeIsDefault() throws NoSuchMethodException {
+        // given
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+
+        // then
+        Retryable retryable = method.getAnnotation(Retryable.class);
+        assertThat(retryable.recover()).isEmpty();
     }
 
     @Test

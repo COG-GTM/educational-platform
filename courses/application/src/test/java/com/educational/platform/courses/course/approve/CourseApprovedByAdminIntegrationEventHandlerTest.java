@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
@@ -348,6 +349,48 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
         verify(failedIntegrationEventRepository).save(captor.capture());
         assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Top-level message");
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_nullCourseId_commandHandlerStillInvoked() {
+        // given
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(null);
+
+        // when
+        sut.handleCourseApprovedByAdminEvent(event);
+
+        // then
+        final ArgumentCaptor<ApproveCourseCommand> captor = ArgumentCaptor.forClass(ApproveCourseCommand.class);
+        verify(approveCourseCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", null);
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_persistsFailedEvent() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("Unique constraint violated");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName")).isEqualTo(DataIntegrityViolationException.class.getName());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Unique constraint violated");
+    }
+
+    @Test
+    void handlerMethod_retryableAnnotation_recoverAttributeIsDefault() throws NoSuchMethodException {
+        // given
+        Method method = CourseApprovedByAdminIntegrationEventHandler.class
+                .getMethod("handleCourseApprovedByAdminEvent", CourseApprovedByAdminIntegrationEvent.class);
+
+        // then
+        Retryable retryable = method.getAnnotation(Retryable.class);
+        assertThat(retryable.recover()).isEmpty();
     }
 
     @Test

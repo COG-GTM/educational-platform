@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
@@ -403,17 +404,6 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
     }
 
     @Test
-    void handlerMethod_retryableAnnotation_noRetryForIsEmpty() throws NoSuchMethodException {
-        // given
-        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
-                .getMethod("handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
-
-        // then
-        Retryable retryable = method.getAnnotation(Retryable.class);
-        assertThat(retryable.noRetryFor()).isEmpty();
-    }
-
-    @Test
     void handleCourseRatingRecalculatedEvent_maxRating_commandReceivedCorrectValue() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -428,6 +418,95 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThat(captor.getValue())
                 .hasFieldOrPropertyWithValue("uuid", uuid)
                 .hasFieldOrPropertyWithValue("rating", 5.0);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_nanRating_commandReceivedCorrectValue() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.NaN);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> captor = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid);
+        assertThat(Double.isNaN((double) getField(captor.getValue(), "rating"))).isTrue();
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_positiveInfinityRating_commandReceivedCorrectValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.POSITIVE_INFINITY);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> captor = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("rating", Double.POSITIVE_INFINITY);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_nullCourseId_commandHandlerStillInvoked() {
+        // given
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(null, 4.5);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> captor = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue())
+                .hasFieldOrPropertyWithValue("uuid", null)
+                .hasFieldOrPropertyWithValue("rating", 4.5);
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_persistsFailedEvent() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("Unique constraint violated");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName")).isEqualTo(DataIntegrityViolationException.class.getName());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Unique constraint violated");
+    }
+
+    @Test
+    void handlerMethod_retryableAnnotation_recoverAttributeIsDefault() throws NoSuchMethodException {
+        // given
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+
+        // then
+        Retryable retryable = method.getAnnotation(Retryable.class);
+        assertThat(retryable.recover()).isEmpty();
+    }
+
+    @Test
+    void handlerMethod_retryableAnnotation_noRetryForIsEmpty() throws NoSuchMethodException {
+        // given
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+
+        // then
+        Retryable retryable = method.getAnnotation(Retryable.class);
+        assertThat(retryable.noRetryFor()).isEmpty();
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {

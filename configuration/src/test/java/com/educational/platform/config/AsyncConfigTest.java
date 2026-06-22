@@ -195,6 +195,39 @@ class AsyncConfigTest {
     }
 
     @Test
+    void asyncUncaughtExceptionHandler_handlesErrorSubclass() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        OutOfMemoryError error = new OutOfMemoryError("heap space");
+        var method = AsyncConfigTest.class.getDeclaredMethod("asyncUncaughtExceptionHandler_handlesErrorSubclass");
+
+        // when/then - should not throw even with Error subclass
+        handler.handleUncaughtException(error, method, "param1");
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_handlesExceptionWithNullMessage() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        RuntimeException exception = new RuntimeException((String) null);
+        var method = AsyncConfigTest.class.getDeclaredMethod("asyncUncaughtExceptionHandler_handlesExceptionWithNullMessage");
+
+        // when/then - should not throw with null message
+        handler.handleUncaughtException(exception, method, "param1");
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_handlesExceptionWithNullParams() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        RuntimeException exception = new RuntimeException("test");
+        var method = AsyncConfigTest.class.getDeclaredMethod("asyncUncaughtExceptionHandler_handlesExceptionWithNullParams");
+
+        // when/then - should not throw with null params array
+        handler.handleUncaughtException(exception, method, (Object[]) null);
+    }
+
+    @Test
     void getAsyncExecutor_awaitTerminationSecondsIs30() throws Exception {
         // when
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();

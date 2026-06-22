@@ -290,6 +290,87 @@ class FailedIntegrationEventRecordTest {
                 .isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
     }
 
+    @Test
+    void constructor_unicodeStrings_accepted() throws Exception {
+        // given
+        String eventClassName = "com.example.\u00c9v\u00e9ntHandler";
+        String eventPayload = "Payload with \u00fc\u00f1\u00ee\u00e7\u00f8\u00f0\u00e9 characters: \u4e16\u754c";
+        String exceptionMessage = "Erreur: \u00e9chec de la connexion \u00e0 la base de donn\u00e9es";
+        String exceptionClassName = "com.example.\u00c9xception";
+
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                eventClassName, eventPayload, exceptionMessage, exceptionClassName, 3);
+
+        // then
+        assertThat(getField(record, "eventClassName")).isEqualTo(eventClassName);
+        assertThat(getField(record, "eventPayload")).isEqualTo(eventPayload);
+        assertThat(getField(record, "exceptionMessage")).isEqualTo(exceptionMessage);
+        assertThat(getField(record, "exceptionClassName")).isEqualTo(exceptionClassName);
+    }
+
+    @Test
+    void constructor_multipleInstances_haveIndependentTimestamps() throws Exception {
+        // when
+        FailedIntegrationEventRecord first = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload1", "error1", "java.lang.RuntimeException", 1);
+        FailedIntegrationEventRecord second = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload2", "error2", "java.lang.RuntimeException", 2);
+
+        // then
+        Instant firstCreatedAt = (Instant) getField(first, "createdAt");
+        Instant secondCreatedAt = (Instant) getField(second, "createdAt");
+        assertThat(firstCreatedAt).isBeforeOrEqualTo(secondCreatedAt);
+        assertThat(getField(first, "eventPayload")).isNotEqualTo(getField(second, "eventPayload"));
+        assertThat((int) getField(first, "retryCount")).isNotEqualTo((int) getField(second, "retryCount"));
+    }
+
+    @Test
+    void constructor_payloadAtExactLimit_accepted() throws Exception {
+        // given
+        String exactLimitPayload = "x".repeat(4000);
+
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", exactLimitPayload, "error", "java.lang.RuntimeException", 3);
+
+        // then
+        assertThat(((String) getField(record, "eventPayload")).length()).isEqualTo(4000);
+    }
+
+    @Test
+    void constructor_exceptionMessageAtExactLimit_accepted() throws Exception {
+        // given
+        String exactLimitMessage = "x".repeat(2000);
+
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", exactLimitMessage, "java.lang.RuntimeException", 3);
+
+        // then
+        assertThat(((String) getField(record, "exceptionMessage")).length()).isEqualTo(2000);
+    }
+
+    @Test
+    void protectedNoArgConstructor_fieldsAreNull() throws Exception {
+        // given
+        Constructor<FailedIntegrationEventRecord> constructor =
+                FailedIntegrationEventRecord.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+
+        // when
+        FailedIntegrationEventRecord record = constructor.newInstance();
+
+        // then
+        assertThat(getField(record, "id")).isNull();
+        assertThat(getField(record, "eventClassName")).isNull();
+        assertThat(getField(record, "eventPayload")).isNull();
+        assertThat(getField(record, "exceptionMessage")).isNull();
+        assertThat(getField(record, "exceptionClassName")).isNull();
+        assertThat(getField(record, "createdAt")).isNull();
+        assertThat(getField(record, "status")).isNull();
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
