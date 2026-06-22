@@ -794,6 +794,20 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         verify(failedIntegrationEventRepository).save(any(FailedIntegrationEventRecord.class));
     }
 
+    @Test
+    void handleCourseRatingRecalculatedEvent_dataIntegrityViolationException_rethrowsForRetry() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        doThrow(new DataIntegrityViolationException("unique constraint violated"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessage("unique constraint violated");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

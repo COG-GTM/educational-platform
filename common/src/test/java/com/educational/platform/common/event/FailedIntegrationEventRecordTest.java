@@ -371,6 +371,7 @@ class FailedIntegrationEventRecordTest {
         assertThat(getField(record, "exceptionClassName")).isNull();
         assertThat(getField(record, "createdAt")).isNull();
         assertThat(getField(record, "status")).isNull();
+        assertThat((int) getField(record, "retryCount")).isZero();
     }
 
     @Test
@@ -512,6 +513,14 @@ class FailedIntegrationEventRecordTest {
     void class_hasExactlyTwoConstructors() {
         java.lang.reflect.Constructor<?>[] constructors = FailedIntegrationEventRecord.class.getDeclaredConstructors();
         assertThat(constructors).as("One protected no-arg (JPA) + one public 5-arg").hasSize(2);
+    }
+
+    @Test
+    void constructor_withMinIntRetryCount_accepted() throws Exception {
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", "java.lang.RuntimeException", Integer.MIN_VALUE);
+
+        assertThat((int) getField(record, "retryCount")).isEqualTo(Integer.MIN_VALUE);
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {
