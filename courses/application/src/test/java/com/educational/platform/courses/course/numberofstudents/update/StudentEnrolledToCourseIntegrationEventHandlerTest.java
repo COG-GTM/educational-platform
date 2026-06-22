@@ -25,6 +25,7 @@ import org.springframework.scheduling.annotation.Async;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.UUID;
 
@@ -297,6 +298,59 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
 
         // then
         verify(failedIntegrationEventRepository, times(1)).save(any(FailedIntegrationEventRecord.class));
+    }
+
+    @Test
+    void recover_persistsRecordWithFailedStatus() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB connection lost");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((FailedIntegrationEventRecord.Status) getField(captor.getValue(), "status"))
+                .isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+    }
+
+    @Test
+    void recover_persistsRecordWithCreatedAtTimestamp() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB connection lost");
+        final Instant before = Instant.now();
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final Instant after = Instant.now();
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final Instant createdAt = (Instant) getField(captor.getValue(), "createdAt");
+        assertThat(createdAt).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
+    }
+
+    @Test
+    void recover_withCausedException_persistsTopLevelExceptionMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException(
+                "Top-level message", new RuntimeException("root cause"));
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Top-level message");
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {

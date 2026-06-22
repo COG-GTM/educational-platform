@@ -274,6 +274,22 @@ class FailedIntegrationEventRecordTest {
         assertThat(getField(record, "exceptionMessage")).isEqualTo(longMessage);
     }
 
+    @Test
+    void constructor_bothNullableFieldsNull_accepted() throws Exception {
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", null, null, 3);
+
+        // then
+        assertThat(getField(record, "exceptionMessage")).isNull();
+        assertThat(getField(record, "exceptionClassName")).isNull();
+        assertThat(getField(record, "eventClassName")).isEqualTo("com.example.Event");
+        assertThat(getField(record, "eventPayload")).isEqualTo("payload");
+        assertThat((int) getField(record, "retryCount")).isEqualTo(3);
+        assertThat((FailedIntegrationEventRecord.Status) getField(record, "status"))
+                .isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
