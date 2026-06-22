@@ -28,6 +28,8 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.UUID;
 
+import org.springframework.stereotype.Component;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -222,6 +224,51 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
 
         // then
         assertThat(hasRecover).isTrue();
+    }
+
+    @Test
+    void handlerClass_hasComponentAnnotation() {
+        assertThat(StudentEnrolledToCourseIntegrationEventHandler.class.getAnnotation(Component.class)).isNotNull();
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_transientException_commandHandlerStillInvoked() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        doThrow(new DataAccessResourceFailureException("DB connection lost"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when
+        try { sut.handleStudentEnrolledToCourseEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verify(increaseNumberOfStudentsCommandHandler, times(1)).handle(any());
+    }
+
+    @Test
+    void recover_whenRepositorySaveFails_propagatesException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        final DataAccessResourceFailureException originalException = new DataAccessResourceFailureException("DB connection lost");
+        doThrow(new DataAccessResourceFailureException("Failed to save"))
+                .when(failedIntegrationEventRepository).save(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(originalException, event))
+                .isInstanceOf(DataAccessResourceFailureException.class)
+                .hasMessage("Failed to save");
+    }
+
+    @Test
+    void recoverMethod_acceptsDataAccessException() throws NoSuchMethodException {
+        Method method = StudentEnrolledToCourseIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, StudentEnrolledToCourseIntegrationEvent.class);
+
+        assertThat(method).isNotNull();
+        assertThat(method.getAnnotation(Recover.class)).isNotNull();
+        assertThat(method.getReturnType()).isEqualTo(void.class);
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {

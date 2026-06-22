@@ -2,11 +2,14 @@ package com.educational.platform.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.scheduling.annotation.AsyncConfigurer;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -139,5 +142,55 @@ class AsyncConfigTest {
         // then
         assertThat(threadName[0]).startsWith("integration-event-");
         executor.shutdown();
+    }
+
+    @Test
+    void getAsyncExecutor_multipleCallsReturnSeparateInstances() {
+        // when
+        Executor first = asyncConfig.getAsyncExecutor();
+        Executor second = asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(first).isNotSameAs(second);
+        ((ThreadPoolTaskExecutor) first).shutdown();
+        ((ThreadPoolTaskExecutor) second).shutdown();
+    }
+
+    @Test
+    void enableAsync_hasHighestPrecedenceOrder() {
+        EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
+        assertThat(enableAsync).isNotNull();
+        assertThat(enableAsync.order()).isEqualTo(Ordered.HIGHEST_PRECEDENCE);
+    }
+
+    @Test
+    void getAsyncExecutor_hasBeanAnnotation() throws NoSuchMethodException {
+        Method method = AsyncConfig.class.getMethod("getAsyncExecutor");
+        Bean bean = method.getAnnotation(Bean.class);
+        assertThat(bean).isNotNull();
+        assertThat(bean.name()).contains("integrationEventExecutor");
+    }
+
+    @Test
+    void getAsyncExecutor_shutdownConfigIsSet() throws Exception {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then — verify via reflection that waitForTasksToCompleteOnShutdown was set to true
+        java.lang.reflect.Field field = org.springframework.scheduling.concurrent.ExecutorConfigurationSupport.class
+                .getDeclaredField("waitForTasksToCompleteOnShutdown");
+        field.setAccessible(true);
+        assertThat((boolean) field.get(executor)).isTrue();
+        executor.shutdown();
+    }
+
+    @Test
+    void getAsyncUncaughtExceptionHandler_multipleCallsReturnSeparateInstances() {
+        // when
+        AsyncUncaughtExceptionHandler first = asyncConfig.getAsyncUncaughtExceptionHandler();
+        AsyncUncaughtExceptionHandler second = asyncConfig.getAsyncUncaughtExceptionHandler();
+
+        // then
+        assertThat(first).isNotSameAs(second);
     }
 }

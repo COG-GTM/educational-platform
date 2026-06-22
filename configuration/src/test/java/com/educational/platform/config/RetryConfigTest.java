@@ -2,6 +2,7 @@ package com.educational.platform.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.retry.annotation.EnableRetry;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,5 +28,12 @@ class RetryConfigTest {
 
         // then
         assertThat(config).isNotNull();
+    }
+
+    @Test
+    void enableRetry_hasLowestPrecedenceOrder() {
+        EnableRetry enableRetry = RetryConfig.class.getAnnotation(EnableRetry.class);
+        assertThat(enableRetry).isNotNull();
+        assertThat(enableRetry.order()).isEqualTo(Ordered.LOWEST_PRECEDENCE);
     }
 }

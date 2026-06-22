@@ -25,6 +25,8 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.UUID;
 
+import org.springframework.stereotype.Component;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -219,6 +221,51 @@ class SendCourseToApproveIntegrationEventHandlerTest {
 
         // then
         assertThat(hasRecover).isTrue();
+    }
+
+    @Test
+    void handlerClass_hasComponentAnnotation() {
+        assertThat(SendCourseToApproveIntegrationEventHandler.class.getAnnotation(Component.class)).isNotNull();
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_transientException_commandHandlerStillInvoked() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new DataAccessResourceFailureException("DB connection lost"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when
+        try { sut.handleSendCourseToApproveEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verify(createCourseProposalCommandHandler, times(1)).handle(any());
+    }
+
+    @Test
+    void recover_whenRepositorySaveFails_propagatesException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final DataAccessResourceFailureException originalException = new DataAccessResourceFailureException("DB connection lost");
+        doThrow(new DataAccessResourceFailureException("Failed to save"))
+                .when(failedIntegrationEventRepository).save(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(originalException, event))
+                .isInstanceOf(DataAccessResourceFailureException.class)
+                .hasMessage("Failed to save");
+    }
+
+    @Test
+    void recoverMethod_acceptsDataAccessException() throws NoSuchMethodException {
+        Method method = SendCourseToApproveIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, SendCourseToApproveIntegrationEvent.class);
+
+        assertThat(method).isNotNull();
+        assertThat(method.getAnnotation(Recover.class)).isNotNull();
+        assertThat(method.getReturnType()).isEqualTo(void.class);
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {

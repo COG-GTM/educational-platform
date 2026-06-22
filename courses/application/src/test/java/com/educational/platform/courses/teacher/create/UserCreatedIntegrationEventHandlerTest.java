@@ -24,6 +24,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 
+import org.springframework.stereotype.Component;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -208,6 +210,49 @@ class UserCreatedIntegrationEventHandlerTest {
 
         // then
         assertThat(hasRecover).isTrue();
+    }
+
+    @Test
+    void handlerClass_hasComponentAnnotation() {
+        assertThat(UserCreatedIntegrationEventHandler.class.getAnnotation(Component.class)).isNotNull();
+    }
+
+    @Test
+    void handleUserCreatedEvent_transientException_commandHandlerStillInvoked() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        doThrow(new DataAccessResourceFailureException("DB connection lost"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when
+        try { sut.handleUserCreatedEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verify(createTeacherCommandHandler, times(1)).handle(any());
+    }
+
+    @Test
+    void recover_whenRepositorySaveFails_propagatesException() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataAccessResourceFailureException originalException = new DataAccessResourceFailureException("DB connection lost");
+        doThrow(new DataAccessResourceFailureException("Failed to save"))
+                .when(failedIntegrationEventRepository).save(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(originalException, event))
+                .isInstanceOf(DataAccessResourceFailureException.class)
+                .hasMessage("Failed to save");
+    }
+
+    @Test
+    void recoverMethod_acceptsDataAccessException() throws NoSuchMethodException {
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, UserCreatedIntegrationEvent.class);
+
+        assertThat(method).isNotNull();
+        assertThat(method.getAnnotation(Recover.class)).isNotNull();
+        assertThat(method.getReturnType()).isEqualTo(void.class);
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {

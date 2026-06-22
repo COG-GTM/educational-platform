@@ -1,5 +1,6 @@
 package com.educational.platform.common.event;
 
+import jakarta.persistence.*;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Constructor;
@@ -149,6 +150,77 @@ class FailedIntegrationEventRecordTest {
 
         // then
         assertThat(getField(record, "id")).isNull();
+    }
+
+    @Test
+    void class_hasEntityAnnotation() {
+        assertThat(FailedIntegrationEventRecord.class.getAnnotation(Entity.class)).isNotNull();
+    }
+
+    @Test
+    void class_hasTableAnnotation_withCorrectName() {
+        Table table = FailedIntegrationEventRecord.class.getAnnotation(Table.class);
+        assertThat(table).isNotNull();
+        assertThat(table.name()).isEqualTo("failed_integration_events");
+    }
+
+    @Test
+    void idField_hasGeneratedValueWithIdentityStrategy() throws Exception {
+        Field idField = FailedIntegrationEventRecord.class.getDeclaredField("id");
+        assertThat(idField.getAnnotation(Id.class)).isNotNull();
+        GeneratedValue gv = idField.getAnnotation(GeneratedValue.class);
+        assertThat(gv).isNotNull();
+        assertThat(gv.strategy()).isEqualTo(GenerationType.IDENTITY);
+    }
+
+    @Test
+    void eventPayloadField_hasColumnWithLength4000() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventPayload");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.length()).isEqualTo(4000);
+        assertThat(column.nullable()).isFalse();
+    }
+
+    @Test
+    void exceptionMessageField_hasColumnWithLength2000() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("exceptionMessage");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.length()).isEqualTo(2000);
+    }
+
+    @Test
+    void statusField_hasEnumeratedStringAnnotation() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("status");
+        Enumerated enumerated = field.getAnnotation(Enumerated.class);
+        assertThat(enumerated).isNotNull();
+        assertThat(enumerated.value()).isEqualTo(EnumType.STRING);
+    }
+
+    @Test
+    void createdAtField_isNotNullable() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("createdAt");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.nullable()).isFalse();
+    }
+
+    @Test
+    void retryCountField_isNotNullable() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("retryCount");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.nullable()).isFalse();
+    }
+
+    @Test
+    void constructor_largePayloadNearLimit_accepted() throws Exception {
+        String largePayload = "x".repeat(3999);
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", largePayload, "error", "java.lang.RuntimeException", 3);
+
+        assertThat(getField(record, "eventPayload")).isEqualTo(largePayload);
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {

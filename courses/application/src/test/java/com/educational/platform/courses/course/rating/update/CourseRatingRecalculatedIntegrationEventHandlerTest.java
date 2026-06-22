@@ -25,6 +25,8 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.UUID;
 
+import org.springframework.stereotype.Component;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -220,6 +222,68 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
 
         // then
         assertThat(hasRecover).isTrue();
+    }
+
+    @Test
+    void handlerClass_hasComponentAnnotation() {
+        assertThat(CourseRatingRecalculatedIntegrationEventHandler.class.getAnnotation(Component.class)).isNotNull();
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_transientException_commandHandlerStillInvoked() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        doThrow(new DataAccessResourceFailureException("DB connection lost"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when
+        try { sut.handleCourseRatingRecalculatedEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verify(updateCourseRatingCommandHandler, times(1)).handle(any());
+    }
+
+    @Test
+    void recover_whenRepositorySaveFails_propagatesException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException originalException = new DataAccessResourceFailureException("DB connection lost");
+        doThrow(new DataAccessResourceFailureException("Failed to save"))
+                .when(failedIntegrationEventRepository).save(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(originalException, event))
+                .isInstanceOf(DataAccessResourceFailureException.class)
+                .hasMessage("Failed to save");
+    }
+
+    @Test
+    void recoverMethod_acceptsDataAccessException() throws NoSuchMethodException {
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, CourseRatingRecalculatedIntegrationEvent.class);
+
+        assertThat(method).isNotNull();
+        assertThat(method.getAnnotation(Recover.class)).isNotNull();
+        assertThat(method.getReturnType()).isEqualTo(void.class);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_zeroRating_commandReceivedCorrectValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 0.0);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> captor = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("rating", 0.0);
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {
