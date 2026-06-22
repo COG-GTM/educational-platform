@@ -555,6 +555,79 @@ class IntegrationEventHandlerConsistencyTest {
                         "No @EventListener method found in " + handlerClass.getSimpleName()));
     }
 
+    @Test
+    void allHandlers_asyncAnnotation_valueIsDefaultEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Async async = method.getAnnotation(Async.class);
+            assertThat(async.value())
+                    .as("@Async.value in %s should be empty (uses default executor)", handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_maxAttemptsFieldMatchesRetryableMaxAttempts() throws Exception {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Field field = handlerClass.getDeclaredField("MAX_ATTEMPTS");
+            field.setAccessible(true);
+            int fieldValue = (int) field.get(null);
+
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+
+            assertThat(retryable.maxAttempts())
+                    .as("@Retryable.maxAttempts in %s must equal MAX_ATTEMPTS field value",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(fieldValue);
+        }
+    }
+
+    @Test
+    void allHandlers_doNotExtendCustomBaseClass() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            assertThat(handlerClass.getSuperclass())
+                    .as("Handler %s should extend Object directly (no base class hierarchy)",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(Object.class);
+        }
+    }
+
+    @Test
+    void allHandlers_haveExactlyTwoDeclaredPublicMethods() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            long publicMethodCount = Arrays.stream(handlerClass.getDeclaredMethods())
+                    .filter(m -> Modifier.isPublic(m.getModifiers()))
+                    .count();
+            assertThat(publicMethodCount)
+                    .as("Handler %s should have exactly 2 public methods (handle + recover)",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(2);
+        }
+    }
+
+    @Test
+    void allHandlers_recoverMethod_nameStartsWithRecover() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method recoverMethod = findRecoverMethod(handlerClass);
+            assertThat(recoverMethod.getName())
+                    .as("@Recover method name in %s should be 'recover'", handlerClass.getSimpleName())
+                    .isEqualTo("recover");
+        }
+    }
+
+    @Test
+    void allHandlers_failedIntegrationEventRepositoryFieldExists() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            boolean hasRepoField = Arrays.stream(handlerClass.getDeclaredFields())
+                    .anyMatch(f -> f.getType().equals(FailedIntegrationEventRepository.class));
+            assertThat(hasRepoField)
+                    .as("Handler %s should have a FailedIntegrationEventRepository field",
+                            handlerClass.getSimpleName())
+                    .isTrue();
+        }
+    }
+
     private Method findRecoverMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.getAnnotation(Recover.class) != null)
