@@ -266,6 +266,27 @@ class AsyncConfigTest {
     }
 
     @Test
+    void getAsyncExecutor_executorIsNotShutdownAfterCreation() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getThreadPoolExecutor().isShutdown()).isFalse();
+        assertThat(executor.getThreadPoolExecutor().isTerminated()).isFalse();
+        executor.shutdown();
+    }
+
+    @Test
+    void getAsyncExecutor_activeCountIsZeroInitially() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getActiveCount()).isZero();
+        executor.shutdown();
+    }
+
+    @Test
     void asyncUncaughtExceptionHandler_handlesNestedCauseChainWithoutThrowing() throws NoSuchMethodException {
         // given
         AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();

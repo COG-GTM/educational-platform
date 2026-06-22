@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.retry.annotation.EnableRetry;
+import org.springframework.scheduling.annotation.EnableAsync;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,5 +43,12 @@ class RetryConfigTest {
         EnableRetry enableRetry = RetryConfig.class.getAnnotation(EnableRetry.class);
         assertThat(enableRetry).isNotNull();
         assertThat(enableRetry.proxyTargetClass()).isFalse();
+    }
+
+    @Test
+    void retryConfig_orderIsLowerThanAsyncOrder() {
+        EnableRetry enableRetry = RetryConfig.class.getAnnotation(EnableRetry.class);
+        EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
+        assertThat(enableRetry.order()).isGreaterThan(enableAsync.order());
     }
 }

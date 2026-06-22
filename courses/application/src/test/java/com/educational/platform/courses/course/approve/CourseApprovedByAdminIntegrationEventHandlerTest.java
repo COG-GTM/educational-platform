@@ -23,6 +23,7 @@ import org.springframework.scheduling.annotation.Async;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.UUID;
@@ -432,6 +433,38 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         final ArgumentCaptor<ApproveCourseCommand> captor = ArgumentCaptor.forClass(ApproveCourseCommand.class);
         verify(approveCourseCommandHandler).handle(captor.capture());
         assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void recoverMethod_doesNotHaveAsyncAnnotation() throws NoSuchMethodException {
+        Method method = CourseApprovedByAdminIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, CourseApprovedByAdminIntegrationEvent.class);
+
+        assertThat(method.getAnnotation(Async.class)).isNull();
+    }
+
+    @Test
+    void recoverMethod_doesNotHaveEventListenerAnnotation() throws NoSuchMethodException {
+        Method method = CourseApprovedByAdminIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, CourseApprovedByAdminIntegrationEvent.class);
+
+        assertThat(method.getAnnotation(EventListener.class)).isNull();
+    }
+
+    @Test
+    void handlerMethod_isPublic() throws NoSuchMethodException {
+        Method method = CourseApprovedByAdminIntegrationEventHandler.class
+                .getMethod("handleCourseApprovedByAdminEvent", CourseApprovedByAdminIntegrationEvent.class);
+
+        assertThat(Modifier.isPublic(method.getModifiers())).isTrue();
+    }
+
+    @Test
+    void recoverMethod_isPublic() throws NoSuchMethodException {
+        Method method = CourseApprovedByAdminIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, CourseApprovedByAdminIntegrationEvent.class);
+
+        assertThat(Modifier.isPublic(method.getModifiers())).isTrue();
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {

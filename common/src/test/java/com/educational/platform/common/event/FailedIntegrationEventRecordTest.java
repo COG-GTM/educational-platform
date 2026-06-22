@@ -386,6 +386,63 @@ class FailedIntegrationEventRecordTest {
         assertThat((int) getField(record2, "retryCount")).isEqualTo(5);
     }
 
+    @Test
+    void eventPayloadField_hasCorrectColumnName() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventPayload");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.name()).isEqualTo("event_payload");
+    }
+
+    @Test
+    void exceptionMessageField_hasCorrectColumnName() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("exceptionMessage");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.name()).isEqualTo("exception_message");
+    }
+
+    @Test
+    void exceptionMessageField_isNullable() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("exceptionMessage");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.nullable()).isTrue();
+    }
+
+    @Test
+    void exceptionClassNameField_isNullable() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("exceptionClassName");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.nullable()).isTrue();
+    }
+
+    @Test
+    void createdAtField_hasCorrectColumnName() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("createdAt");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.name()).isEqualTo("created_at");
+    }
+
+    @Test
+    void retryCountField_hasCorrectColumnName() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("retryCount");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.name()).isEqualTo("retry_count");
+    }
+
+    @Test
+    void allFields_arePrivate() throws Exception {
+        for (Field field : FailedIntegrationEventRecord.class.getDeclaredFields()) {
+            assertThat(Modifier.isPrivate(field.getModifiers()))
+                    .as("Field '%s' should be private", field.getName())
+                    .isTrue();
+        }
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

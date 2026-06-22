@@ -23,6 +23,7 @@ import org.springframework.scheduling.annotation.Async;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.time.Instant;
 import java.util.Arrays;
 
@@ -453,6 +454,38 @@ class UserCreatedIntegrationEventHandlerTest {
         final ArgumentCaptor<CreateTeacherCommand> captor = ArgumentCaptor.forClass(CreateTeacherCommand.class);
         verify(createTeacherCommandHandler).handle(captor.capture());
         assertThat(captor.getValue()).hasFieldOrPropertyWithValue("username", "teacher1");
+    }
+
+    @Test
+    void recoverMethod_doesNotHaveAsyncAnnotation() throws NoSuchMethodException {
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, UserCreatedIntegrationEvent.class);
+
+        assertThat(method.getAnnotation(Async.class)).isNull();
+    }
+
+    @Test
+    void recoverMethod_doesNotHaveEventListenerAnnotation() throws NoSuchMethodException {
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, UserCreatedIntegrationEvent.class);
+
+        assertThat(method.getAnnotation(EventListener.class)).isNull();
+    }
+
+    @Test
+    void handlerMethod_isPublic() throws NoSuchMethodException {
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+
+        assertThat(Modifier.isPublic(method.getModifiers())).isTrue();
+    }
+
+    @Test
+    void recoverMethod_isPublic() throws NoSuchMethodException {
+        Method method = UserCreatedIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, UserCreatedIntegrationEvent.class);
+
+        assertThat(Modifier.isPublic(method.getModifiers())).isTrue();
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {
