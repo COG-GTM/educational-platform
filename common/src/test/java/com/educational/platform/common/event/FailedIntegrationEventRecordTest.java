@@ -553,6 +553,45 @@ class FailedIntegrationEventRecordTest {
         assertThat(field.getType()).isEqualTo(FailedIntegrationEventRecord.Status.class);
     }
 
+    @Test
+    void eventClassNameField_hasDefaultColumnLength() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventClassName");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.length()).isEqualTo(255);
+    }
+
+    @Test
+    void exceptionClassNameField_hasDefaultColumnLength() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("exceptionClassName");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.length()).isEqualTo(255);
+    }
+
+    @Test
+    void constructor_allNonNullFieldsPopulated_noFieldIsNull() throws Exception {
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", "java.lang.RuntimeException", 3);
+
+        assertThat(getField(record, "eventClassName")).isNotNull();
+        assertThat(getField(record, "eventPayload")).isNotNull();
+        assertThat(getField(record, "exceptionMessage")).isNotNull();
+        assertThat(getField(record, "exceptionClassName")).isNotNull();
+        assertThat(getField(record, "createdAt")).isNotNull();
+        assertThat(getField(record, "status")).isNotNull();
+    }
+
+    @Test
+    void statusEnum_failedOrdinal_isZero() {
+        assertThat(FailedIntegrationEventRecord.Status.FAILED.ordinal()).isZero();
+    }
+
+    @Test
+    void statusEnum_resolvedOrdinal_isOne() {
+        assertThat(FailedIntegrationEventRecord.Status.RESOLVED.ordinal()).isEqualTo(1);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

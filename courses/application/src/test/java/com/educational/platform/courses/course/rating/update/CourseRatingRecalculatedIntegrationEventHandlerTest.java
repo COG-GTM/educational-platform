@@ -882,6 +882,43 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThat(Modifier.isFinal(CourseRatingRecalculatedIntegrationEventHandler.class.getModifiers())).isFalse();
     }
 
+    @Test
+    void handleCourseRatingRecalculatedEvent_errorSubclass_propagatesWithoutCatch() {
+        // given — Error subclasses bypass the catch(Exception) block
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        doThrow(new StackOverflowError("deep recursion"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when/then — Error propagates directly, not caught by handler
+        try {
+            sut.handleCourseRatingRecalculatedEvent(event);
+            assertThat(true).as("Expected StackOverflowError to be thrown").isFalse();
+        } catch (StackOverflowError e) {
+            assertThat(e.getMessage()).isEqualTo("deep recursion");
+        }
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_concurrentInvocations_areIndependent() {
+        // given — handler is stateless, concurrent calls should not interfere
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseRatingRecalculatedIntegrationEvent event1 = new CourseRatingRecalculatedIntegrationEvent(uuid1, 3.5);
+        final CourseRatingRecalculatedIntegrationEvent event2 = new CourseRatingRecalculatedIntegrationEvent(uuid2, 4.5);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event1);
+        sut.handleCourseRatingRecalculatedEvent(event2);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> captor = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler, times(2)).handle(captor.capture());
+        assertThat(captor.getAllValues().get(0)).hasFieldOrPropertyWithValue("uuid", uuid1);
+        assertThat(captor.getAllValues().get(1)).hasFieldOrPropertyWithValue("uuid", uuid2);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

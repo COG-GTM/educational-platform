@@ -774,6 +774,43 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(Modifier.isFinal(StudentEnrolledToCourseIntegrationEventHandler.class.getModifiers())).isFalse();
     }
 
+    @Test
+    void handleStudentEnrolledToCourseEvent_errorSubclass_propagatesWithoutCatch() {
+        // given — Error subclasses bypass the catch(Exception) block
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        doThrow(new StackOverflowError("deep recursion"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when/then — Error propagates directly, not caught by handler
+        try {
+            sut.handleStudentEnrolledToCourseEvent(event);
+            assertThat(true).as("Expected StackOverflowError to be thrown").isFalse();
+        } catch (StackOverflowError e) {
+            assertThat(e.getMessage()).isEqualTo("deep recursion");
+        }
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_concurrentInvocations_areIndependent() {
+        // given — handler is stateless, concurrent calls should not interfere
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final StudentEnrolledToCourseIntegrationEvent event1 = new StudentEnrolledToCourseIntegrationEvent(uuid1, "student1");
+        final StudentEnrolledToCourseIntegrationEvent event2 = new StudentEnrolledToCourseIntegrationEvent(uuid2, "student2");
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event1);
+        sut.handleStudentEnrolledToCourseEvent(event2);
+
+        // then
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> captor = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler, times(2)).handle(captor.capture());
+        assertThat(captor.getAllValues().get(0)).hasFieldOrPropertyWithValue("uuid", uuid1);
+        assertThat(captor.getAllValues().get(1)).hasFieldOrPropertyWithValue("uuid", uuid2);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

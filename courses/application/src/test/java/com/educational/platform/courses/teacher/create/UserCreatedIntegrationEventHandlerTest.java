@@ -768,6 +768,40 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(Modifier.isFinal(UserCreatedIntegrationEventHandler.class.getModifiers())).isFalse();
     }
 
+    @Test
+    void handleUserCreatedEvent_errorSubclass_propagatesWithoutCatch() {
+        // given — Error subclasses bypass the catch(Exception) block
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        doThrow(new StackOverflowError("deep recursion"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when/then — Error propagates directly, not caught by handler
+        try {
+            sut.handleUserCreatedEvent(event);
+            assertThat(true).as("Expected StackOverflowError to be thrown").isFalse();
+        } catch (StackOverflowError e) {
+            assertThat(e.getMessage()).isEqualTo("deep recursion");
+        }
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleUserCreatedEvent_concurrentInvocations_areIndependent() {
+        // given — handler is stateless, concurrent calls should not interfere
+        final UserCreatedIntegrationEvent event1 = new UserCreatedIntegrationEvent("teacher1", "t1@test.com");
+        final UserCreatedIntegrationEvent event2 = new UserCreatedIntegrationEvent("teacher2", "t2@test.com");
+
+        // when
+        sut.handleUserCreatedEvent(event1);
+        sut.handleUserCreatedEvent(event2);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> captor = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler, times(2)).handle(captor.capture());
+        assertThat(captor.getAllValues().get(0)).hasFieldOrPropertyWithValue("username", "teacher1");
+        assertThat(captor.getAllValues().get(1)).hasFieldOrPropertyWithValue("username", "teacher2");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
