@@ -1720,6 +1720,51 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
     }
 
+    @Test
+    void handleSendCourseToApproveEvent_onIllegalArgumentException_doesNotInteractWithFailedEventRepository() {
+        // given — IllegalArgumentException is not a DataAccessException, must not trigger recovery
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new IllegalArgumentException("invalid course id"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when
+        try { sut.handleSendCourseToApproveEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_onGenericRuntimeException_doesNotInteractWithFailedEventRepository() {
+        // given — IllegalStateException is not a DataAccessException, must not trigger recovery
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new IllegalStateException("unexpected state"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when
+        try { sut.handleSendCourseToApproveEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_onCheckedExceptionWrapped_doesNotInteractWithFailedEventRepository() {
+        // given — RuntimeException wrapping a checked cause is not a DataAccessException
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new RuntimeException("wrapped", new java.io.IOException("disk full")))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when
+        try { sut.handleSendCourseToApproveEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

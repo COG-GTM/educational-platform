@@ -1863,6 +1863,51 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
     }
 
+    @Test
+    void handleStudentEnrolledToCourseEvent_onIllegalArgumentException_doesNotInteractWithFailedEventRepository() {
+        // given — IllegalArgumentException is not a DataAccessException, must not trigger recovery
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        doThrow(new IllegalArgumentException("invalid enrollment"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when
+        try { sut.handleStudentEnrolledToCourseEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_onGenericRuntimeException_doesNotInteractWithFailedEventRepository() {
+        // given — IllegalStateException is not a DataAccessException, must not trigger recovery
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        doThrow(new IllegalStateException("unexpected state"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when
+        try { sut.handleStudentEnrolledToCourseEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_onCheckedExceptionWrapped_doesNotInteractWithFailedEventRepository() {
+        // given — RuntimeException wrapping a checked cause is not a DataAccessException
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        doThrow(new RuntimeException("wrapped", new java.io.IOException("disk full")))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when
+        try { sut.handleStudentEnrolledToCourseEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
