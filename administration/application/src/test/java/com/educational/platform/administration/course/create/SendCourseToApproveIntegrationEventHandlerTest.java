@@ -1779,6 +1779,58 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         verifyNoInteractions(createCourseProposalCommandHandler);
     }
 
+    @Test
+    void handleSendCourseToApproveEvent_concurrencyFailureException_rethrowsForRetry() {
+        // given — ConcurrencyFailureException is a DataAccessException subclass, eligible for retry
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new org.springframework.dao.ConcurrencyFailureException("Lock timeout"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
+                .isInstanceOf(org.springframework.dao.ConcurrencyFailureException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_retryCountFieldMatchesMaxAttempts() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — retryCount in persisted record should match the handler's MAX_ATTEMPTS constant
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        Field maxAttemptsField = SendCourseToApproveIntegrationEventHandler.class.getDeclaredField("MAX_ATTEMPTS");
+        maxAttemptsField.setAccessible(true);
+        int expectedRetryCount = (int) maxAttemptsField.get(null);
+        assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(expectedRetryCount);
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_persistsFailedEvent() throws Exception {
+        // given — ConcurrencyFailureException is a DataAccessException subclass representing lock contention
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock acquisition timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo(org.springframework.dao.ConcurrencyFailureException.class.getName());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Lock acquisition timeout");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

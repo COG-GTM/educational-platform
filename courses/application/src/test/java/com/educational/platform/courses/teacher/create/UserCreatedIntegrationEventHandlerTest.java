@@ -1887,6 +1887,90 @@ class UserCreatedIntegrationEventHandlerTest {
         verifyNoInteractions(failedIntegrationEventRepository);
     }
 
+    @Test
+    void handleUserCreatedEvent_concurrencyFailureException_rethrowsForRetry() {
+        // given — ConcurrencyFailureException is a DataAccessException subclass, eligible for retry
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@edu.com");
+        doThrow(new org.springframework.dao.ConcurrencyFailureException("Lock timeout"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(org.springframework.dao.ConcurrencyFailureException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_retryCountFieldMatchesMaxAttempts() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@edu.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        Field maxAttemptsField = UserCreatedIntegrationEventHandler.class.getDeclaredField("MAX_ATTEMPTS");
+        maxAttemptsField.setAccessible(true);
+        int expectedRetryCount = (int) maxAttemptsField.get(null);
+        assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(expectedRetryCount);
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_persistsFailedEvent() throws Exception {
+        // given — ConcurrencyFailureException is a DataAccessException subclass representing lock contention
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@edu.com");
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock acquisition timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo(org.springframework.dao.ConcurrencyFailureException.class.getName());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Lock acquisition timeout");
+    }
+
+    @Test
+    void recover_withNullBothFields_persistsEventPayload() throws Exception {
+        // given — both username and email are null
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(null, null);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+        assertThat(getField(captor.getValue(), "eventClassName")).isEqualTo(event.getClass().getName());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("DB error");
+    }
+
+    @Test
+    void recover_withNullUsernameAndConcurrencyFailure_persistsCorrectExceptionType() throws Exception {
+        // given — null username combined with ConcurrencyFailureException
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(null, "user@edu.com");
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention on user creation");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo(org.springframework.dao.ConcurrencyFailureException.class.getName());
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

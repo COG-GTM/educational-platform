@@ -72,6 +72,42 @@ class ChangelogInclusionOrderTest {
     }
 
     @Test
+    void masterChangelog_commonComesBeforeCourseEnrollments() throws Exception {
+        List<String> includes = parseIncludedFiles();
+
+        int commonIdx = indexOf(includes, "common.yml");
+        int enrollmentsIdx = indexOf(includes, "course-enrollments.yml");
+
+        assertThat(commonIdx).as("common.yml index").isGreaterThanOrEqualTo(0);
+        assertThat(enrollmentsIdx).as("course-enrollments.yml index").isGreaterThanOrEqualTo(0);
+        assertThat(commonIdx).isLessThan(enrollmentsIdx);
+    }
+
+    @Test
+    void masterChangelog_commonComesBeforeCourseReviews() throws Exception {
+        List<String> includes = parseIncludedFiles();
+
+        int commonIdx = indexOf(includes, "common.yml");
+        int reviewsIdx = indexOf(includes, "course-reviews.yml");
+
+        assertThat(commonIdx).as("common.yml index").isGreaterThanOrEqualTo(0);
+        assertThat(reviewsIdx).as("course-reviews.yml index").isGreaterThanOrEqualTo(0);
+        assertThat(commonIdx).isLessThan(reviewsIdx);
+    }
+
+    @Test
+    void masterChangelog_commonComesBeforeUsers() throws Exception {
+        List<String> includes = parseIncludedFiles();
+
+        int commonIdx = indexOf(includes, "common.yml");
+        int usersIdx = indexOf(includes, "users.yml");
+
+        assertThat(commonIdx).as("common.yml index").isGreaterThanOrEqualTo(0);
+        assertThat(usersIdx).as("users.yml index").isGreaterThanOrEqualTo(0);
+        assertThat(commonIdx).isLessThan(usersIdx);
+    }
+
+    @Test
     void masterChangelog_hasNoDuplicateIncludes() throws Exception {
         List<String> includes = parseIncludedFiles();
 

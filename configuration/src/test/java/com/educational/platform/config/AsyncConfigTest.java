@@ -827,4 +827,33 @@ class AsyncConfigTest {
         // when/then — should not throw
         handler.handleUncaughtException(top, method, "event-data");
     }
+
+    @Test
+    void getAsyncExecutor_beanAnnotation_destroyMethodNotExplicitlyDisabled() throws NoSuchMethodException {
+        Method method = AsyncConfig.class.getMethod("getAsyncExecutor");
+        Bean bean = method.getAnnotation(Bean.class);
+        assertThat(bean.destroyMethod())
+                .as("@Bean.destroyMethod must not be empty string — Spring auto-detects "
+                        + "DisposableBean.destroy() for graceful executor shutdown")
+                .isNotEqualTo("");
+    }
+
+    @Test
+    void getAsyncExecutor_beanAnnotation_initMethodIsDefault() throws NoSuchMethodException {
+        Method method = AsyncConfig.class.getMethod("getAsyncExecutor");
+        Bean bean = method.getAnnotation(Bean.class);
+        assertThat(bean.initMethod())
+                .as("@Bean.initMethod should be default — Spring auto-detects "
+                        + "InitializingBean.afterPropertiesSet() for executor initialization")
+                .isEmpty();
+    }
+
+    @Test
+    void getAsyncExecutor_beanAnnotation_autowireCandidateIsTrue() throws NoSuchMethodException {
+        Method method = AsyncConfig.class.getMethod("getAsyncExecutor");
+        Bean bean = method.getAnnotation(Bean.class);
+        assertThat(bean.autowireCandidate())
+                .as("Bean must be an autowire candidate so handlers can inject it")
+                .isTrue();
+    }
 }

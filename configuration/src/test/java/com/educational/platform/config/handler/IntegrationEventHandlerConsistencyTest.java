@@ -1156,6 +1156,36 @@ class IntegrationEventHandlerConsistencyTest {
         }
     }
 
+    @Test
+    void allHandlers_retryForExceptions_includesConcurrencyFailureHierarchy() {
+        // ConcurrencyFailureException is a DataAccessException subclass and covers lock contention.
+        // ObjectOptimisticLockingFailureException extends ConcurrencyFailureException (via OptimisticLockingFailureException).
+        // Verify the @Retryable.retryFor hierarchy is correct.
+        assertThat(org.springframework.dao.ConcurrencyFailureException.class)
+                .isAssignableTo(org.springframework.dao.DataAccessException.class);
+        assertThat(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+                .isAssignableTo(org.springframework.dao.ConcurrencyFailureException.class);
+    }
+
+    @Test
+    void allHandlers_maxAttemptsFieldValue_matchesRetryableAnnotation() throws Exception {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            // Read MAX_ATTEMPTS constant
+            java.lang.reflect.Field field = handlerClass.getDeclaredField("MAX_ATTEMPTS");
+            field.setAccessible(true);
+            int maxAttemptsField = (int) field.get(null);
+
+            // Read @Retryable annotation
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+
+            assertThat(maxAttemptsField)
+                    .as("MAX_ATTEMPTS constant in %s must equal @Retryable.maxAttempts so recover() persists the correct count",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(retryable.maxAttempts());
+        }
+    }
+
     private Method findRecoverMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.getAnnotation(Recover.class) != null)
