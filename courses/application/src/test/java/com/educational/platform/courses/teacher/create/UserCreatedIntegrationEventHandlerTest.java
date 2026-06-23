@@ -1654,6 +1654,116 @@ class UserCreatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_withDataAccessResourceFailureException_persistsCorrectEventClassName() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must still be correct regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo(UserCreatedIntegrationEvent.class.getName());
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_persistsCorrectEventPayload() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventPayload must still be event.toString() regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_persistsCorrectExceptionMessage() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionMessage must be correctly persisted regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("DB error");
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_persistsCorrectRetryCount() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — retryCount must equal MAX_ATTEMPTS regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(3);
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_persistsRecordWithFailedStatus() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — status must be FAILED regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((FailedIntegrationEventRecord.Status) getField(captor.getValue(), "status"))
+                .isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_persistsCreatedAtTimestamp() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+        final Instant before = Instant.now();
+
+        // when
+        sut.recover(exception, event);
+
+        // then — createdAt must be set regardless of exception type
+        final Instant after = Instant.now();
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final Instant createdAt = (Instant) getField(captor.getValue(), "createdAt");
+        assertThat(createdAt).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_nullMessage_persistsNullMessage() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException((String) null);
+
+        // when
+        sut.recover(exception, event);
+
+        // then — null message must be persisted without exception
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
+    }
+
+    @Test
     void constructor_withNullCommandHandler_constructsSuccessfully() {
         new UserCreatedIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
     }
