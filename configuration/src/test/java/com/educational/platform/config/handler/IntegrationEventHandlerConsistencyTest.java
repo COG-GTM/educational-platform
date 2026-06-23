@@ -911,6 +911,28 @@ class IntegrationEventHandlerConsistencyTest {
     }
 
     @Test
+    void allHandlers_eventListenerMethod_isNotFinal() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            assertThat(Modifier.isFinal(method.getModifiers()))
+                    .as("@EventListener method in %s must not be final — CGLIB proxies override it for @Async and @Retryable",
+                            handlerClass.getSimpleName())
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void allHandlers_recoverMethod_isNotFinal() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findRecoverMethod(handlerClass);
+            assertThat(Modifier.isFinal(method.getModifiers()))
+                    .as("@Recover method in %s must not be final — Spring Retry discovers and invokes it via proxy",
+                            handlerClass.getSimpleName())
+                    .isFalse();
+        }
+    }
+
+    @Test
     void allHandlers_haveExactlyTwoDeclaredPublicMethods() {
         for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
             long publicMethodCount = Arrays.stream(handlerClass.getDeclaredMethods())

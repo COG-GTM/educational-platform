@@ -201,6 +201,42 @@ class DeadLetterRecordDiagnosticCompletenessTest {
                 .contains("enrolled-student");
     }
 
+    @Test
+    void courseRatingHandler_recover_withEdgeCaseValues_diagnosticRecordStillComplete() throws Exception {
+        // given — NaN rating + null courseId: extreme edge case where both fields are edge values
+        var repo = mock(FailedIntegrationEventRepository.class);
+        var handler = new CourseRatingRecalculatedIntegrationEventHandler(
+                mock(UpdateCourseRatingCommandHandler.class), repo);
+        var event = new CourseRatingRecalculatedIntegrationEvent(null, Double.NaN);
+        var exception = new DataAccessResourceFailureException(EXCEPTION_MSG);
+
+        // when
+        handler.recover(exception, event);
+
+        // then — even with edge-case values, all diagnostic fields must be populated
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(repo).save(captor.capture());
+        assertDiagnosticCompleteness(captor.getValue(), event, exception);
+    }
+
+    @Test
+    void studentEnrolledHandler_recover_withBothNullFields_diagnosticRecordStillComplete() throws Exception {
+        // given — both courseId and username are null
+        var repo = mock(FailedIntegrationEventRepository.class);
+        var handler = new StudentEnrolledToCourseIntegrationEventHandler(
+                mock(IncreaseNumberOfStudentsCommandHandler.class), repo);
+        var event = new StudentEnrolledToCourseIntegrationEvent(null, null);
+        var exception = new DataAccessResourceFailureException(EXCEPTION_MSG);
+
+        // when
+        handler.recover(exception, event);
+
+        // then
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(repo).save(captor.capture());
+        assertDiagnosticCompleteness(captor.getValue(), event, exception);
+    }
+
     private void assertDiagnosticCompleteness(FailedIntegrationEventRecord record,
                                                Object event,
                                                DataAccessResourceFailureException exception) throws Exception {
