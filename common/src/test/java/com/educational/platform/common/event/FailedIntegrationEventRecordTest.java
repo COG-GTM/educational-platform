@@ -584,19 +584,23 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
-    void eventClassNameField_hasDefaultColumnLength() throws Exception {
+    void eventClassNameField_hasColumnLength500() throws Exception {
         Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventClassName");
         Column column = field.getAnnotation(Column.class);
         assertThat(column).isNotNull();
-        assertThat(column.length()).isEqualTo(255);
+        assertThat(column.length())
+                .as("eventClassName length must match Liquibase migration VARCHAR(500)")
+                .isEqualTo(500);
     }
 
     @Test
-    void exceptionClassNameField_hasDefaultColumnLength() throws Exception {
+    void exceptionClassNameField_hasColumnLength500() throws Exception {
         Field field = FailedIntegrationEventRecord.class.getDeclaredField("exceptionClassName");
         Column column = field.getAnnotation(Column.class);
         assertThat(column).isNotNull();
-        assertThat(column.length()).isEqualTo(255);
+        assertThat(column.length())
+                .as("exceptionClassName length must match Liquibase migration VARCHAR(500)")
+                .isEqualTo(500);
     }
 
     @Test
@@ -712,25 +716,25 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
-    void constructor_longEventClassName_nearDefaultColumnLimit_accepted() throws Exception {
-        // given — eventClassName column uses default length 255
-        String longClassName = "com.educational.platform." + "a".repeat(230);
+    void constructor_longEventClassName_nearColumnLimit_accepted() throws Exception {
+        // given — eventClassName column is VARCHAR(500) per Liquibase migration
+        String longClassName = "com.educational.platform." + "a".repeat(475);
         FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
                 longClassName, "payload", "error", "java.lang.RuntimeException", 3);
 
         assertThat(getField(record, "eventClassName")).isEqualTo(longClassName);
-        assertThat(((String) getField(record, "eventClassName")).length()).isEqualTo(255);
+        assertThat(((String) getField(record, "eventClassName")).length()).isEqualTo(500);
     }
 
     @Test
-    void constructor_longExceptionClassName_nearDefaultColumnLimit_accepted() throws Exception {
-        // given — exceptionClassName column uses default length 255
-        String longExceptionClass = "org.springframework.dao." + "a".repeat(231);  // 24 + 231 = 255
+    void constructor_longExceptionClassName_nearColumnLimit_accepted() throws Exception {
+        // given — exceptionClassName column is VARCHAR(500) per Liquibase migration
+        String longExceptionClass = "org.springframework.dao." + "a".repeat(476);  // 24 + 476 = 500
         FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
                 "com.example.Event", "payload", "error", longExceptionClass, 3);
 
         assertThat(getField(record, "exceptionClassName")).isEqualTo(longExceptionClass);
-        assertThat(((String) getField(record, "exceptionClassName")).length()).isEqualTo(255);
+        assertThat(((String) getField(record, "exceptionClassName")).length()).isEqualTo(500);
     }
 
     @Test

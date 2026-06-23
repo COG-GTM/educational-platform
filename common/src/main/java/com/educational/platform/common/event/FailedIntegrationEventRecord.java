@@ -14,7 +14,7 @@ public class FailedIntegrationEventRecord {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "event_class_name", nullable = false)
+    @Column(name = "event_class_name", nullable = false, length = 500)
     private String eventClassName;
 
     @Column(name = "event_payload", nullable = false, length = 4000)
@@ -23,7 +23,7 @@ public class FailedIntegrationEventRecord {
     @Column(name = "exception_message", length = 2000)
     private String exceptionMessage;
 
-    @Column(name = "exception_class_name")
+    @Column(name = "exception_class_name", length = 500)
     private String exceptionClassName;
 
     @Column(name = "created_at", nullable = false)
