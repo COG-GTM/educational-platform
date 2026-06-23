@@ -2285,6 +2285,40 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo(specialMessage);
     }
 
+    @Test
+    void recover_withCustomDataAccessExceptionSubclass_persistsActualRuntimeClassName() throws Exception {
+        // given — a custom subclass of DataAccessException should have its actual runtime type stored
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error") {};
+
+        // when
+        sut.recover(exception, event);
+
+        // then — the persisted className must be the anonymous subclass, not DataAccessResourceFailureException
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String persistedClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(persistedClassName).isNotEqualTo(DataAccessResourceFailureException.class.getName());
+        assertThat(persistedClassName).contains("UserCreatedIntegrationEventHandlerTest");
+    }
+
+    @Test
+    void recover_eventPayload_isNotJavaObjectReference() throws Exception {
+        // given — event.toString() for records should produce a readable representation, not Object@hex
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String payload = (String) getField(captor.getValue(), "eventPayload");
+        assertThat(payload).doesNotMatch(".*@[0-9a-f]+$");
+        assertThat(payload).contains("user1");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

@@ -2557,6 +2557,42 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo(specialMessage);
     }
 
+    @Test
+    void recover_withCustomDataAccessExceptionSubclass_persistsActualRuntimeClassName() throws Exception {
+        // given — a custom subclass of DataAccessException should have its actual runtime type stored
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error") {};
+
+        // when
+        sut.recover(exception, event);
+
+        // then — the persisted className must be the anonymous subclass, not DataAccessResourceFailureException
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String persistedClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(persistedClassName).isNotEqualTo(DataAccessResourceFailureException.class.getName());
+        assertThat(persistedClassName).contains("CourseRatingRecalculatedIntegrationEventHandlerTest");
+    }
+
+    @Test
+    void recover_eventPayload_isNotJavaObjectReference() throws Exception {
+        // given — event.toString() for records should produce a readable representation, not Object@hex
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String payload = (String) getField(captor.getValue(), "eventPayload");
+        assertThat(payload).doesNotMatch(".*@[0-9a-f]+$");
+        assertThat(payload).contains("123e4567-e89b-12d3-a456-426655440001");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
