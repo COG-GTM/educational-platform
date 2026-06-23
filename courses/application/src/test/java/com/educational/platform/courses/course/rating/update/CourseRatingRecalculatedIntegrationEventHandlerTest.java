@@ -1520,6 +1520,74 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .contains(String.valueOf(Double.MAX_VALUE));
     }
 
+    @Test
+    void recover_withConcurrencyFailureException_persistsFailedEvent() throws Exception {
+        // given — ConcurrencyFailureException is a DataAccessException subclass representing lock contention
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock acquisition timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo(org.springframework.dao.ConcurrencyFailureException.class.getName());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Lock acquisition timeout");
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_concurrencyFailureException_rethrowsForRetry() {
+        // given — ConcurrencyFailureException is a DataAccessException subclass, eligible for retry
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        doThrow(new org.springframework.dao.ConcurrencyFailureException("Lock timeout"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isInstanceOf(org.springframework.dao.ConcurrencyFailureException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_withNaNRating_eventPayloadContainsNaN() throws Exception {
+        // given — NaN rating should be serialized correctly in event payload
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.NaN);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+        assertThat(getField(captor.getValue(), "eventPayload").toString()).contains("NaN");
+    }
+
+    @Test
+    void recover_retryCountFieldMatchesMaxAttempts() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        Field maxAttemptsField = CourseRatingRecalculatedIntegrationEventHandler.class.getDeclaredField("MAX_ATTEMPTS");
+        maxAttemptsField.setAccessible(true);
+        int expectedRetryCount = (int) maxAttemptsField.get(null);
+        assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(expectedRetryCount);
+    }
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

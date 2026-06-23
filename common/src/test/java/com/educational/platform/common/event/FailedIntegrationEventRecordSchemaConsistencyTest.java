@@ -205,6 +205,33 @@ class FailedIntegrationEventRecordSchemaConsistencyTest {
                 .isTrue();
     }
 
+    @Test
+    void eventClassNameColumn_lengthMatchesSchema() throws NoSuchFieldException {
+        Column column = getDeclaredFieldColumn("eventClassName");
+        assertThat(column.length())
+                .as("eventClassName @Column length should match VARCHAR(500) in common.yml")
+                .isEqualTo(500);
+    }
+
+    @Test
+    void exceptionClassNameColumn_lengthMatchesSchema() throws NoSuchFieldException {
+        Column column = getDeclaredFieldColumn("exceptionClassName");
+        assertThat(column.length())
+                .as("exceptionClassName @Column length should match VARCHAR(500) in common.yml")
+                .isEqualTo(500);
+    }
+
+    @Test
+    void statusColumn_lengthAccommodatesAllEnumValues() throws NoSuchFieldException {
+        Column column = getDeclaredFieldColumn("status");
+        int schemaLength = 20;
+        for (FailedIntegrationEventRecord.Status status : FailedIntegrationEventRecord.Status.values()) {
+            assertThat(status.name().length())
+                    .as("Status '%s' must fit within @Column length or VARCHAR(%d)", status.name(), schemaLength)
+                    .isLessThanOrEqualTo(schemaLength);
+        }
+    }
+
     private Column getDeclaredFieldColumn(String fieldName) throws NoSuchFieldException {
         Field field = FailedIntegrationEventRecord.class.getDeclaredField(fieldName);
         Column column = field.getAnnotation(Column.class);
