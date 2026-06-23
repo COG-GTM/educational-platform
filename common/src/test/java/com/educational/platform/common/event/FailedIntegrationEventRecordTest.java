@@ -873,6 +873,34 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
+    void constructor_eventPayload_exceedingColumnLimit_acceptedAtJavaLevel() throws Exception {
+        // given — event payload well beyond VARCHAR(4000) — accepted by Java, fails at DB
+        String exceedingPayload = "p".repeat(5000);
+
+        // when
+        var record = new FailedIntegrationEventRecord(
+                "com.example.Event", exceedingPayload, "message", "exClassName", 3);
+
+        // then — Java object creation succeeds regardless of column limit
+        assertThat(getField(record, "eventPayload")).isEqualTo(exceedingPayload);
+        assertThat(((String) getField(record, "eventPayload")).length()).isGreaterThan(4000);
+    }
+
+    @Test
+    void constructor_exceptionMessage_exceedingColumnLimit_acceptedAtJavaLevel() throws Exception {
+        // given — exception message well beyond VARCHAR(2000) — accepted by Java, fails at DB
+        String exceedingMessage = "m".repeat(3000);
+
+        // when
+        var record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", exceedingMessage, "exClassName", 3);
+
+        // then — Java object creation succeeds regardless of column limit
+        assertThat(getField(record, "exceptionMessage")).isEqualTo(exceedingMessage);
+        assertThat(((String) getField(record, "exceptionMessage")).length()).isGreaterThan(2000);
+    }
+
+    @Test
     void constructor_createdAt_isNotBeforeConstructionStartTime() throws Exception {
         // given
         Instant before = Instant.now();

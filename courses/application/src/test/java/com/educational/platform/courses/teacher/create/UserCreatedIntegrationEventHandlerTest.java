@@ -1232,6 +1232,51 @@ class UserCreatedIntegrationEventHandlerTest {
         verifyNoInteractions(failedIntegrationEventRepository);
     }
 
+    @Test
+    void recover_withNullExceptionArg_throwsNullPointerException() {
+        // given — null exception causes NPE on e.getMessage() / e.getClass().getName()
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(null, event))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_withExceptionMessageExceedingColumnLimit_persistsFullMessage() throws Exception {
+        // given — exception message exceeding the 2000-char column limit at Java level
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final String longMessage = "E".repeat(3000);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException(longMessage);
+
+        // when
+        sut.recover(exception, event);
+
+        // then — Java level accepts the full message; DB truncation is a persistence concern
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo(longMessage);
+        assertThat(((String) getField(captor.getValue(), "exceptionMessage")).length()).isEqualTo(3000);
+    }
+
+    @Test
+    void recover_eventPayloadContainsUsernameAndEmail() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventPayload"))
+                .contains("teacher1")
+                .contains("teacher1@example.com");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

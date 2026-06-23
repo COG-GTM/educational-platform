@@ -800,4 +800,31 @@ class AsyncConfigTest {
         assertThat(exec1.getThreadNamePrefix()).isEqualTo(exec2.getThreadNamePrefix())
                 .isEqualTo("integration-event-");
     }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withVeryLongExceptionMessage_handlesWithoutThrowing() throws NoSuchMethodException {
+        // given — very long exception message near logging buffer limits
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        String longMessage = "X".repeat(5000);
+        RuntimeException exception = new RuntimeException(longMessage);
+        var method = AsyncConfigTest.class
+                .getDeclaredMethod("asyncUncaughtExceptionHandler_withVeryLongExceptionMessage_handlesWithoutThrowing");
+
+        // when/then — should not throw
+        handler.handleUncaughtException(exception, method, "param1", "param2");
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withDeeplyCausedException_handlesWithoutThrowing() throws NoSuchMethodException {
+        // given — deeply nested exception cause chain
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Exception root = new java.io.IOException("disk full");
+        Exception mid = new RuntimeException("data access failed", root);
+        Exception top = new IllegalStateException("handler failure", mid);
+        var method = AsyncConfigTest.class
+                .getDeclaredMethod("asyncUncaughtExceptionHandler_withDeeplyCausedException_handlesWithoutThrowing");
+
+        // when/then — should not throw
+        handler.handleUncaughtException(top, method, "event-data");
+    }
 }
