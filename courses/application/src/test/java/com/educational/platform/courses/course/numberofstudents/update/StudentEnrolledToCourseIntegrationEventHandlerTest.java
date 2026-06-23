@@ -1045,6 +1045,55 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("DB error");
     }
 
+    @Test
+    void handleStudentEnrolledToCourseEvent_nullPointerException_rethrows() {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        doThrow(new NullPointerException("course entity was null"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("course entity was null");
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_withDeeplyNestedCauseChain_persistsTopLevelMessage() throws Exception {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final java.io.IOException rootCause = new java.io.IOException("socket closed");
+        final java.sql.SQLException midCause = new java.sql.SQLException("connection reset", rootCause);
+        final DataAccessResourceFailureException exception =
+                new DataAccessResourceFailureException("Could not open connection", midCause);
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Could not open connection");
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo(DataAccessResourceFailureException.class.getName());
+    }
+
+    @Test
+    void recover_withIdenticalEventDataTwice_producesIndependentRecords() throws Exception {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event1 = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final StudentEnrolledToCourseIntegrationEvent event2 = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        sut.recover(exception, event1);
+        sut.recover(exception, event2);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).hasSize(2);
+        assertThat(captor.getAllValues().get(0)).isNotSameAs(captor.getAllValues().get(1));
+        assertThat(getField(captor.getAllValues().get(0), "eventPayload"))
+                .isEqualTo(getField(captor.getAllValues().get(1), "eventPayload"));
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
