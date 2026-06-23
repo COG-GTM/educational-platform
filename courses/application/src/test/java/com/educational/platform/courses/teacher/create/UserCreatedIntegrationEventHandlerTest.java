@@ -2643,6 +2643,105 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(payload).contains("email=user1@example.com");
     }
 
+    // --- Real-world SQL exception subtypes in recover ---
+
+    @Test
+    void recover_withCannotAcquireLockException_persistsCorrectClassName() throws Exception {
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final org.springframework.dao.CannotAcquireLockException exception =
+                new org.springframework.dao.CannotAcquireLockException("Lock wait timeout exceeded");
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.CannotAcquireLockException");
+        assertThat(getField(captor.getValue(), "exceptionMessage"))
+                .isEqualTo("Lock wait timeout exceeded");
+    }
+
+    @Test
+    void recover_withDeadlockLoserDataAccessException_persistsCorrectClassName() throws Exception {
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final org.springframework.dao.DeadlockLoserDataAccessException exception =
+                new org.springframework.dao.DeadlockLoserDataAccessException("Deadlock found when trying to get lock", null);
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.DeadlockLoserDataAccessException");
+    }
+
+    @Test
+    void recover_withQueryTimeoutException_persistsCorrectClassName() throws Exception {
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final org.springframework.dao.QueryTimeoutException exception =
+                new org.springframework.dao.QueryTimeoutException("Query timed out after 30s");
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.QueryTimeoutException");
+        assertThat(getField(captor.getValue(), "exceptionMessage"))
+                .isEqualTo("Query timed out after 30s");
+    }
+
+    @Test
+    void recover_withPessimisticLockingFailureException_persistsCorrectClassName() throws Exception {
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final org.springframework.dao.PessimisticLockingFailureException exception =
+                new org.springframework.dao.PessimisticLockingFailureException("Could not obtain pessimistic lock");
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.PessimisticLockingFailureException");
+    }
+
+    // --- Event immutability after handler/recover invocation ---
+
+    @Test
+    void handleUserCreatedEvent_eventUnchangedAfterHandling() {
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+
+        sut.handleUserCreatedEvent(event);
+
+        assertThat(event.username()).isEqualTo("teacher1");
+        assertThat(event.email()).isEqualTo("teacher1@test.com");
+    }
+
+    @Test
+    void recover_eventUnchangedAfterRecovery() {
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        sut.recover(exception, event);
+
+        assertThat(event.username()).isEqualTo("teacher1");
+        assertThat(event.email()).isEqualTo("teacher1@test.com");
+    }
+
+    @Test
+    void recover_sameEventInstance_canBeUsedForMultipleRecoverCalls() {
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataAccessResourceFailureException exception1 = new DataAccessResourceFailureException("first");
+        final DataAccessResourceFailureException exception2 = new DataAccessResourceFailureException("second");
+
+        sut.recover(exception1, event);
+        sut.recover(exception2, event);
+
+        assertThat(event.username()).isEqualTo("teacher1");
+        assertThat(event.email()).isEqualTo("teacher1@test.com");
+        verify(failedIntegrationEventRepository, times(2)).save(any(FailedIntegrationEventRecord.class));
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

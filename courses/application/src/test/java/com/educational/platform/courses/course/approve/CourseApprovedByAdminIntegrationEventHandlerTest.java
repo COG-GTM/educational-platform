@@ -2538,6 +2538,109 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         assertThat(payload).contains("courseId=123e4567-e89b-12d3-a456-426655440001");
     }
 
+    // --- Real-world SQL exception subtypes in recover ---
+
+    @Test
+    void recover_withCannotAcquireLockException_persistsCorrectClassName() throws Exception {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.CannotAcquireLockException exception =
+                new org.springframework.dao.CannotAcquireLockException("Lock wait timeout exceeded");
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.CannotAcquireLockException");
+        assertThat(getField(captor.getValue(), "exceptionMessage"))
+                .isEqualTo("Lock wait timeout exceeded");
+    }
+
+    @Test
+    void recover_withDeadlockLoserDataAccessException_persistsCorrectClassName() throws Exception {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.DeadlockLoserDataAccessException exception =
+                new org.springframework.dao.DeadlockLoserDataAccessException("Deadlock found when trying to get lock", null);
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.DeadlockLoserDataAccessException");
+    }
+
+    @Test
+    void recover_withQueryTimeoutException_persistsCorrectClassName() throws Exception {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.QueryTimeoutException exception =
+                new org.springframework.dao.QueryTimeoutException("Query timed out after 30s");
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.QueryTimeoutException");
+        assertThat(getField(captor.getValue(), "exceptionMessage"))
+                .isEqualTo("Query timed out after 30s");
+    }
+
+    @Test
+    void recover_withPessimisticLockingFailureException_persistsCorrectClassName() throws Exception {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.PessimisticLockingFailureException exception =
+                new org.springframework.dao.PessimisticLockingFailureException("Could not obtain pessimistic lock");
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.PessimisticLockingFailureException");
+    }
+
+    // --- Event immutability after handler/recover invocation ---
+
+    @Test
+    void handleCourseApprovedByAdminEvent_eventUnchangedAfterHandling() {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+
+        sut.handleCourseApprovedByAdminEvent(event);
+
+        assertThat(event.courseId()).isEqualTo(uuid);
+    }
+
+    @Test
+    void recover_eventUnchangedAfterRecovery() {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        sut.recover(exception, event);
+
+        assertThat(event.courseId()).isEqualTo(uuid);
+    }
+
+    @Test
+    void recover_sameEventInstance_canBeUsedForMultipleRecoverCalls() {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception1 = new DataAccessResourceFailureException("first");
+        final DataAccessResourceFailureException exception2 = new DataAccessResourceFailureException("second");
+
+        sut.recover(exception1, event);
+        sut.recover(exception2, event);
+
+        assertThat(event.courseId()).isEqualTo(uuid);
+        verify(failedIntegrationEventRepository, times(2)).save(any(FailedIntegrationEventRecord.class));
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
