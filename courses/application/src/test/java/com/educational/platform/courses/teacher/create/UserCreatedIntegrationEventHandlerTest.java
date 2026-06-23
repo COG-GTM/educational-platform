@@ -1326,6 +1326,37 @@ class UserCreatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_withObjectOptimisticLockingFailureException_persistsCorrectExceptionMessage() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@edu.com");
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionMessage must be correctly persisted regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("lock failure");
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_persistsCorrectExceptionMessage() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@edu.com");
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionMessage must be correctly persisted regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("constraint error");
+    }
+
+    @Test
     void handleUserCreatedEvent_nullPointerException_rethrows() {
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@edu.com");
         doThrow(new NullPointerException("teacher entity was null"))

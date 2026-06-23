@@ -1524,6 +1524,39 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_withObjectOptimisticLockingFailureException_persistsCorrectExceptionMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionMessage must be correctly persisted regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("lock failure");
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_persistsCorrectExceptionMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionMessage must be correctly persisted regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("constraint error");
+    }
+
+    @Test
     void handleCourseRatingRecalculatedEvent_nullPointerException_rethrows() {
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
