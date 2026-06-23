@@ -1448,6 +1448,78 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .contains("4.5");
     }
 
+    @Test
+    void recover_withZeroRating_eventPayloadContainsZero() throws Exception {
+        // given — zero is a valid rating edge case; verify it appears in the persisted toString payload
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 0.0);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventPayload"))
+                .contains("123e4567-e89b-12d3-a456-426655440001")
+                .contains("0.0");
+    }
+
+    @Test
+    void recover_withNegativeInfinityRating_eventPayloadContainsInfinity() throws Exception {
+        // given — Double.NEGATIVE_INFINITY serializes as "-Infinity" in toString
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.NEGATIVE_INFINITY);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventPayload"))
+                .contains("123e4567-e89b-12d3-a456-426655440001")
+                .contains("-Infinity");
+    }
+
+    @Test
+    void recover_withPositiveInfinityRating_eventPayloadContainsInfinity() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.POSITIVE_INFINITY);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventPayload"))
+                .contains("123e4567-e89b-12d3-a456-426655440001")
+                .contains("Infinity");
+    }
+
+    @Test
+    void recover_withMaxValueRating_eventPayloadContainsRating() throws Exception {
+        // given — Double.MAX_VALUE has a very long string representation
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.MAX_VALUE);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventPayload"))
+                .contains("123e4567-e89b-12d3-a456-426655440001")
+                .contains(String.valueOf(Double.MAX_VALUE));
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
