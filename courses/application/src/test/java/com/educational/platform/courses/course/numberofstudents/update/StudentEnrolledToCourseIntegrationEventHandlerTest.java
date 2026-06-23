@@ -1431,6 +1431,8 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(captor.getAllValues().get(0)).isNotSameAs(captor.getAllValues().get(1));
         assertThat(getField(captor.getAllValues().get(0), "eventPayload"))
                 .isEqualTo(getField(captor.getAllValues().get(1), "eventPayload"));
+        assertThat(getField(captor.getAllValues().get(0), "eventClassName"))
+                .isEqualTo(getField(captor.getAllValues().get(1), "eventClassName"));
     }
 
     @Test
