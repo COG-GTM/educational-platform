@@ -1237,6 +1237,20 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_withNullException_repositoryNeverInvoked() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+
+        // when
+        try { sut.recover(null, event); } catch (NullPointerException ignored) { }
+
+        // then — NPE occurs before repository.save(), so repo is never touched
+        verifyNoInteractions(failedIntegrationEventRepository);
+        verifyNoInteractions(increaseNumberOfStudentsCommandHandler);
+    }
+
+    @Test
     void recover_withExceptionMessageExceedingColumnLimit_persistsFullMessage() throws Exception {
         // given — exception message exceeding the 2000-char column limit at Java level
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
