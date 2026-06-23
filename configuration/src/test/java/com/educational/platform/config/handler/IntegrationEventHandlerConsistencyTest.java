@@ -886,6 +886,161 @@ class IntegrationEventHandlerConsistencyTest {
         }
     }
 
+    @Test
+    void allHandlers_eventListenerMethod_doesNotDeclareCheckedExceptions() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            assertThat(method.getExceptionTypes())
+                    .as("@EventListener in %s should not declare checked exceptions — "
+                            + "@Async void methods silently swallow checked exceptions without triggering "
+                            + "AsyncUncaughtExceptionHandler properly", handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_recoverMethod_doesNotDeclareCheckedExceptions() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findRecoverMethod(handlerClass);
+            assertThat(method.getExceptionTypes())
+                    .as("@Recover in %s should not declare checked exceptions — "
+                            + "recovery runs in the same async thread and should handle failures internally",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_eventListenerMethod_isNotFinal() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            assertThat(Modifier.isFinal(method.getModifiers()))
+                    .as("@EventListener method in %s must not be final — CGLIB proxies override it for @Async and @Retryable",
+                            handlerClass.getSimpleName())
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void allHandlers_recoverMethod_isNotFinal() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findRecoverMethod(handlerClass);
+            assertThat(Modifier.isFinal(method.getModifiers()))
+                    .as("@Recover method in %s must not be final — Spring Retry discovers and invokes it via proxy",
+                            handlerClass.getSimpleName())
+                    .isFalse();
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    void allHandlers_retryableValueAlias_isEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(retryable.value())
+                    .as("@Retryable.value() in %s should be empty — use retryFor() instead",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    void allHandlers_retryableIncludeAlias_isEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(retryable.include())
+                    .as("@Retryable.include() in %s should be empty — use retryFor() instead",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    void allHandlers_retryableExcludeAlias_isEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(retryable.exclude())
+                    .as("@Retryable.exclude() in %s should be empty — use noRetryFor() instead",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_backoffValueAlias_isDefaultWhenDelayIsSet() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Backoff backoff = method.getAnnotation(Retryable.class).backoff();
+            assertThat(backoff.delay())
+                    .as("@Backoff.delay() in %s should be explicitly set (overrides value())",
+                            handlerClass.getSimpleName())
+                    .isGreaterThan(0);
+            assertThat(backoff.value())
+                    .as("@Backoff.value() in %s should be default 1000 — delay() overrides it",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(1000L);
+        }
+    }
+
+    @Test
+    void allHandlers_haveExactlyTwoDeclaredPublicMethods() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            long publicMethodCount = Arrays.stream(handlerClass.getDeclaredMethods())
+                    .filter(m -> Modifier.isPublic(m.getModifiers()))
+                    .count();
+            assertThat(publicMethodCount)
+                    .as("Handler %s should have exactly 2 public methods (handle + recover) — "
+                            + "additional public methods may be accidentally proxied by Spring AOP",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(2);
+        }
+    }
+
+    @Test
+    void allHandlers_eventParameterType_toStringIncludesAllComponentNames() throws Exception {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Class<?> eventType = method.getParameterTypes()[0];
+            assertThat(eventType.isRecord()).isTrue();
+
+            var components = eventType.getRecordComponents();
+            assertThat(components)
+                    .as("Event type %s in %s should have at least one record component for diagnostics",
+                            eventType.getSimpleName(), handlerClass.getSimpleName())
+                    .isNotEmpty();
+
+            // Instantiate with default values to verify toString() format
+            Object[] args = Arrays.stream(components)
+                    .map(c -> defaultValueFor(c.getType()))
+                    .toArray();
+            Object event = eventType.getDeclaredConstructors()[0].newInstance(args);
+            String toStringOutput = event.toString();
+
+            // Verify toString() includes all component names (critical for dead-letter diagnostics)
+            for (var component : components) {
+                assertThat(toStringOutput)
+                        .as("Event %s toString() should include component name '%s' for dead-letter record diagnostics",
+                                eventType.getSimpleName(), component.getName())
+                        .contains(component.getName());
+            }
+        }
+    }
+
+    private Object defaultValueFor(Class<?> type) {
+        if (type == java.util.UUID.class) return java.util.UUID.fromString("00000000-0000-0000-0000-000000000000");
+        if (type == String.class) return "test-value";
+        if (type == double.class || type == Double.class) return 0.0;
+        if (type == int.class || type == Integer.class) return 0;
+        if (type == long.class || type == Long.class) return 0L;
+        if (type == boolean.class || type == Boolean.class) return false;
+        throw new IllegalArgumentException("Unsupported type for default value: " + type);
+    }
+
     private Method findRecoverMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.getAnnotation(Recover.class) != null)

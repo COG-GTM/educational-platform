@@ -97,4 +97,20 @@ class RetryConfigTest {
         assertThat(RetryConfig.class.getDeclaredConstructors()).hasSize(1);
         assertThat(RetryConfig.class.getDeclaredConstructors()[0].getParameterCount()).isZero();
     }
+
+    @Test
+    void enableRetry_orderValue_isIntegerMaxValue() {
+        EnableRetry enableRetry = RetryConfig.class.getAnnotation(EnableRetry.class);
+        assertThat(enableRetry).isNotNull();
+        assertThat(enableRetry.order())
+                .as("@EnableRetry.order should be Integer.MAX_VALUE (LOWEST_PRECEDENCE) — "
+                        + "retry advisor wraps closest to target method, inside async proxy")
+                .isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
+    void retryConfig_doesNotHaveTransactionalAnnotation() {
+        assertThat(RetryConfig.class.getAnnotation(
+                org.springframework.transaction.annotation.Transactional.class)).isNull();
+    }
 }

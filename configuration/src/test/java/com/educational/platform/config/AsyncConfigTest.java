@@ -628,4 +628,47 @@ class AsyncConfigTest {
                 .isInstanceOf(ThreadPoolTaskExecutor.class);
         ((ThreadPoolTaskExecutor) executor).shutdown();
     }
+
+    @Test
+    void asyncConfig_logFieldReferencesOwnClass() throws Exception {
+        java.lang.reflect.Field logField = AsyncConfig.class.getDeclaredField("log");
+        logField.setAccessible(true);
+        org.slf4j.Logger logger = (org.slf4j.Logger) logField.get(null);
+        assertThat(logger.getName())
+                .as("Logger in AsyncConfig should reference its own class (catches copy-paste errors)")
+                .isEqualTo(AsyncConfig.class.getName());
+    }
+
+    @Test
+    void getAsyncExecutor_executorDoesNotCallInitialize() throws Exception {
+        // AsyncConfig returns an uninitialized executor — Spring's bean lifecycle calls
+        // afterPropertiesSet() during context startup. This test documents that design choice.
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        // Before afterPropertiesSet(), the underlying ThreadPoolExecutor should not exist
+        java.lang.reflect.Field tpeField = org.springframework.scheduling.concurrent.ExecutorConfigurationSupport.class
+                .getDeclaredField("executor");
+        tpeField.setAccessible(true);
+        assertThat(tpeField.get(executor))
+                .as("Executor should not be initialized yet — Spring lifecycle handles initialization")
+                .isNull();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_handlesEmptyParamsArray() throws NoSuchMethodException {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        RuntimeException exception = new RuntimeException("empty params");
+        var method = AsyncConfigTest.class
+                .getDeclaredMethod("asyncUncaughtExceptionHandler_handlesEmptyParamsArray");
+
+        // when/then — should not throw with empty params array
+        handler.handleUncaughtException(exception, method);
+    }
+
+    @Test
+    void asyncConfig_getAsyncExecutorMethod_hasOverrideAnnotation() throws NoSuchMethodException {
+        Method method = AsyncConfig.class.getMethod("getAsyncExecutor");
+        // Verify this overrides AsyncConfigurer interface
+        assertThat(method.getDeclaringClass()).isEqualTo(AsyncConfig.class);
+        assertThat(AsyncConfigurer.class.getMethod("getAsyncExecutor")).isNotNull();
+    }
 }

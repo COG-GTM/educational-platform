@@ -168,6 +168,42 @@ class IntegrationEventHandlerContractTest {
                 .isEqualTo(ALL_HANDLER_CLASSES.size());
     }
 
+    @Test
+    void allHandlers_recoverMethod_secondParamMatchesEventListenerParam() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method handleMethod = findEventListenerMethod(handlerClass);
+            Method recoverMethod = findRecoverMethod(handlerClass);
+            Class<?> handleEventType = handleMethod.getParameterTypes()[0];
+            Class<?> recoverEventType = recoverMethod.getParameterTypes()[1];
+            assertThat(recoverEventType)
+                    .as("@Recover event param in %s must exactly match @EventListener event param "
+                            + "for Spring Retry convention-based method resolution", handlerClass.getSimpleName())
+                    .isEqualTo(handleEventType);
+        }
+    }
+
+    @Test
+    void allHandlers_eventListenerMethod_isNotFinal() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            assertThat(java.lang.reflect.Modifier.isFinal(method.getModifiers()))
+                    .as("@EventListener in %s must not be final — CGLIB cannot proxy final methods",
+                            handlerClass.getSimpleName())
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void allHandlers_recoverMethod_isNotFinal() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findRecoverMethod(handlerClass);
+            assertThat(java.lang.reflect.Modifier.isFinal(method.getModifiers()))
+                    .as("@Recover in %s must not be final — Spring Retry needs to proxy recover methods",
+                            handlerClass.getSimpleName())
+                    .isFalse();
+        }
+    }
+
     private Method findEventListenerMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.getAnnotation(EventListener.class) != null)
