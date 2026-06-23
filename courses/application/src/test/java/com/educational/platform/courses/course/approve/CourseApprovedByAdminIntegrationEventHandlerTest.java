@@ -1184,6 +1184,67 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
                 .isEqualTo(CourseApprovedByAdminIntegrationEvent.class.getName());
     }
 
+    @Test
+    void handleCourseApprovedByAdminEvent_nullPointerException_rethrows() {
+        // given — NPE is the most common unchecked exception; it is NOT a DataAccessException
+        // so it should propagate without triggering @Recover
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new NullPointerException("course entity was null"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("course entity was null");
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_withDeeplyNestedCauseChain_persistsTopLevelMessage() throws Exception {
+        // given — real-world DB failures often have deep cause chains:
+        // DataAccessResourceFailureException -> SQLException -> IOException
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final java.io.IOException rootCause = new java.io.IOException("socket closed");
+        final java.sql.SQLException midCause = new java.sql.SQLException("connection reset", rootCause);
+        final DataAccessResourceFailureException exception =
+                new DataAccessResourceFailureException("Could not open connection", midCause);
+
+        // when
+        sut.recover(exception, event);
+
+        // then — only the top-level message should be persisted, not the nested cause messages
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Could not open connection");
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo(DataAccessResourceFailureException.class.getName());
+    }
+
+    @Test
+    void recover_withIdenticalEventDataTwice_producesIndependentRecordsWithTimestamps() throws Exception {
+        // given — same event data submitted twice (e.g., duplicate event delivery)
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event1 = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final CourseApprovedByAdminIntegrationEvent event2 = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event1);
+        sut.recover(exception, event2);
+
+        // then — two independent records should be saved, each with its own timestamp
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).hasSize(2);
+        final FailedIntegrationEventRecord record1 = captor.getAllValues().get(0);
+        final FailedIntegrationEventRecord record2 = captor.getAllValues().get(1);
+        assertThat(record1).isNotSameAs(record2);
+        assertThat(getField(record1, "eventPayload")).isEqualTo(getField(record2, "eventPayload"));
+        assertThat(getField(record1, "eventClassName")).isEqualTo(getField(record2, "eventClassName"));
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
