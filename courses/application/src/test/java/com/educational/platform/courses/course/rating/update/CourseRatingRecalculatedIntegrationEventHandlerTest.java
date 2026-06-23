@@ -2811,6 +2811,62 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         verifyNoInteractions(updateCourseRatingCommandHandler);
     }
 
+    @Test
+    void recover_afterSuccessfulHandle_persistsIndependentRecord() throws Exception {
+        // given — handler succeeds first, then recover is called; verifies no shared state
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseRatingRecalculatedIntegrationEvent successEvent = new CourseRatingRecalculatedIntegrationEvent(uuid1, 4.5);
+        final CourseRatingRecalculatedIntegrationEvent failedEvent = new CourseRatingRecalculatedIntegrationEvent(uuid2, 3.0);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB down");
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(successEvent);
+        sut.recover(exception, failedEvent);
+
+        // then
+        verify(updateCourseRatingCommandHandler).handle(any());
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(failedEvent.toString());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("DB down");
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_andDeeplyNestedCause_persistsTopLevelMessage() throws Exception {
+        // given — deep cause chain with ConcurrencyFailureException (not DARFE)
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final java.io.IOException rootCause = new java.io.IOException("socket closed");
+        final java.sql.SQLException midCause = new java.sql.SQLException("connection reset", rootCause);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock acquisition failed", midCause);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Lock acquisition failed");
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.ConcurrencyFailureException");
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_exceptionWithNullMessage_rethrowsPreservingNullMessage() {
+        // given — exception with null message should be rethrown with null message intact
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException((String) null);
+        doThrow(exception).when(updateCourseRatingCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isSameAs(exception)
+                .hasMessage(null);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
