@@ -1371,6 +1371,69 @@ class UserCreatedIntegrationEventHandlerTest {
                 .isEqualTo(getField(captor.getAllValues().get(1), "eventPayload"));
     }
 
+    @Test
+    void handleUserCreatedEvent_DataAccessResourceFailureExceptionFromCommandHandler_preservesExceptionIdentity() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException originalException =
+                new DataAccessResourceFailureException("DB connection lost");
+        doThrow(originalException).when(createTeacherCommandHandler).handle(any());
+
+        // when/then — catch(Exception e) { throw e; } must not wrap the primary retryable exception
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_exceptionClassNameIsFullyQualified() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.orm.ObjectOptimisticLockingFailureException");
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_exceptionClassNameIsFullyQualified() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.DataIntegrityViolationException");
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — OOLF lives in org.springframework.orm, not org.springframework.dao
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.orm.");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

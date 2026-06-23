@@ -1572,6 +1572,73 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .isEqualTo(getField(captor.getAllValues().get(1), "eventPayload"));
     }
 
+    @Test
+    void handleCourseRatingRecalculatedEvent_DataAccessResourceFailureExceptionFromCommandHandler_preservesExceptionIdentity() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException originalException =
+                new DataAccessResourceFailureException("DB connection lost");
+        doThrow(originalException).when(updateCourseRatingCommandHandler).handle(any());
+
+        // when/then — catch(Exception e) { throw e; } must not wrap the primary retryable exception
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_exceptionClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.orm.ObjectOptimisticLockingFailureException");
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_exceptionClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.DataIntegrityViolationException");
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — OOLF lives in org.springframework.orm, not org.springframework.dao
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.orm.");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
