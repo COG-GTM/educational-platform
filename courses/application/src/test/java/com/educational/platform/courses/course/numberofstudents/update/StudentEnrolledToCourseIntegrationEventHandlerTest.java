@@ -1180,6 +1180,50 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         verify(increaseNumberOfStudentsCommandHandler).handle(captor.capture());
         assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", courseId);
     }
+    @Test
+    void constructor_withNullCommandHandler_constructsSuccessfully() {
+        new StudentEnrolledToCourseIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
+    }
+
+    @Test
+    void constructor_withNullRepository_constructsSuccessfully() {
+        new StudentEnrolledToCourseIntegrationEventHandler(mock(IncreaseNumberOfStudentsCommandHandler.class), null);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_withNullCommandHandler_throwsNullPointerException() {
+        // given
+        var handler = new StudentEnrolledToCourseIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
+        var event = new StudentEnrolledToCourseIntegrationEvent(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"), "student1");
+
+        // when/then
+        assertThatThrownBy(() -> handler.handleStudentEnrolledToCourseEvent(event))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void recover_withNullRepository_throwsNullPointerException() {
+        // given
+        var handler = new StudentEnrolledToCourseIntegrationEventHandler(mock(IncreaseNumberOfStudentsCommandHandler.class), null);
+        var event = new StudentEnrolledToCourseIntegrationEvent(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"), "student1");
+        var exception = new DataAccessResourceFailureException("DB error");
+
+        // when/then
+        assertThatThrownBy(() -> handler.recover(exception, event))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void recover_withNullEvent_throwsNullPointerException() {
+        // given
+        var exception = new DataAccessResourceFailureException("DB error");
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(exception, null))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

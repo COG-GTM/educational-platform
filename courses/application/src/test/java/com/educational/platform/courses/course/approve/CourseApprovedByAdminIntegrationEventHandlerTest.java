@@ -1038,6 +1038,50 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
                 .as("Recover method must not be static — Spring Retry discovers it via proxy")
                 .isFalse();
     }
+    @Test
+    void constructor_withNullCommandHandler_constructsSuccessfully() {
+        new CourseApprovedByAdminIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
+    }
+
+    @Test
+    void constructor_withNullRepository_constructsSuccessfully() {
+        new CourseApprovedByAdminIntegrationEventHandler(mock(ApproveCourseCommandHandler.class), null);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_withNullCommandHandler_throwsNullPointerException() {
+        // given
+        var handler = new CourseApprovedByAdminIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
+        var event = new CourseApprovedByAdminIntegrationEvent(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"));
+
+        // when/then
+        assertThatThrownBy(() -> handler.handleCourseApprovedByAdminEvent(event))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void recover_withNullRepository_throwsNullPointerException() {
+        // given
+        var handler = new CourseApprovedByAdminIntegrationEventHandler(mock(ApproveCourseCommandHandler.class), null);
+        var event = new CourseApprovedByAdminIntegrationEvent(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"));
+        var exception = new DataAccessResourceFailureException("DB error");
+
+        // when/then
+        assertThatThrownBy(() -> handler.recover(exception, event))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void recover_withNullEvent_throwsNullPointerException() {
+        // given
+        var exception = new DataAccessResourceFailureException("DB error");
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(exception, null))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

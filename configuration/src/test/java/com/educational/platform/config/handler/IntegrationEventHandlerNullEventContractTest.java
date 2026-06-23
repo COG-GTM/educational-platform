@@ -13,6 +13,7 @@ import com.educational.platform.courses.teacher.create.CreateTeacherCommandHandl
 import com.educational.platform.courses.teacher.create.UserCreatedIntegrationEventHandler;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -103,6 +104,89 @@ class IntegrationEventHandlerNullEventContractTest {
         try { new UserCreatedIntegrationEventHandler(
                 mock(CreateTeacherCommandHandler.class), repo5)
                 .handleUserCreatedEvent(null); } catch (NullPointerException ignored) {}
+
+        verifyNoInteractions(repo1, repo2, repo3, repo4, repo5);
+    }
+
+    @Test
+    void sendCourseToApproveHandler_recover_nullEvent_throwsNullPointerException() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+        var handler = new SendCourseToApproveIntegrationEventHandler(
+                mock(CreateCourseProposalCommandHandler.class), repo);
+
+        assertThatThrownBy(() -> handler.recover(new DataAccessResourceFailureException("err"), null))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(repo);
+    }
+
+    @Test
+    void courseApprovedByAdminHandler_recover_nullEvent_throwsNullPointerException() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+        var handler = new CourseApprovedByAdminIntegrationEventHandler(
+                mock(ApproveCourseCommandHandler.class), repo);
+
+        assertThatThrownBy(() -> handler.recover(new DataAccessResourceFailureException("err"), null))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(repo);
+    }
+
+    @Test
+    void studentEnrolledToCourseHandler_recover_nullEvent_throwsNullPointerException() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+        var handler = new StudentEnrolledToCourseIntegrationEventHandler(
+                mock(IncreaseNumberOfStudentsCommandHandler.class), repo);
+
+        assertThatThrownBy(() -> handler.recover(new DataAccessResourceFailureException("err"), null))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(repo);
+    }
+
+    @Test
+    void courseRatingRecalculatedHandler_recover_nullEvent_throwsNullPointerException() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+        var handler = new CourseRatingRecalculatedIntegrationEventHandler(
+                mock(UpdateCourseRatingCommandHandler.class), repo);
+
+        assertThatThrownBy(() -> handler.recover(new DataAccessResourceFailureException("err"), null))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(repo);
+    }
+
+    @Test
+    void userCreatedHandler_recover_nullEvent_throwsNullPointerException() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+        var handler = new UserCreatedIntegrationEventHandler(
+                mock(CreateTeacherCommandHandler.class), repo);
+
+        assertThatThrownBy(() -> handler.recover(new DataAccessResourceFailureException("err"), null))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(repo);
+    }
+
+    @Test
+    void allHandlers_recover_nullEvent_doesNotInteractWithRepository() {
+        var exception = new DataAccessResourceFailureException("err");
+        var repo1 = mock(FailedIntegrationEventRepository.class);
+        var repo2 = mock(FailedIntegrationEventRepository.class);
+        var repo3 = mock(FailedIntegrationEventRepository.class);
+        var repo4 = mock(FailedIntegrationEventRepository.class);
+        var repo5 = mock(FailedIntegrationEventRepository.class);
+
+        try { new SendCourseToApproveIntegrationEventHandler(
+                mock(CreateCourseProposalCommandHandler.class), repo1)
+                .recover(exception, null); } catch (NullPointerException ignored) {}
+        try { new CourseApprovedByAdminIntegrationEventHandler(
+                mock(ApproveCourseCommandHandler.class), repo2)
+                .recover(exception, null); } catch (NullPointerException ignored) {}
+        try { new StudentEnrolledToCourseIntegrationEventHandler(
+                mock(IncreaseNumberOfStudentsCommandHandler.class), repo3)
+                .recover(exception, null); } catch (NullPointerException ignored) {}
+        try { new CourseRatingRecalculatedIntegrationEventHandler(
+                mock(UpdateCourseRatingCommandHandler.class), repo4)
+                .recover(exception, null); } catch (NullPointerException ignored) {}
+        try { new UserCreatedIntegrationEventHandler(
+                mock(CreateTeacherCommandHandler.class), repo5)
+                .recover(exception, null); } catch (NullPointerException ignored) {}
 
         verifyNoInteractions(repo1, repo2, repo3, repo4, repo5);
     }
