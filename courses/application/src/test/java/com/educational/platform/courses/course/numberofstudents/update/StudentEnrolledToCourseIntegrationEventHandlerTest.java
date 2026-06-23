@@ -1096,7 +1096,6 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
 
     @Test
     void handleStudentEnrolledToCourseEvent_withNullEvent_throwsNullPointerException() {
-        // when/then — documents the null-event contract
         assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(null))
                 .isInstanceOf(NullPointerException.class);
         verifyNoInteractions(failedIntegrationEventRepository);
@@ -1104,16 +1103,13 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
 
     @Test
     void recover_withVeryLongExceptionMessage_persistsFullMessage() throws Exception {
-        // given — exception message near the 2000-char column limit
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
         final String longMessage = "X".repeat(2000);
         final DataAccessResourceFailureException exception = new DataAccessResourceFailureException(longMessage);
 
-        // when
         sut.recover(exception, event);
 
-        // then
         final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
         verify(failedIntegrationEventRepository).save(captor.capture());
         assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo(longMessage);
@@ -1122,22 +1118,68 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
 
     @Test
     void recover_withSpecialCharsInUsername_persistsEventPayload() throws Exception {
-        // given — special characters in username field
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final StudentEnrolledToCourseIntegrationEvent event =
                 new StudentEnrolledToCourseIntegrationEvent(uuid, "user+special@chars.com");
         final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
 
-        // when
         sut.recover(exception, event);
 
-        // then
         final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
         verify(failedIntegrationEventRepository).save(captor.capture());
         assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
         assertThat(getField(captor.getValue(), "eventPayload").toString()).contains("user+special@chars.com");
     }
 
+    @Test
+    void recover_withOOLFENullCause_persistsCorrectFields() throws Exception {
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(courseId, "student1");
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("optimistic lock conflict", (Throwable) null);
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo(ObjectOptimisticLockingFailureException.class.getName());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("optimistic lock conflict");
+        assertThat((FailedIntegrationEventRecord.Status) getField(captor.getValue(), "status"))
+                .isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+    }
+
+    @Test
+    void handlerMethod_isNotStatic() throws NoSuchMethodException {
+        Method method = StudentEnrolledToCourseIntegrationEventHandler.class
+                .getDeclaredMethod("handleStudentEnrolledToCourseEvent", StudentEnrolledToCourseIntegrationEvent.class);
+        assertThat(Modifier.isStatic(method.getModifiers()))
+                .as("Handler method must not be static — CGLIB cannot proxy static methods")
+                .isFalse();
+    }
+
+    @Test
+    void recoverMethod_isNotStatic() throws NoSuchMethodException {
+        Method method = StudentEnrolledToCourseIntegrationEventHandler.class
+                .getDeclaredMethod("recover", DataAccessException.class, StudentEnrolledToCourseIntegrationEvent.class);
+        assertThat(Modifier.isStatic(method.getModifiers()))
+                .as("Recover method must not be static — Spring Retry discovers it via proxy")
+                .isFalse();
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_unicodeUsername_commandReceivedCorrectCourseId() {
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event =
+                new StudentEnrolledToCourseIntegrationEvent(courseId, "\u00fc\u00f1\u00ee\u00e7\u00f8\u00f0\u00e9-student");
+
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> captor =
+                ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", courseId);
+    }
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

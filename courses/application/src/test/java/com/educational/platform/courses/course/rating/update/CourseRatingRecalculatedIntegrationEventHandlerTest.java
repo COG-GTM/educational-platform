@@ -1294,6 +1294,54 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThat(((String) getField(captor.getValue(), "exceptionMessage")).length()).isEqualTo(2000);
     }
 
+
+    @Test
+    void recover_withOOLFENullCause_persistsCorrectFields() throws Exception {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("optimistic lock conflict", (Throwable) null);
+
+        sut.recover(exception, event);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo(ObjectOptimisticLockingFailureException.class.getName());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("optimistic lock conflict");
+        assertThat((FailedIntegrationEventRecord.Status) getField(captor.getValue(), "status"))
+                .isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_negativeZeroRating_commandReceivedCorrectValue() {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, -0.0);
+
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        final ArgumentCaptor<UpdateCourseRatingCommand> captor = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(captor.capture());
+        assertThat(captor.getValue()).hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void handlerMethod_isNotStatic() throws NoSuchMethodException {
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getDeclaredMethod("handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+        assertThat(Modifier.isStatic(method.getModifiers()))
+                .as("Handler method must not be static — CGLIB cannot proxy static methods")
+                .isFalse();
+    }
+
+    @Test
+    void recoverMethod_isNotStatic() throws NoSuchMethodException {
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getDeclaredMethod("recover", DataAccessException.class, CourseRatingRecalculatedIntegrationEvent.class);
+        assertThat(Modifier.isStatic(method.getModifiers()))
+                .as("Recover method must not be static — Spring Retry discovers it via proxy")
+                .isFalse();
+    }
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

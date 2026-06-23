@@ -1031,6 +1031,48 @@ class IntegrationEventHandlerConsistencyTest {
         }
     }
 
+    @Test
+    void allHandlers_eventListenerMethodIsNotStatic() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            assertThat(Modifier.isStatic(method.getModifiers()))
+                    .as("@EventListener in %s must not be static — CGLIB cannot proxy static methods",
+                            handlerClass.getSimpleName())
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void allHandlers_recoverMethodIsNotStatic() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findRecoverMethod(handlerClass);
+            assertThat(Modifier.isStatic(method.getModifiers()))
+                    .as("@Recover in %s must not be static — Spring Retry discovers and invokes it via proxy",
+                            handlerClass.getSimpleName())
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void allHandlers_doNotHaveServiceAnnotation() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            assertThat(handlerClass.getAnnotation(org.springframework.stereotype.Service.class))
+                    .as("Handler %s should use @Component, not @Service — handlers are infrastructure, not business services",
+                            handlerClass.getSimpleName())
+                    .isNull();
+        }
+    }
+
+    @Test
+    void allHandlers_doNotHaveRepositoryAnnotation() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            assertThat(handlerClass.getAnnotation(org.springframework.stereotype.Repository.class))
+                    .as("Handler %s should use @Component, not @Repository — handlers are not data access objects",
+                            handlerClass.getSimpleName())
+                    .isNull();
+        }
+    }
+
     private Object defaultValueFor(Class<?> type) {
         if (type == java.util.UUID.class) return java.util.UUID.fromString("00000000-0000-0000-0000-000000000000");
         if (type == String.class) return "test-value";

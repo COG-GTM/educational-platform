@@ -676,22 +676,17 @@ class AsyncConfigTest {
 
     @Test
     void getAsyncExecutor_beforeInitialization_rejectsTaskSubmission() {
-        // given — executor not yet initialized (no afterPropertiesSet() call)
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
-
-        // when/then — submitting a task before initialization should fail
         assertThatThrownBy(() -> executor.execute(() -> {}))
                 .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     void getAsyncExecutor_afterInitialization_usesConfiguredThreadNamePrefix() throws Exception {
-        // given
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
         executor.afterPropertiesSet();
 
         try {
-            // when
             java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
             java.util.concurrent.atomic.AtomicReference<String> threadName = new java.util.concurrent.atomic.AtomicReference<>();
             executor.execute(() -> {
@@ -699,8 +694,6 @@ class AsyncConfigTest {
                 latch.countDown();
             });
             latch.await(5, java.util.concurrent.TimeUnit.SECONDS);
-
-            // then
             assertThat(threadName.get()).startsWith("integration-event-");
         } finally {
             executor.shutdown();
@@ -709,12 +702,51 @@ class AsyncConfigTest {
 
     @Test
     void asyncUncaughtExceptionHandler_nullMethod_throwsNullPointerException() {
-        // given
         AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
         RuntimeException exception = new RuntimeException("test error");
-
-        // when/then — null method triggers NPE during logging (Method.getName())
         assertThatThrownBy(() -> handler.handleUncaughtException(exception, null, "param"))
                 .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void asyncConfig_getAsyncUncaughtExceptionHandlerMethod_overridesAsyncConfigurer() throws NoSuchMethodException {
+        Method method = AsyncConfig.class.getMethod("getAsyncUncaughtExceptionHandler");
+        assertThat(method.getDeclaringClass()).isEqualTo(AsyncConfig.class);
+        assertThat(AsyncConfigurer.class.getMethod("getAsyncUncaughtExceptionHandler")).isNotNull();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_handlesNullParams() throws NoSuchMethodException {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        RuntimeException exception = new RuntimeException("null params test");
+        var method = AsyncConfigTest.class
+                .getDeclaredMethod("asyncUncaughtExceptionHandler_handlesNullParams");
+        handler.handleUncaughtException(exception, method, (Object[]) null);
+    }
+
+    @Test
+    void asyncConfig_hasNoPublicFields() {
+        long publicFieldCount = java.util.Arrays.stream(AsyncConfig.class.getDeclaredFields())
+                .filter(f -> java.lang.reflect.Modifier.isPublic(f.getModifiers()))
+                .count();
+        assertThat(publicFieldCount)
+                .as("AsyncConfig should not expose public fields")
+                .isZero();
+    }
+
+    @Test
+    void getAsyncExecutor_executorIsNotNull() {
+        Executor executor = asyncConfig.getAsyncExecutor();
+        assertThat(executor)
+                .as("getAsyncExecutor should never return null — Spring requires a valid executor")
+                .isNotNull();
+    }
+
+    @Test
+    void getAsyncUncaughtExceptionHandler_handlerIsNotNull() {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        assertThat(handler)
+                .as("getAsyncUncaughtExceptionHandler should never return null — Spring uses it for async error handling")
+                .isNotNull();
     }
 }
