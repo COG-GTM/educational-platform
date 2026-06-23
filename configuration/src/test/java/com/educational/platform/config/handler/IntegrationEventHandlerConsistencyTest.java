@@ -1083,6 +1083,79 @@ class IntegrationEventHandlerConsistencyTest {
         throw new IllegalArgumentException("Unsupported type for default value: " + type);
     }
 
+    @Test
+    void allHandlers_classNameEndsWithIntegrationEventHandler() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            assertThat(handlerClass.getSimpleName())
+                    .as("Handler %s should follow the *IntegrationEventHandler naming convention",
+                            handlerClass.getSimpleName())
+                    .endsWith("IntegrationEventHandler");
+        }
+    }
+
+    @Test
+    void allHandlers_eventClassNameFitsWithinRecordColumnLimit() {
+        // FailedIntegrationEventRecord.eventClassName is VARCHAR(500).
+        // Handlers persist event.getClass().getName() — if the FQCN exceeds 500 chars
+        // (e.g., after a deep package refactor), the DB insert silently truncates or fails.
+        int columnLimit = 500;
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Class<?> eventType = method.getParameterTypes()[0];
+            assertThat(eventType.getName().length())
+                    .as("Event FQCN '%s' used by %s must fit within @Column(length=%d)",
+                            eventType.getName(), handlerClass.getSimpleName(), columnLimit)
+                    .isLessThanOrEqualTo(columnLimit);
+        }
+    }
+
+    @Test
+    void allHandlers_retryForExceptionClassNamesFitWithinRecordColumnLimit() {
+        // FailedIntegrationEventRecord.exceptionClassName is VARCHAR(500).
+        // Handlers persist e.getClass().getName() in recover() — verify all declared
+        // retryFor exception FQCNs fit within the column limit.
+        int columnLimit = 500;
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            for (Class<? extends Throwable> exType : retryable.retryFor()) {
+                assertThat(exType.getName().length())
+                        .as("Exception FQCN '%s' in retryFor of %s must fit within @Column(length=%d)",
+                                exType.getName(), handlerClass.getSimpleName(), columnLimit)
+                        .isLessThanOrEqualTo(columnLimit);
+            }
+        }
+    }
+
+    @Test
+    void allHandlers_eventPayloadFitsWithinRecordColumnLimit() {
+        // FailedIntegrationEventRecord.eventPayload is VARCHAR(4000).
+        // Handlers persist event.toString(). Verify reasonable event instances produce
+        // payloads within the column limit (guards against events with very large toString).
+        int columnLimit = 4000;
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Class<?> eventType = method.getParameterTypes()[0];
+            assertThat(eventType.isRecord())
+                    .as("Event type %s should be a record for predictable toString()", eventType.getSimpleName())
+                    .isTrue();
+            // Construct a typical event with default values
+            var components = eventType.getRecordComponents();
+            Object[] args = Arrays.stream(components)
+                    .map(c -> defaultValueFor(c.getType()))
+                    .toArray();
+            try {
+                Object event = eventType.getDeclaredConstructors()[0].newInstance(args);
+                assertThat(event.toString().length())
+                        .as("Default event %s toString() length must fit within @Column(length=%d)",
+                                eventType.getSimpleName(), columnLimit)
+                        .isLessThanOrEqualTo(columnLimit);
+            } catch (Exception e) {
+                throw new AssertionError("Could not instantiate " + eventType.getSimpleName(), e);
+            }
+        }
+    }
+
     private Method findRecoverMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.getAnnotation(Recover.class) != null)
