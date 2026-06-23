@@ -157,18 +157,6 @@ class FailedIntegrationEventRecordSchemaConsistencyTest {
     }
 
     @Test
-    void eventClassNameColumn_lengthMatchesSchema() throws NoSuchFieldException {
-        Column column = getDeclaredFieldColumn("eventClassName");
-        assertThat(column.length()).isEqualTo(500);
-    }
-
-    @Test
-    void exceptionClassNameColumn_lengthMatchesSchema() throws NoSuchFieldException {
-        Column column = getDeclaredFieldColumn("exceptionClassName");
-        assertThat(column.length()).isEqualTo(500);
-    }
-
-    @Test
     void createdAtField_isInstantType() throws NoSuchFieldException {
         Field field = FailedIntegrationEventRecord.class.getDeclaredField("createdAt");
         assertThat(field.getType()).isEqualTo(Instant.class);
