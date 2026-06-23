@@ -1218,6 +1218,51 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(exceptionClassName).isNotEqualTo(exception.getClass().getSimpleName());
     }
 
+    @Test
+    void recoverMethod_secondParameterType_matchesHandlerMethodEventType() throws NoSuchMethodException {
+        // given
+        Method handlerMethod = UserCreatedIntegrationEventHandler.class
+                .getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+        Method recoverMethod = UserCreatedIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, UserCreatedIntegrationEvent.class);
+
+        // then — @Recover second parameter must match @EventListener parameter for Spring Retry matching
+        assertThat(recoverMethod.getParameterTypes()[1]).isEqualTo(handlerMethod.getParameterTypes()[0]);
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_persistsCorrectEventClassName() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must still be correct regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo(UserCreatedIntegrationEvent.class.getName());
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_persistsCorrectEventClassName() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must still be correct regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo(UserCreatedIntegrationEvent.class.getName());
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
