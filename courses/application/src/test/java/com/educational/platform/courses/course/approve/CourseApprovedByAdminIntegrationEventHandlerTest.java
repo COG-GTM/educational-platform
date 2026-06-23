@@ -847,6 +847,163 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_eventClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo("com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent");
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_checkedExceptionFromCommandHandler_rethrows() {
+        // given — unchecked wrapper of a checked exception
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new IllegalArgumentException("invalid course id"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("invalid course id");
+    }
+
+    @Test
+    void recover_eventClassName_isNotSimpleName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must be package-qualified, not a simple class name
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String eventClassName = (String) getField(captor.getValue(), "eventClassName");
+        assertThat(eventClassName).contains(".");
+        assertThat(eventClassName).isNotEqualTo(event.getClass().getSimpleName());
+    }
+
+    @Test
+    void recover_exceptionClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.DataAccessResourceFailureException");
+    }
+
+    @Test
+    void recover_exceptionClassName_isNotSimpleName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must be package-qualified, not a simple class name
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String exceptionClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(exceptionClassName).contains(".");
+        assertThat(exceptionClassName).isNotEqualTo(exception.getClass().getSimpleName());
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_checkedExceptionFromCommandHandler_preservesExceptionIdentity() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final IllegalArgumentException originalException = new IllegalArgumentException("invalid course id");
+        doThrow(originalException).when(approveCourseCommandHandler).handle(any());
+
+        // when/then — catch(Exception e) { throw e; } must not wrap the exception
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_NullPointerExceptionFromCommandHandler_preservesExceptionIdentity() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final NullPointerException originalException = new NullPointerException("course was null");
+        doThrow(originalException).when(approveCourseCommandHandler).handle(any());
+
+        // when/then — NPE must propagate with identity preserved through catch(Exception e) { throw e; }
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_checkedExceptionFromCommandHandler_causeIsNull() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final IllegalArgumentException exception = new IllegalArgumentException("invalid course id");
+        doThrow(exception).when(approveCourseCommandHandler).handle(any());
+
+        // when/then — catch(Exception e) { throw e; } must not add a cause chain
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .hasNoCause();
+    }
+
+    @Test
+    void recover_eventClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must start with the platform package prefix
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventClassName"))
+                .startsWith("com.educational.platform.");
+    }
+
+    @Test
+    void recover_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must start with the Spring DAO package prefix
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
+    @Test
     void recover_withDifferentExceptionSubtypes_persistsCorrectClassForEach() throws Exception {
         // given
         final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -884,24 +1041,6 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
     }
 
     @Test
-    void recover_eventClassNameIsFullyQualified() throws Exception {
-        // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
-        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("error");
-
-        // when
-        sut.recover(exception, event);
-
-        // then
-        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
-        verify(failedIntegrationEventRepository).save(captor.capture());
-        assertThat((String) getField(captor.getValue(), "eventClassName"))
-                .contains(".")
-                .endsWith("CourseApprovedByAdminIntegrationEvent");
-    }
-
-    @Test
     void handleCourseApprovedByAdminEvent_checkedExceptionWrapped_rethrows() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -917,17 +1056,231 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
     }
 
     @Test
-    void handleCourseApprovedByAdminEvent_checkedExceptionFromCommandHandler_rethrows() {
-        // given — direct unchecked exception (not wrapped)
+    void handleCourseApprovedByAdminEvent_ObjectOptimisticLockingFailureExceptionFromCommandHandler_preservesExceptionIdentity() {
+        // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
-        doThrow(new IllegalArgumentException("invalid course id"))
-                .when(approveCourseCommandHandler).handle(any());
+        final ObjectOptimisticLockingFailureException originalException =
+                new ObjectOptimisticLockingFailureException("optimistic lock conflict", new RuntimeException());
+        doThrow(originalException).when(approveCourseCommandHandler).handle(any());
 
-        // when/then
+        // when/then — catch(Exception e) { throw e; } must not wrap the retryable exception
         assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("invalid course id");
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_DataIntegrityViolationExceptionFromCommandHandler_preservesExceptionIdentity() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataIntegrityViolationException originalException =
+                new DataIntegrityViolationException("constraint violation");
+        doThrow(originalException).when(approveCourseCommandHandler).handle(any());
+
+        // when/then — catch(Exception e) { throw e; } must not wrap the DataAccessException subclass
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_exceptionClassName_isNotSimpleName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must be package-qualified, not a simple class name
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String exceptionClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(exceptionClassName).contains(".");
+        assertThat(exceptionClassName).isNotEqualTo(exception.getClass().getSimpleName());
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_exceptionClassName_isNotSimpleName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must be package-qualified, not a simple class name
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String exceptionClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(exceptionClassName).contains(".");
+        assertThat(exceptionClassName).isNotEqualTo(exception.getClass().getSimpleName());
+    }
+
+    @Test
+    void recoverMethod_secondParameterType_matchesHandlerMethodEventType() throws NoSuchMethodException {
+        // given
+        Method handlerMethod = CourseApprovedByAdminIntegrationEventHandler.class
+                .getMethod("handleCourseApprovedByAdminEvent", CourseApprovedByAdminIntegrationEvent.class);
+        Method recoverMethod = CourseApprovedByAdminIntegrationEventHandler.class
+                .getMethod("recover", DataAccessException.class, CourseApprovedByAdminIntegrationEvent.class);
+
+        // then — @Recover second parameter must match @EventListener parameter for Spring Retry matching
+        assertThat(recoverMethod.getParameterTypes()[1]).isEqualTo(handlerMethod.getParameterTypes()[0]);
+    }
+
+    @Test
+    void recover_eventPayloadContainsCourseId() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — persisted payload must contain the courseId UUID string
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventPayload"))
+                .contains(uuid.toString());
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_persistsCorrectEventClassName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must still be correct regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo(CourseApprovedByAdminIntegrationEvent.class.getName());
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_persistsCorrectEventClassName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must still be correct regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo(CourseApprovedByAdminIntegrationEvent.class.getName());
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_persistsCorrectEventPayload() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventPayload must still be event.toString() regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_persistsCorrectEventPayload() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventPayload must still be event.toString() regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_persistsCorrectRetryCount() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — retryCount must equal MAX_ATTEMPTS regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(3);
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_persistsCorrectRetryCount() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — retryCount must equal MAX_ATTEMPTS regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(3);
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_persistsCorrectExceptionMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionMessage must be correctly persisted regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("lock failure");
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_persistsCorrectExceptionMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionMessage must be correctly persisted regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("constraint error");
     }
 
     @Test
@@ -979,6 +1332,73 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         assertThat(record1).isNotSameAs(record2);
         assertThat(getField(record1, "eventPayload")).isEqualTo(getField(record2, "eventPayload"));
         assertThat(getField(record1, "eventClassName")).isEqualTo(getField(record2, "eventClassName"));
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_DataAccessResourceFailureExceptionFromCommandHandler_preservesExceptionIdentity() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException originalException =
+                new DataAccessResourceFailureException("DB connection lost");
+        doThrow(originalException).when(approveCourseCommandHandler).handle(any());
+
+        // when/then — catch(Exception e) { throw e; } must not wrap the primary retryable exception
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_exceptionClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.orm.ObjectOptimisticLockingFailureException");
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_exceptionClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.DataIntegrityViolationException");
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — OOLF lives in org.springframework.orm, not org.springframework.dao
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.orm.");
     }
 
     @Test
@@ -1039,6 +1459,213 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
                 .isFalse();
     }
     @Test
+    void recover_withObjectOptimisticLockingFailureException_persistsRecordWithFailedStatus() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — status must be FAILED regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((FailedIntegrationEventRecord.Status) getField(captor.getValue(), "status"))
+                .isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_persistsRecordWithFailedStatus() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — status must be FAILED regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((FailedIntegrationEventRecord.Status) getField(captor.getValue(), "status"))
+                .isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_persistsCreatedAtTimestamp() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException("lock failure", new RuntimeException());
+        final Instant before = Instant.now();
+
+        // when
+        sut.recover(exception, event);
+
+        // then — createdAt must be set regardless of exception type
+        final Instant after = Instant.now();
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final Instant createdAt = (Instant) getField(captor.getValue(), "createdAt");
+        assertThat(createdAt).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_persistsCreatedAtTimestamp() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+        final Instant before = Instant.now();
+
+        // when
+        sut.recover(exception, event);
+
+        // then — createdAt must be set regardless of exception type
+        final Instant after = Instant.now();
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final Instant createdAt = (Instant) getField(captor.getValue(), "createdAt");
+        assertThat(createdAt).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_nullMessage_persistsNullMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException((String) null);
+
+        // when
+        sut.recover(exception, event);
+
+        // then — null message must be persisted without exception
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_persistsCorrectEventClassName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must still be correct regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo(CourseApprovedByAdminIntegrationEvent.class.getName());
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_persistsCorrectEventPayload() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventPayload must still be event.toString() regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_persistsCorrectExceptionMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionMessage must be correctly persisted regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("DB error");
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_persistsCorrectRetryCount() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — retryCount must equal MAX_ATTEMPTS regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(3);
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_persistsRecordWithFailedStatus() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — status must be FAILED regardless of exception type
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((FailedIntegrationEventRecord.Status) getField(captor.getValue(), "status"))
+                .isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_persistsCreatedAtTimestamp() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+        final Instant before = Instant.now();
+
+        // when
+        sut.recover(exception, event);
+
+        // then — createdAt must be set regardless of exception type
+        final Instant after = Instant.now();
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final Instant createdAt = (Instant) getField(captor.getValue(), "createdAt");
+        assertThat(createdAt).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_nullMessage_persistsNullMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException((String) null);
+
+        // when
+        sut.recover(exception, event);
+
+        // then — null message must be persisted without exception
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
+    }
+
+    @Test
     void constructor_withNullCommandHandler_constructsSuccessfully() {
         new CourseApprovedByAdminIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
     }
@@ -1060,15 +1687,21 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
     }
 
     @Test
-    void recover_withNullRepository_throwsNullPointerException() {
-        // given
-        var handler = new CourseApprovedByAdminIntegrationEventHandler(mock(ApproveCourseCommandHandler.class), null);
-        var event = new CourseApprovedByAdminIntegrationEvent(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"));
-        var exception = new DataAccessResourceFailureException("DB error");
+    void recover_withExceptionMessageExceedingColumnLimit_persistsFullMessage() throws Exception {
+        // given — exception message exceeding the 2000-char column limit at Java level
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final String longMessage = "E".repeat(3000);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException(longMessage);
 
-        // when/then
-        assertThatThrownBy(() -> handler.recover(exception, event))
-                .isInstanceOf(NullPointerException.class);
+        // when
+        sut.recover(exception, event);
+
+        // then — Java level accepts the full message; DB truncation is a persistence concern
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo(longMessage);
+        assertThat(((String) getField(captor.getValue(), "exceptionMessage")).length()).isEqualTo(3000);
     }
 
     @Test
@@ -1095,6 +1728,158 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_withNullRepository_throwsNullPointerException() {
+        // given
+        var handler = new CourseApprovedByAdminIntegrationEventHandler(mock(ApproveCourseCommandHandler.class), null);
+        var event = new CourseApprovedByAdminIntegrationEvent(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"));
+        var exception = new DataAccessResourceFailureException("DB error");
+
+        // when/then
+        assertThatThrownBy(() -> handler.recover(exception, event))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void constructor_withBothNullDependencies_constructsSuccessfully() {
+        // constructor does not validate — NPE deferred to method invocation
+        new CourseApprovedByAdminIntegrationEventHandler(null, null);
+    }
+
+    @Test
+    void maxAttemptsField_valueIsThree() throws Exception {
+        // given — hardcoded assertion guards against accidental changes to retry count
+        Field maxAttemptsField = CourseApprovedByAdminIntegrationEventHandler.class.getDeclaredField("MAX_ATTEMPTS");
+        maxAttemptsField.setAccessible(true);
+        int maxAttempts = (int) maxAttemptsField.get(null);
+
+        // then
+        assertThat(maxAttempts).isEqualTo(3);
+    }
+
+    @Test
+    void recover_eventClassName_containsDot() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must be a fully qualified name (contains at least one dot)
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventClassName")).contains(".");
+    }
+
+    @Test
+    void recover_exceptionClassName_containsDot() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must be a fully qualified name (contains at least one dot)
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName")).contains(".");
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — DIVE lives in org.springframework.dao, not org.springframework.orm
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
+    @Test
+    void recover_withNullException_throwsNullPointerException() {
+        // given — null exception causes NPE in e.getMessage() and e.getClass().getName()
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(null, event))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_nullMessage_persistsNullMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException((String) null, new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — null message must be persisted without exception
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_onIllegalArgumentException_doesNotInteractWithFailedEventRepository() {
+        // given — IllegalArgumentException is not a DataAccessException, must not trigger recovery
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new IllegalArgumentException("invalid course id"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when
+        try { sut.handleCourseApprovedByAdminEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_onGenericRuntimeException_doesNotInteractWithFailedEventRepository() {
+        // given — IllegalStateException is not a DataAccessException, must not trigger recovery
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new IllegalStateException("unexpected state"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when
+        try { sut.handleCourseApprovedByAdminEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_onCheckedExceptionWrapped_doesNotInteractWithFailedEventRepository() {
+        // given — RuntimeException wrapping a checked cause is not a DataAccessException
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new RuntimeException("wrapped", new java.io.IOException("disk full")))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when
+        try { sut.handleCourseApprovedByAdminEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
     void recover_withNullException_repositoryNeverInvoked() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -1109,57 +1894,18 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
     }
 
     @Test
-    void recover_withExceptionMessageExceedingColumnLimit_persistsFullMessage() throws Exception {
-        // given — exception message exceeding the 2000-char column limit at Java level
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
-        final String longMessage = "E".repeat(3000);
-        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException(longMessage);
-
-        // when
-        sut.recover(exception, event);
-
-        // then — Java level accepts the full message; DB truncation is a persistence concern
-        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
-        verify(failedIntegrationEventRepository).save(captor.capture());
-        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo(longMessage);
-        assertThat(((String) getField(captor.getValue(), "exceptionMessage")).length()).isEqualTo(3000);
-    }
-
-    @Test
-    void recover_eventPayloadContainsCourseId() throws Exception {
+    void handleCourseApprovedByAdminEvent_onDataIntegrityViolationException_doesNotInteractWithFailedEventRepository() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
-        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+        doThrow(new DataIntegrityViolationException("constraint violation"))
+                .when(approveCourseCommandHandler).handle(any());
 
         // when
-        sut.recover(exception, event);
+        try { sut.handleCourseApprovedByAdminEvent(event); } catch (Exception ignored) { }
 
-        // then
-        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
-        verify(failedIntegrationEventRepository).save(captor.capture());
-        assertThat((String) getField(captor.getValue(), "eventPayload"))
-                .contains("123e4567-e89b-12d3-a456-426655440001");
-    }
-
-    @Test
-    void recover_withConcurrencyFailureException_persistsFailedEvent() throws Exception {
-        // given — ConcurrencyFailureException is a DataAccessException subclass representing lock contention
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
-        final org.springframework.dao.ConcurrencyFailureException exception =
-                new org.springframework.dao.ConcurrencyFailureException("Lock acquisition timeout");
-
-        // when
-        sut.recover(exception, event);
-
-        // then
-        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
-        verify(failedIntegrationEventRepository).save(captor.capture());
-        assertThat(getField(captor.getValue(), "exceptionClassName"))
-                .isEqualTo(org.springframework.dao.ConcurrencyFailureException.class.getName());
-        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Lock acquisition timeout");
+        // then — only recover() should persist dead-letter records, never the handler itself
+        verifyNoInteractions(failedIntegrationEventRepository);
     }
 
     @Test
@@ -1193,6 +1939,424 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         maxAttemptsField.setAccessible(true);
         int expectedRetryCount = (int) maxAttemptsField.get(null);
         assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(expectedRetryCount);
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_persistsFailedEvent() throws Exception {
+        // given — ConcurrencyFailureException is a DataAccessException subclass representing lock contention
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock acquisition timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo(org.springframework.dao.ConcurrencyFailureException.class.getName());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Lock acquisition timeout");
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_persistsCorrectEventClassName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock acquisition timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo(CourseApprovedByAdminIntegrationEvent.class.getName());
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_persistsCorrectEventPayload() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock acquisition timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_persistsCorrectExceptionMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock acquisition timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("Lock acquisition timeout");
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_persistsCorrectRetryCount() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock acquisition timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(3);
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_persistsCreatedAtTimestamp() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock acquisition timeout");
+        final Instant before = Instant.now();
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final Instant after = Instant.now();
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final Instant createdAt = (Instant) getField(captor.getValue(), "createdAt");
+        assertThat(createdAt).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_persistsRecordWithFailedStatus() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock acquisition timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((FailedIntegrationEventRecord.Status) getField(captor.getValue(), "status"))
+                .isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_exceptionClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock acquisition timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — hardcoded FQN assertion catches silent package relocations
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.ConcurrencyFailureException");
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_nullMessage_persistsNullMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException((String) null);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_ConcurrencyFailureExceptionFromCommandHandler_preservesExceptionIdentity() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException originalException =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+        doThrow(originalException).when(approveCourseCommandHandler).handle(any());
+
+        // when/then
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_onConcurrencyFailureException_doesNotInteractWithFailedEventRepository() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new org.springframework.dao.ConcurrencyFailureException("Lock contention"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when
+        try { sut.handleCourseApprovedByAdminEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+
+    @Test
+    void handleCourseApprovedByAdminEvent_resourceNotFoundException_preservesExceptionIdentity() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final ResourceNotFoundException originalException = new ResourceNotFoundException("Course not found");
+        doThrow(originalException).when(approveCourseCommandHandler).handle(any());
+
+        // when/then — catch(Exception e) { throw e; } must not wrap the business exception
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void recover_withSpecialCharsInExceptionMessage_persistsExactMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final String specialMessage = "Error: tab\there, newline\nhere, unicode \u00e9\u00e8\u00ea and null-byte \u0000 end";
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException(specialMessage);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo(specialMessage);
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_exceptionClassName_isNotSimpleName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String exceptionClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(exceptionClassName).contains(".");
+        assertThat(exceptionClassName).isNotEqualTo(exception.getClass().getSimpleName());
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_exceptionClassName_containsDot() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName")).contains(".");
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — ConcurrencyFailureException lives in org.springframework.dao
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
+    @Test
+    void recover_withIdenticalEventDataTwice_producesIndependentRecords() throws Exception {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event1 = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final CourseApprovedByAdminIntegrationEvent event2 = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        sut.recover(exception, event1);
+        sut.recover(exception, event2);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).hasSize(2);
+        assertThat(captor.getAllValues().get(0)).isNotSameAs(captor.getAllValues().get(1));
+        assertThat(getField(captor.getAllValues().get(0), "eventPayload"))
+                .isEqualTo(getField(captor.getAllValues().get(1), "eventPayload"));
+    }
+
+    @Test
+    void recover_withCustomDataAccessExceptionSubclass_persistsActualRuntimeClassName() throws Exception {
+        // given — a custom subclass of DataAccessException should have its actual runtime type stored
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error") {};
+
+        // when
+        sut.recover(exception, event);
+
+        // then — the persisted className must be the anonymous subclass, not DataAccessResourceFailureException
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String persistedClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(persistedClassName).isNotEqualTo(DataAccessResourceFailureException.class.getName());
+        assertThat(persistedClassName).contains("CourseApprovedByAdminIntegrationEventHandlerTest");
+    }
+
+    @Test
+    void recover_eventPayload_isNotJavaObjectReference() throws Exception {
+        // given — event.toString() for records should produce a readable representation, not Object@hex
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String payload = (String) getField(captor.getValue(), "eventPayload");
+        assertThat(payload).doesNotMatch(".*@[0-9a-f]+$");
+        assertThat(payload).contains("123e4567-e89b-12d3-a456-426655440001");
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_exceptionClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — hardcoded FQN assertion catches silent package relocations
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.DataAccessResourceFailureException");
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_exceptionClassName_isNotSimpleName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must be package-qualified, not a simple class name
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String exceptionClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(exceptionClassName).contains(".");
+        assertThat(exceptionClassName).isNotEqualTo(exception.getClass().getSimpleName());
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — DARFE lives in org.springframework.dao
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_exceptionClassName_isNotSimpleName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must be package-qualified, not a simple class name
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String exceptionClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(exceptionClassName).contains(".");
+        assertThat(exceptionClassName).isNotEqualTo(exception.getClass().getSimpleName());
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — ConcurrencyFailureException lives in org.springframework.dao
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {
