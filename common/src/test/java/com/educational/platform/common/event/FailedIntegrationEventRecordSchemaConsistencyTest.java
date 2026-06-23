@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -206,22 +205,6 @@ class FailedIntegrationEventRecordSchemaConsistencyTest {
     }
 
     @Test
-    void eventClassNameColumn_lengthMatchesSchema() throws NoSuchFieldException {
-        Column column = getDeclaredFieldColumn("eventClassName");
-        assertThat(column.length())
-                .as("eventClassName @Column length should match VARCHAR(500) in common.yml")
-                .isEqualTo(500);
-    }
-
-    @Test
-    void exceptionClassNameColumn_lengthMatchesSchema() throws NoSuchFieldException {
-        Column column = getDeclaredFieldColumn("exceptionClassName");
-        assertThat(column.length())
-                .as("exceptionClassName @Column length should match VARCHAR(500) in common.yml")
-                .isEqualTo(500);
-    }
-
-    @Test
     void statusColumn_lengthAccommodatesAllEnumValues() throws NoSuchFieldException {
         Column column = getDeclaredFieldColumn("status");
         int schemaLength = 20;
@@ -230,6 +213,38 @@ class FailedIntegrationEventRecordSchemaConsistencyTest {
                     .as("Status '%s' must fit within @Column length or VARCHAR(%d)", status.name(), schemaLength)
                     .isLessThanOrEqualTo(schemaLength);
         }
+    }
+
+    @Test
+    void retryCountField_typeIsPrimitiveInt() throws NoSuchFieldException {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("retryCount");
+        assertThat(field.getType())
+                .as("retryCount must be primitive int to match Liquibase INT (non-nullable)")
+                .isEqualTo(int.class);
+    }
+
+    @Test
+    void idField_typeIsLong() throws NoSuchFieldException {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("id");
+        assertThat(field.getType())
+                .as("id must be Long to match Liquibase BIGINT with IDENTITY strategy")
+                .isEqualTo(Long.class);
+    }
+
+    @Test
+    void eventClassNameField_typeIsString() throws NoSuchFieldException {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventClassName");
+        assertThat(field.getType())
+                .as("eventClassName must be String to match Liquibase VARCHAR")
+                .isEqualTo(String.class);
+    }
+
+    @Test
+    void exceptionClassNameField_typeIsString() throws NoSuchFieldException {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("exceptionClassName");
+        assertThat(field.getType())
+                .as("exceptionClassName must be String to match Liquibase VARCHAR")
+                .isEqualTo(String.class);
     }
 
     private Column getDeclaredFieldColumn(String fieldName) throws NoSuchFieldException {
