@@ -1718,6 +1718,51 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
     }
 
     @Test
+    void handleCourseApprovedByAdminEvent_onIllegalArgumentException_doesNotInteractWithFailedEventRepository() {
+        // given — IllegalArgumentException is not a DataAccessException, must not trigger recovery
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new IllegalArgumentException("invalid course id"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when
+        try { sut.handleCourseApprovedByAdminEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_onGenericRuntimeException_doesNotInteractWithFailedEventRepository() {
+        // given — IllegalStateException is not a DataAccessException, must not trigger recovery
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new IllegalStateException("unexpected state"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when
+        try { sut.handleCourseApprovedByAdminEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_onCheckedExceptionWrapped_doesNotInteractWithFailedEventRepository() {
+        // given — RuntimeException wrapping a checked cause is not a DataAccessException
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new RuntimeException("wrapped", new java.io.IOException("disk full")))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when
+        try { sut.handleCourseApprovedByAdminEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
     void recover_withNullException_repositoryNeverInvoked() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

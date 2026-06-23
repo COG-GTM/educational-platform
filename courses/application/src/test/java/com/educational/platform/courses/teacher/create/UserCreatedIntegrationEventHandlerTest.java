@@ -1845,6 +1845,48 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
     }
 
+    @Test
+    void handleUserCreatedEvent_onIllegalArgumentException_doesNotInteractWithFailedEventRepository() {
+        // given — IllegalArgumentException is not a DataAccessException, must not trigger recovery
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        doThrow(new IllegalArgumentException("invalid username"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when
+        try { sut.handleUserCreatedEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleUserCreatedEvent_onGenericRuntimeException_doesNotInteractWithFailedEventRepository() {
+        // given — IllegalStateException is not a DataAccessException, must not trigger recovery
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        doThrow(new IllegalStateException("unexpected state"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when
+        try { sut.handleUserCreatedEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void handleUserCreatedEvent_onCheckedExceptionWrapped_doesNotInteractWithFailedEventRepository() {
+        // given — RuntimeException wrapping a checked cause is not a DataAccessException
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        doThrow(new RuntimeException("wrapped", new java.io.IOException("disk full")))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when
+        try { sut.handleUserCreatedEvent(event); } catch (Exception ignored) { }
+
+        // then
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
