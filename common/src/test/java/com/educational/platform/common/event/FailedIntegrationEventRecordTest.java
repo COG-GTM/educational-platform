@@ -967,6 +967,44 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
+    void constructor_multilineEventPayload_preservedExactly() throws Exception {
+        // given — event.toString() for records may include newlines when fields contain them
+        String multilinePayload = "SendCourseToApproveIntegrationEvent[courseId=123e4567]\n"
+                + "  stackTrace: org.springframework.dao.DataAccessResourceFailureException\n"
+                + "\tat com.example.Handler.handle(Handler.java:42)\n"
+                + "\tat sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)";
+        String multilineMessage = "Multiple failures detected:\n"
+                + "1. Connection pool exhausted\n"
+                + "2. Timeout waiting for lock\n"
+                + "3. Retry limit reached";
+
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", multilinePayload, multilineMessage, "java.lang.RuntimeException", 3);
+
+        // then — newlines and indentation preserved exactly
+        assertThat(getField(record, "eventPayload")).isEqualTo(multilinePayload);
+        assertThat(getField(record, "exceptionMessage")).isEqualTo(multilineMessage);
+        assertThat(((String) getField(record, "eventPayload"))).contains("\n");
+        assertThat(((String) getField(record, "exceptionMessage"))).contains("\n");
+    }
+
+    @Test
+    void constructor_tabsAndControlCharactersInPayload_preserved() throws Exception {
+        // given — payload may contain tabs, carriage returns from exception stack traces
+        String payloadWithTabs = "Event[field1=value1\tfield2=value2\r\nfield3=value3]";
+
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", payloadWithTabs, "error\twith\ttabs", "java.lang.Exception", 1);
+
+        // then
+        assertThat(getField(record, "eventPayload")).isEqualTo(payloadWithTabs);
+        assertThat(((String) getField(record, "eventPayload"))).contains("\t");
+        assertThat(((String) getField(record, "exceptionMessage"))).contains("\t");
+    }
+
+    @Test
     void constructor_allFieldsExceedColumnLimitsSimultaneously_acceptedAtJavaLevel() throws Exception {
         // given — all string fields exceed their column limits simultaneously
         String eventClassName = "E".repeat(1000);    // exceeds 500
