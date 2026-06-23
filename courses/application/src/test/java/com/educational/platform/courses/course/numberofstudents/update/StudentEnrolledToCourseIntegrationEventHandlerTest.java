@@ -979,6 +979,66 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
     }
 
     @Test
+    void handleStudentEnrolledToCourseEvent_NullPointerExceptionFromCommandHandler_preservesExceptionIdentity() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final NullPointerException originalException = new NullPointerException("course was null");
+        doThrow(originalException).when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when/then — NPE must propagate with identity preserved through catch(Exception e) { throw e; }
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_checkedExceptionFromCommandHandler_causeIsNull() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final IllegalArgumentException exception = new IllegalArgumentException("invalid enrollment");
+        doThrow(exception).when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when/then — catch(Exception e) { throw e; } must not add a cause chain
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .hasNoCause();
+    }
+
+    @Test
+    void recover_eventClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must start with the platform package prefix
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventClassName"))
+                .startsWith("com.educational.platform.");
+    }
+
+    @Test
+    void recover_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must start with the Spring DAO package prefix
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
+    @Test
     void recover_withNullUsername_persistsEventPayload() throws Exception {
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, null);

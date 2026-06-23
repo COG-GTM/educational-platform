@@ -1008,6 +1008,62 @@ class UserCreatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void handleUserCreatedEvent_NullPointerExceptionFromCommandHandler_preservesExceptionIdentity() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final NullPointerException originalException = new NullPointerException("username was null");
+        doThrow(originalException).when(createTeacherCommandHandler).handle(any());
+
+        // when/then — NPE must propagate with identity preserved through catch(Exception e) { throw e; }
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleUserCreatedEvent_checkedExceptionFromCommandHandler_causeIsNull() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final IllegalArgumentException exception = new IllegalArgumentException("invalid username");
+        doThrow(exception).when(createTeacherCommandHandler).handle(any());
+
+        // when/then — catch(Exception e) { throw e; } must not add a cause chain
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .hasNoCause();
+    }
+
+    @Test
+    void recover_eventClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must start with the platform package prefix
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventClassName"))
+                .startsWith("com.educational.platform.");
+    }
+
+    @Test
+    void recover_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must start with the Spring DAO package prefix
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
+    @Test
     void recover_eventPayloadContainsBothUsernameAndEmail() throws Exception {
         // given — event.toString() should include both fields even though handler only uses username
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("admin", "admin@edu.com");

@@ -1184,6 +1184,66 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void handleCourseRatingRecalculatedEvent_NullPointerExceptionFromCommandHandler_preservesExceptionIdentity() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final NullPointerException originalException = new NullPointerException("course was null");
+        doThrow(originalException).when(updateCourseRatingCommandHandler).handle(any());
+
+        // when/then — NPE must propagate with identity preserved through catch(Exception e) { throw e; }
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_checkedExceptionFromCommandHandler_causeIsNull() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final IllegalArgumentException exception = new IllegalArgumentException("invalid rating value");
+        doThrow(exception).when(updateCourseRatingCommandHandler).handle(any());
+
+        // when/then — catch(Exception e) { throw e; } must not add a cause chain
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .hasNoCause();
+    }
+
+    @Test
+    void recover_eventClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must start with the platform package prefix
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventClassName"))
+                .startsWith("com.educational.platform.");
+    }
+
+    @Test
+    void recover_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must start with the Spring DAO package prefix
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
+    @Test
     void recover_withMinDoubleRating_persistsEventPayload() throws Exception {
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.MIN_VALUE);
