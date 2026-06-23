@@ -1,8 +1,17 @@
 package com.educational.platform.administration.course.create;
 
+import com.educational.platform.common.event.FailedIntegrationEventRepository;
+import com.educational.platform.common.event.FailedIntegrationEventRecord;
 import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataAccessException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
@@ -12,16 +21,41 @@ import org.springframework.stereotype.Component;
 @Component
 public class SendCourseToApproveIntegrationEventHandler {
 
-    private final CreateCourseProposalCommandHandler createCourseProposalCommandHandler;
+    private static final Logger log = LoggerFactory.getLogger(SendCourseToApproveIntegrationEventHandler.class);
+    private static final int MAX_ATTEMPTS = 3;
 
-    public SendCourseToApproveIntegrationEventHandler(CreateCourseProposalCommandHandler createCourseProposalCommandHandler) {
+    private final CreateCourseProposalCommandHandler createCourseProposalCommandHandler;
+    private final FailedIntegrationEventRepository failedIntegrationEventRepository;
+
+    public SendCourseToApproveIntegrationEventHandler(CreateCourseProposalCommandHandler createCourseProposalCommandHandler,
+                                                      FailedIntegrationEventRepository failedIntegrationEventRepository) {
         this.createCourseProposalCommandHandler = createCourseProposalCommandHandler;
+        this.failedIntegrationEventRepository = failedIntegrationEventRepository;
     }
 
     @Async
+    @Retryable(retryFor = {DataAccessException.class, ObjectOptimisticLockingFailureException.class},
+               maxAttempts = MAX_ATTEMPTS, backoff = @Backoff(delay = 500, multiplier = 2))
     @EventListener
     public void handleSendCourseToApproveEvent(SendCourseToApproveIntegrationEvent event) {
-        createCourseProposalCommandHandler.handle(new CreateCourseProposalCommand(event.courseId()));
+        log.info("Received integration event: {}", event);
+        try {
+            createCourseProposalCommandHandler.handle(new CreateCourseProposalCommand(event.courseId()));
+        } catch (Exception e) {
+            log.error("Failed to handle integration event: {}", event, e);
+            throw e;
+        }
     }
 
+    @Recover
+    public void recover(DataAccessException e, SendCourseToApproveIntegrationEvent event) {
+        log.error("All retries exhausted for event: {}. Error: {}", event, e.getMessage(), e);
+        failedIntegrationEventRepository.save(new FailedIntegrationEventRecord(
+                event.getClass().getName(),
+                event.toString(),
+                e.getMessage(),
+                e.getClass().getName(),
+                MAX_ATTEMPTS
+        ));
+    }
 }
