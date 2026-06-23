@@ -420,6 +420,36 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
+    void eventClassNameField_isNotNullable() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventClassName");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.nullable())
+                .as("eventClassName must be NOT NULL — dead-letter records without an event class are undiagnosable")
+                .isFalse();
+    }
+
+    @Test
+    void eventPayloadField_isNotNullable() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventPayload");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.nullable())
+                .as("eventPayload must be NOT NULL — dead-letter records without payload cannot be replayed")
+                .isFalse();
+    }
+
+    @Test
+    void statusField_isNotNullable() throws Exception {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("status");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).isNotNull();
+        assertThat(column.nullable())
+                .as("status must be NOT NULL — every dead-letter record requires a lifecycle state")
+                .isFalse();
+    }
+
+    @Test
     void createdAtField_hasCorrectColumnName() throws Exception {
         Field field = FailedIntegrationEventRecord.class.getDeclaredField("createdAt");
         Column column = field.getAnnotation(Column.class);

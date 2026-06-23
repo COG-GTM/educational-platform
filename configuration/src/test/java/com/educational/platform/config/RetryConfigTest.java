@@ -107,4 +107,10 @@ class RetryConfigTest {
                         + "retry advisor wraps closest to target method, inside async proxy")
                 .isEqualTo(Integer.MAX_VALUE);
     }
+
+    @Test
+    void retryConfig_doesNotHaveTransactionalAnnotation() {
+        assertThat(RetryConfig.class.getAnnotation(
+                org.springframework.transaction.annotation.Transactional.class)).isNull();
+    }
 }
