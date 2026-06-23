@@ -1742,6 +1742,96 @@ class UserCreatedIntegrationEventHandlerTest {
                 .contains("teacher1@example.com");
     }
 
+    @Test
+    void constructor_withBothNullDependencies_constructsSuccessfully() {
+        // constructor does not validate — NPE deferred to method invocation
+        new UserCreatedIntegrationEventHandler(null, null);
+    }
+
+    @Test
+    void maxAttemptsField_valueIsThree() throws Exception {
+        // given — hardcoded assertion guards against accidental changes to retry count
+        Field maxAttemptsField = UserCreatedIntegrationEventHandler.class.getDeclaredField("MAX_ATTEMPTS");
+        maxAttemptsField.setAccessible(true);
+        int maxAttempts = (int) maxAttemptsField.get(null);
+
+        // then
+        assertThat(maxAttempts).isEqualTo(3);
+    }
+
+    @Test
+    void recover_eventClassName_containsDot() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must be a fully qualified name (contains at least one dot)
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventClassName")).contains(".");
+    }
+
+    @Test
+    void recover_exceptionClassName_containsDot() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must be a fully qualified name (contains at least one dot)
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName")).contains(".");
+    }
+
+    @Test
+    void recover_withDataIntegrityViolationException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — DIVE lives in org.springframework.dao, not org.springframework.orm
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
+    @Test
+    void recover_withNullException_throwsNullPointerException() {
+        // given — null exception causes NPE in e.getMessage() and e.getClass().getName()
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(null, event))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_nullMessage_persistsNullMessage() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException((String) null, new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — null message must be persisted without exception
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
