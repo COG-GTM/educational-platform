@@ -844,6 +844,49 @@ class FailedIntegrationEventRecordTest {
                 .isEqualTo("RESOLVED");
     }
 
+    @Test
+    void constructor_eventClassName_exceedingDefaultColumnLimit_acceptedAtJavaLevel() throws Exception {
+        // given — event class name well beyond VARCHAR(255) — accepted by Java, fails at DB
+        String exceedingClassName = "com.educational.platform.very.deeply.nested.package." + "a".repeat(500);
+
+        // when
+        var record = new FailedIntegrationEventRecord(
+                exceedingClassName, "payload", "message", "exClassName", 3);
+
+        // then — Java object creation succeeds regardless of column limit
+        assertThat(getField(record, "eventClassName")).isEqualTo(exceedingClassName);
+        assertThat(((String) getField(record, "eventClassName")).length()).isGreaterThan(500);
+    }
+
+    @Test
+    void constructor_exceptionClassName_exceedingDefaultColumnLimit_acceptedAtJavaLevel() throws Exception {
+        // given — exception class name well beyond VARCHAR(255) — accepted by Java, fails at DB
+        String exceedingExClassName = "org.springframework.dao.very.specific." + "b".repeat(500);
+
+        // when
+        var record = new FailedIntegrationEventRecord(
+                "eventClass", "payload", "message", exceedingExClassName, 3);
+
+        // then — Java object creation succeeds regardless of column limit
+        assertThat(getField(record, "exceptionClassName")).isEqualTo(exceedingExClassName);
+        assertThat(((String) getField(record, "exceptionClassName")).length()).isGreaterThan(500);
+    }
+
+    @Test
+    void constructor_createdAt_isNotBeforeConstructionStartTime() throws Exception {
+        // given
+        Instant before = Instant.now();
+
+        // when
+        var record = new FailedIntegrationEventRecord(
+                "className", "payload", "message", "exClassName", 3);
+
+        // then
+        Instant createdAt = (Instant) getField(record, "createdAt");
+        assertThat(createdAt).isAfterOrEqualTo(before);
+        assertThat(createdAt).isBeforeOrEqualTo(Instant.now());
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

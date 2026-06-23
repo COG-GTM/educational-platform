@@ -1085,6 +1085,62 @@ class UserCreatedIntegrationEventHandlerTest {
                 .isEqualTo(getField(captor.getAllValues().get(1), "eventPayload"));
     }
 
+    @Test
+    void handleUserCreatedEvent_withNullEvent_throwsNullPointerException() {
+        // when/then — documents the null-event contract
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(null))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_withVeryLongExceptionMessage_persistsFullMessage() throws Exception {
+        // given — exception message near the 2000-char column limit
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final String longMessage = "X".repeat(2000);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException(longMessage);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo(longMessage);
+        assertThat(((String) getField(captor.getValue(), "exceptionMessage")).length()).isEqualTo(2000);
+    }
+
+    @Test
+    void recover_withEmptyEmail_persistsEventPayload() throws Exception {
+        // given — empty email field
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+    }
+
+    @Test
+    void recover_withSpecialCharsInEmail_persistsEventPayload() throws Exception {
+        // given — special characters in email field
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "user+tag@sub.domain.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
+        assertThat(getField(captor.getValue(), "eventPayload").toString()).contains("user+tag@sub.domain.com");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

@@ -1268,6 +1268,32 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .isEqualTo(getField(captor.getAllValues().get(1), "eventPayload"));
     }
 
+    @Test
+    void handleCourseRatingRecalculatedEvent_withNullEvent_throwsNullPointerException() {
+        // when/then — documents the null-event contract
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(null))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_withVeryLongExceptionMessage_persistsFullMessage() throws Exception {
+        // given — exception message near the 2000-char column limit
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final String longMessage = "X".repeat(2000);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException(longMessage);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo(longMessage);
+        assertThat(((String) getField(captor.getValue(), "exceptionMessage")).length()).isEqualTo(2000);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
