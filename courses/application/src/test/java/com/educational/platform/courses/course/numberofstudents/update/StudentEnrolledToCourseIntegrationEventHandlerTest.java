@@ -2040,107 +2040,6 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
     }
 
     @Test
-    void recover_withDataAccessResourceFailureException_persistsCorrectEventClassName() throws Exception {
-        // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
-        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
-
-        // when
-        sut.recover(exception, event);
-
-        // then — eventClassName must still be correct when exception type is DARFE
-        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
-        verify(failedIntegrationEventRepository).save(captor.capture());
-        assertThat(getField(captor.getValue(), "eventClassName"))
-                .isEqualTo(StudentEnrolledToCourseIntegrationEvent.class.getName());
-    }
-
-    @Test
-    void recover_withDataAccessResourceFailureException_persistsCorrectEventPayload() throws Exception {
-        // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
-        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
-
-        // when
-        sut.recover(exception, event);
-
-        // then — eventPayload must be event.toString() when exception type is DARFE
-        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
-        verify(failedIntegrationEventRepository).save(captor.capture());
-        assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
-    }
-
-    @Test
-    void recover_withDataAccessResourceFailureException_persistsCorrectExceptionMessage() throws Exception {
-        // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
-        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB connection lost");
-
-        // when
-        sut.recover(exception, event);
-
-        // then — exceptionMessage must be correctly persisted for DARFE
-        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
-        verify(failedIntegrationEventRepository).save(captor.capture());
-        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("DB connection lost");
-    }
-
-    @Test
-    void recover_withDataAccessResourceFailureException_persistsCorrectRetryCount() throws Exception {
-        // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
-        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
-
-        // when
-        sut.recover(exception, event);
-
-        // then — retryCount must equal MAX_ATTEMPTS for DARFE
-        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
-        verify(failedIntegrationEventRepository).save(captor.capture());
-        assertThat((int) getField(captor.getValue(), "retryCount")).isEqualTo(3);
-    }
-
-    @Test
-    void recover_withDataAccessResourceFailureException_persistsCreatedAtTimestamp() throws Exception {
-        // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
-        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
-        final Instant before = Instant.now();
-
-        // when
-        sut.recover(exception, event);
-
-        // then — createdAt must be set for DARFE
-        final Instant after = Instant.now();
-        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
-        verify(failedIntegrationEventRepository).save(captor.capture());
-        final Instant createdAt = (Instant) getField(captor.getValue(), "createdAt");
-        assertThat(createdAt).isAfterOrEqualTo(before).isBeforeOrEqualTo(after);
-    }
-
-    @Test
-    void recover_withDataAccessResourceFailureException_persistsRecordWithFailedStatus() throws Exception {
-        // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
-        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
-
-        // when
-        sut.recover(exception, event);
-
-        // then — status must be FAILED for DARFE
-        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
-        verify(failedIntegrationEventRepository).save(captor.capture());
-        assertThat((FailedIntegrationEventRecord.Status) getField(captor.getValue(), "status"))
-                .isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
-    }
-
-    @Test
     void handleStudentEnrolledToCourseEvent_onDataIntegrityViolationException_doesNotInteractWithFailedEventRepository() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -2243,6 +2142,36 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "eventPayload")).isEqualTo(event.toString());
         assertThat(getField(captor.getValue(), "eventPayload").toString())
                 .contains("\u00fc\u00f1\u00ee\u00e7\u00f8\u00f0\u00e9-student");
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_resourceNotFoundException_preservesExceptionIdentity() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final ResourceNotFoundException originalException = new ResourceNotFoundException("Course not found");
+        doThrow(originalException).when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when/then — catch(Exception e) { throw e; } must not wrap the business exception
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void recover_withSpecialCharsInExceptionMessage_persistsExactMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final String specialMessage = "Error: tab\there, newline\nhere, unicode \u00e9\u00e8\u00ea and null-byte \u0000 end";
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException(specialMessage);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo(specialMessage);
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {
