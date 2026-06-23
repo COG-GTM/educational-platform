@@ -1918,6 +1918,67 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         verifyNoInteractions(failedIntegrationEventRepository);
     }
 
+    @Test
+    void recover_exceptionClassName_containsDot() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must be a fully qualified name (contains at least one dot)
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName")).contains(".");
+    }
+
+    @Test
+    void recover_eventClassName_containsDot() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — eventClassName must be a fully qualified name (contains at least one dot)
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventClassName")).contains(".");
+    }
+
+    @Test
+    void recover_withNullException_throwsNullPointerException() {
+        // given — null exception causes NPE in e.getMessage() and e.getClass().getName()
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(null, event))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void constructor_withBothNullDependencies_constructsSuccessfully() {
+        // constructor does not validate — NPE deferred to method invocation
+        new CourseRatingRecalculatedIntegrationEventHandler(null, null);
+    }
+
+    @Test
+    void maxAttemptsField_valueIsThree() throws Exception {
+        // given — hardcoded assertion guards against accidental changes to retry count
+        Field maxAttemptsField = CourseRatingRecalculatedIntegrationEventHandler.class.getDeclaredField("MAX_ATTEMPTS");
+        maxAttemptsField.setAccessible(true);
+        int maxAttempts = (int) maxAttemptsField.get(null);
+
+        // then
+        assertThat(maxAttempts).isEqualTo(3);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
