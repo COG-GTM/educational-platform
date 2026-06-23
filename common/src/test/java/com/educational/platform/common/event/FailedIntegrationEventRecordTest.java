@@ -774,6 +774,35 @@ class FailedIntegrationEventRecordTest {
                 .isNull();
     }
 
+    @Test
+    void constructor_statusIsNeverResolved() throws Exception {
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", "java.lang.RuntimeException", 3);
+        FailedIntegrationEventRecord.Status status =
+                (FailedIntegrationEventRecord.Status) getField(record, "status");
+        assertThat(status)
+                .isEqualTo(FailedIntegrationEventRecord.Status.FAILED)
+                .isNotEqualTo(FailedIntegrationEventRecord.Status.RESOLVED);
+    }
+
+    @Test
+    void statusField_hasNoPublicSetter() {
+        long publicSetterCount = java.util.Arrays.stream(
+                        FailedIntegrationEventRecord.class.getDeclaredMethods())
+                .filter(m -> java.lang.reflect.Modifier.isPublic(m.getModifiers()))
+                .filter(m -> m.getName().equals("setStatus"))
+                .count();
+        assertThat(publicSetterCount)
+                .as("Status should not be publicly modifiable")
+                .isZero();
+    }
+
+    @Test
+    void resolvedStatus_stringRepresentation_matchesEnumName() {
+        assertThat(FailedIntegrationEventRecord.Status.RESOLVED.name())
+                .isEqualTo("RESOLVED");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

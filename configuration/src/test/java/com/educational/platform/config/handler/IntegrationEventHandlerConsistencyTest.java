@@ -932,6 +932,61 @@ class IntegrationEventHandlerConsistencyTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
+    @Test
+    void allHandlers_retryableValueAlias_isEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(retryable.value())
+                    .as("@Retryable.value() in %s should be empty — use retryFor() instead",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    void allHandlers_retryableIncludeAlias_isEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(retryable.include())
+                    .as("@Retryable.include() in %s should be empty — use retryFor() instead",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    void allHandlers_retryableExcludeAlias_isEmpty() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Retryable retryable = method.getAnnotation(Retryable.class);
+            assertThat(retryable.exclude())
+                    .as("@Retryable.exclude() in %s should be empty — use noRetryFor() instead",
+                            handlerClass.getSimpleName())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void allHandlers_backoffValueAlias_isDefaultWhenDelayIsSet() {
+        for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
+            Method method = findEventListenerMethod(handlerClass);
+            Backoff backoff = method.getAnnotation(Retryable.class).backoff();
+            assertThat(backoff.delay())
+                    .as("@Backoff.delay() in %s should be explicitly set (overrides value())",
+                            handlerClass.getSimpleName())
+                    .isGreaterThan(0);
+            assertThat(backoff.value())
+                    .as("@Backoff.value() in %s should be default 1000 — delay() overrides it",
+                            handlerClass.getSimpleName())
+                    .isEqualTo(1000L);
+        }
+    }
+
     @Test
     void allHandlers_haveExactlyTwoDeclaredPublicMethods() {
         for (Class<?> handlerClass : ALL_HANDLER_CLASSES) {
