@@ -18,6 +18,8 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AsyncConfigTest {
 
@@ -670,5 +672,81 @@ class AsyncConfigTest {
         // Verify this overrides AsyncConfigurer interface
         assertThat(method.getDeclaringClass()).isEqualTo(AsyncConfig.class);
         assertThat(AsyncConfigurer.class.getMethod("getAsyncExecutor")).isNotNull();
+    }
+
+    @Test
+    void getAsyncExecutor_beforeInitialization_rejectsTaskSubmission() {
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        assertThatThrownBy(() -> executor.execute(() -> {}))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void getAsyncExecutor_afterInitialization_usesConfiguredThreadNamePrefix() throws Exception {
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.afterPropertiesSet();
+
+        try {
+            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.atomic.AtomicReference<String> threadName = new java.util.concurrent.atomic.AtomicReference<>();
+            executor.execute(() -> {
+                threadName.set(Thread.currentThread().getName());
+                latch.countDown();
+            });
+            latch.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(threadName.get()).startsWith("integration-event-");
+        } finally {
+            executor.shutdown();
+        }
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_nullMethod_throwsNullPointerException() {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        RuntimeException exception = new RuntimeException("test error");
+        assertThatThrownBy(() -> handler.handleUncaughtException(exception, null, "param"))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void asyncConfig_getAsyncUncaughtExceptionHandlerMethod_overridesAsyncConfigurer() throws NoSuchMethodException {
+        Method method = AsyncConfig.class.getMethod("getAsyncUncaughtExceptionHandler");
+        assertThat(method.getDeclaringClass()).isEqualTo(AsyncConfig.class);
+        assertThat(AsyncConfigurer.class.getMethod("getAsyncUncaughtExceptionHandler")).isNotNull();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_handlesNullParams() throws NoSuchMethodException {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        RuntimeException exception = new RuntimeException("null params test");
+        var method = AsyncConfigTest.class
+                .getDeclaredMethod("asyncUncaughtExceptionHandler_handlesNullParams");
+        handler.handleUncaughtException(exception, method, (Object[]) null);
+    }
+
+    @Test
+    void asyncConfig_hasNoPublicFields() {
+        long publicFieldCount = java.util.Arrays.stream(AsyncConfig.class.getDeclaredFields())
+                .filter(f -> java.lang.reflect.Modifier.isPublic(f.getModifiers()))
+                .count();
+        assertThat(publicFieldCount)
+                .as("AsyncConfig should not expose public fields")
+                .isZero();
+    }
+
+    @Test
+    void getAsyncExecutor_executorIsNotNull() {
+        Executor executor = asyncConfig.getAsyncExecutor();
+        assertThat(executor)
+                .as("getAsyncExecutor should never return null — Spring requires a valid executor")
+                .isNotNull();
+    }
+
+    @Test
+    void getAsyncUncaughtExceptionHandler_handlerIsNotNull() {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        assertThat(handler)
+                .as("getAsyncUncaughtExceptionHandler should never return null — Spring uses it for async error handling")
+                .isNotNull();
     }
 }
