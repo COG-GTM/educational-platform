@@ -168,6 +168,43 @@ class FailedIntegrationEventRecordSchemaConsistencyTest {
         assertThat(field.getType()).isEqualTo(FailedIntegrationEventRecord.Status.class);
     }
 
+    @Test
+    void statusEnumValues_allFitWithinSchemaColumnLength() {
+        // The Liquibase schema defines status as VARCHAR(20).
+        // If a new enum value exceeds 20 chars, it will cause a runtime data truncation error.
+        int schemaColumnLength = 20;
+        for (FailedIntegrationEventRecord.Status status : FailedIntegrationEventRecord.Status.values()) {
+            assertThat(status.name().length())
+                    .as("Status enum value '%s' (length %d) must fit within VARCHAR(%d) defined in common.yml",
+                            status.name(), status.name().length(), schemaColumnLength)
+                    .isLessThanOrEqualTo(schemaColumnLength);
+        }
+    }
+
+    @Test
+    void eventClassNameColumn_lengthMatchesSchema() throws NoSuchFieldException {
+        Column column = getDeclaredFieldColumn("eventClassName");
+        assertThat(column.length())
+                .as("@Column.length on eventClassName should match VARCHAR(500) in common.yml")
+                .isEqualTo(500);
+    }
+
+    @Test
+    void exceptionClassNameColumn_lengthMatchesSchema() throws NoSuchFieldException {
+        Column column = getDeclaredFieldColumn("exceptionClassName");
+        assertThat(column.length())
+                .as("@Column.length on exceptionClassName should match VARCHAR(500) in common.yml")
+                .isEqualTo(500);
+    }
+
+    @Test
+    void exceptionClassNameColumn_isNullableMatchesSchema() throws NoSuchFieldException {
+        Column column = getDeclaredFieldColumn("exceptionClassName");
+        assertThat(column.nullable())
+                .as("exceptionClassName should be nullable — exception_class_name in common.yml has no NOT NULL constraint")
+                .isTrue();
+    }
+
     private Column getDeclaredFieldColumn(String fieldName) throws NoSuchFieldException {
         Field field = FailedIntegrationEventRecord.class.getDeclaredField(fieldName);
         Column column = field.getAnnotation(Column.class);

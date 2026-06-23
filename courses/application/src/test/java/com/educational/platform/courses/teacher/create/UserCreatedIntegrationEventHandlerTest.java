@@ -1653,6 +1653,50 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
     }
 
+    @Test
+    void constructor_withNullCommandHandler_constructsSuccessfully() {
+        new UserCreatedIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
+    }
+
+    @Test
+    void constructor_withNullRepository_constructsSuccessfully() {
+        new UserCreatedIntegrationEventHandler(mock(CreateTeacherCommandHandler.class), null);
+    }
+
+    @Test
+    void handleUserCreatedEvent_withNullCommandHandler_throwsNullPointerException() {
+        // given
+        var handler = new UserCreatedIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
+        var event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+
+        // when/then
+        assertThatThrownBy(() -> handler.handleUserCreatedEvent(event))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void recover_withNullRepository_throwsNullPointerException() {
+        // given
+        var handler = new UserCreatedIntegrationEventHandler(mock(CreateTeacherCommandHandler.class), null);
+        var event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        var exception = new DataAccessResourceFailureException("DB error");
+
+        // when/then
+        assertThatThrownBy(() -> handler.recover(exception, event))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void recover_withNullEvent_throwsNullPointerException() {
+        // given
+        var exception = new DataAccessResourceFailureException("DB error");
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(exception, null))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

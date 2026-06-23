@@ -1549,6 +1549,52 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
     }
 
+    @Test
+    void constructor_withNullCommandHandler_constructsSuccessfully() {
+        // constructor does not validate — NPE deferred to handleEvent invocation
+        new SendCourseToApproveIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
+    }
+
+    @Test
+    void constructor_withNullRepository_constructsSuccessfully() {
+        // constructor does not validate — NPE deferred to recover() invocation
+        new SendCourseToApproveIntegrationEventHandler(mock(CreateCourseProposalCommandHandler.class), null);
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_withNullCommandHandler_throwsNullPointerException() {
+        // given
+        var handler = new SendCourseToApproveIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
+        var event = new SendCourseToApproveIntegrationEvent(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"));
+
+        // when/then
+        assertThatThrownBy(() -> handler.handleSendCourseToApproveEvent(event))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void recover_withNullRepository_throwsNullPointerException() {
+        // given
+        var handler = new SendCourseToApproveIntegrationEventHandler(mock(CreateCourseProposalCommandHandler.class), null);
+        var event = new SendCourseToApproveIntegrationEvent(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"));
+        var exception = new DataAccessResourceFailureException("DB error");
+
+        // when/then
+        assertThatThrownBy(() -> handler.recover(exception, event))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void recover_withNullEvent_throwsNullPointerException() {
+        // given — null event causes NPE in event.getClass().getName()
+        var exception = new DataAccessResourceFailureException("DB error");
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(exception, null))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
