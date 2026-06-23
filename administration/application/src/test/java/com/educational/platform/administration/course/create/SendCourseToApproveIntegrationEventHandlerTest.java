@@ -2166,6 +2166,78 @@ class SendCourseToApproveIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_withConcurrencyFailureException_exceptionClassName_isNotSimpleName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String exceptionClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(exceptionClassName).contains(".");
+        assertThat(exceptionClassName).isNotEqualTo(exception.getClass().getSimpleName());
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_exceptionClassName_containsDot() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName")).contains(".");
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — ConcurrencyFailureException lives in org.springframework.dao
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
+    @Test
+    void recover_withIdenticalEventDataTwice_producesIndependentRecords() throws Exception {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event1 = new SendCourseToApproveIntegrationEvent(uuid);
+        final SendCourseToApproveIntegrationEvent event2 = new SendCourseToApproveIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        sut.recover(exception, event1);
+        sut.recover(exception, event2);
+
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).hasSize(2);
+        assertThat(captor.getAllValues().get(0)).isNotSameAs(captor.getAllValues().get(1));
+        assertThat(getField(captor.getAllValues().get(0), "eventPayload"))
+                .isEqualTo(getField(captor.getAllValues().get(1), "eventPayload"));
+    }
+
+    @Test
     void recover_withCustomDataAccessExceptionSubclass_persistsActualRuntimeClassName() throws Exception {
         // given — a custom subclass of DataAccessException should have its actual runtime type stored
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
