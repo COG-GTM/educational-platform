@@ -128,4 +128,32 @@ class IntegrationEventHandlerRecoverNullExceptionContractTest {
 
         verifyNoInteractions(repo1, repo2, repo3, repo4, repo5);
     }
+
+    @Test
+    void allHandlers_recover_nullBothParams_throwsNullPointerException() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+
+        assertThatThrownBy(() -> new SendCourseToApproveIntegrationEventHandler(
+                mock(CreateCourseProposalCommandHandler.class), repo)
+                .recover(null, null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new CourseApprovedByAdminIntegrationEventHandler(
+                mock(ApproveCourseCommandHandler.class), repo)
+                .recover(null, null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new StudentEnrolledToCourseIntegrationEventHandler(
+                mock(IncreaseNumberOfStudentsCommandHandler.class), repo)
+                .recover(null, null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new CourseRatingRecalculatedIntegrationEventHandler(
+                mock(UpdateCourseRatingCommandHandler.class), repo)
+                .recover(null, null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new UserCreatedIntegrationEventHandler(
+                mock(CreateTeacherCommandHandler.class), repo)
+                .recover(null, null))
+                .isInstanceOf(NullPointerException.class);
+
+        verifyNoInteractions(repo);
+    }
 }

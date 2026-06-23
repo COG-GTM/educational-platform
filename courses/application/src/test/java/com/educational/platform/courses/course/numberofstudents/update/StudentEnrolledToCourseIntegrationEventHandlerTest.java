@@ -1863,6 +1863,20 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
     }
 
+    @Test
+    void recover_withNullException_repositoryNeverInvoked() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+
+        // when
+        try { sut.recover(null, event); } catch (NullPointerException ignored) { }
+
+        // then — NPE occurs before repository.save(), so repo is never touched
+        verifyNoInteractions(failedIntegrationEventRepository);
+        verifyNoInteractions(increaseNumberOfStudentsCommandHandler);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

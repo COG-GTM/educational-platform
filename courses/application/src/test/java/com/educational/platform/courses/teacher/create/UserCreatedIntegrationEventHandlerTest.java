@@ -1709,6 +1709,19 @@ class UserCreatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_withNullException_repositoryNeverInvoked() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
+
+        // when
+        try { sut.recover(null, event); } catch (NullPointerException ignored) { }
+
+        // then — NPE occurs before repository.save(), so repo is never touched
+        verifyNoInteractions(failedIntegrationEventRepository);
+        verifyNoInteractions(createTeacherCommandHandler);
+    }
+
+    @Test
     void recover_withExceptionMessageExceedingColumnLimit_persistsFullMessage() throws Exception {
         // given — exception message exceeding the 2000-char column limit at Java level
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@example.com");
