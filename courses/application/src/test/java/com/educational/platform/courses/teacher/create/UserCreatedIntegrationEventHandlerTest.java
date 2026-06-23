@@ -2577,6 +2577,72 @@ class UserCreatedIntegrationEventHandlerTest {
                 .hasMessage(null);
     }
 
+    @Test
+    void recover_eventClassName_matchesHardcodedFQN() throws Exception {
+        // given — hardcoded FQN catches silent import/refactoring mistakes that .class.getName() would not
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo("com.educational.platform.users.integration.event.UserCreatedIntegrationEvent");
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_doesNotInvokeCommandHandler() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        verifyNoInteractions(createTeacherCommandHandler);
+    }
+
+    @Test
+    void recover_eventPayload_containsRecordFieldNames() throws Exception {
+        // given — record toString() must include field names, not just values
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String payload = (String) getField(captor.getValue(), "eventPayload");
+        assertThat(payload).contains("username");
+        assertThat(payload).contains("email");
+    }
+
+    @Test
+    void recover_eventPayload_matchesJavaRecordToStringFormat() throws Exception {
+        // given — Java records produce "TypeName[field1=value1, ...]" format
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String payload = (String) getField(captor.getValue(), "eventPayload");
+        assertThat(payload).startsWith("UserCreatedIntegrationEvent[");
+        assertThat(payload).endsWith("]");
+        assertThat(payload).contains("username=user1");
+        assertThat(payload).contains("email=user1@example.com");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

@@ -1023,6 +1023,53 @@ class FailedIntegrationEventRecordTest {
         assertThat(((String) getField(record, "exceptionClassName")).length()).isEqualTo(1000);
     }
 
+    @Test
+    void constructor_withRecordStylePayload_preservesFormat() throws Exception {
+        // given — integration event records produce "TypeName[field1=value1, field2=value2]" payloads
+        String payload = "SomeIntegrationEvent[courseId=123e4567-e89b-12d3-a456-426655440001, rating=4.5]";
+
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.SomeIntegrationEvent", payload, "error", "java.lang.RuntimeException", 3);
+
+        // then
+        assertThat(getField(record, "eventPayload")).isEqualTo(payload);
+        assertThat((String) getField(record, "eventPayload")).startsWith("SomeIntegrationEvent[");
+        assertThat((String) getField(record, "eventPayload")).endsWith("]");
+        assertThat((String) getField(record, "eventPayload")).contains("courseId=");
+        assertThat((String) getField(record, "eventPayload")).contains("rating=4.5");
+    }
+
+    @Test
+    void constructor_eventClassName_storedVerbatim_notTransformed() throws Exception {
+        // given — the constructor must store the exact string without any normalization or transformation
+        String fqn = "com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent";
+
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                fqn, "payload", "error", "java.lang.RuntimeException", 3);
+
+        // then
+        assertThat(getField(record, "eventClassName")).isEqualTo(fqn);
+        assertThat((String) getField(record, "eventClassName")).contains(".");
+        assertThat((String) getField(record, "eventClassName")).doesNotStartWith(" ");
+        assertThat((String) getField(record, "eventClassName")).doesNotEndWith(" ");
+    }
+
+    @Test
+    void constructor_exceptionClassName_storedVerbatim_notTransformed() throws Exception {
+        // given — anonymous subclass names contain $ and digits; they must be stored as-is
+        String anonymousClassName = "com.example.TestClass$1";
+
+        // when
+        FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", anonymousClassName, 3);
+
+        // then
+        assertThat(getField(record, "exceptionClassName")).isEqualTo(anonymousClassName);
+        assertThat((String) getField(record, "exceptionClassName")).contains("$");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

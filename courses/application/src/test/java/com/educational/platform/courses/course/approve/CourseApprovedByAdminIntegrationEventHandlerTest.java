@@ -2470,6 +2470,74 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
                 .hasMessage(null);
     }
 
+    @Test
+    void recover_eventClassName_matchesHardcodedFQN() throws Exception {
+        // given — hardcoded FQN catches silent import/refactoring mistakes that .class.getName() would not
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "eventClassName"))
+                .isEqualTo("com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent");
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_doesNotInvokeCommandHandler() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        verifyNoInteractions(approveCourseCommandHandler);
+    }
+
+    @Test
+    void recover_eventPayload_containsRecordFieldNames() throws Exception {
+        // given — record toString() must include field names, not just values
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String payload = (String) getField(captor.getValue(), "eventPayload");
+        assertThat(payload).contains("courseId");
+    }
+
+    @Test
+    void recover_eventPayload_matchesJavaRecordToStringFormat() throws Exception {
+        // given — Java records produce "TypeName[field1=value1, ...]" format
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String payload = (String) getField(captor.getValue(), "eventPayload");
+        assertThat(payload).startsWith("CourseApprovedByAdminIntegrationEvent[");
+        assertThat(payload).endsWith("]");
+        assertThat(payload).contains("courseId=123e4567-e89b-12d3-a456-426655440001");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
