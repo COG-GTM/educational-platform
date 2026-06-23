@@ -2439,38 +2439,90 @@ class UserCreatedIntegrationEventHandlerTest {
     }
 
     @Test
-    void recover_withConcurrencyFailureException_exceptionClassName_isNotSimpleName() throws Exception {
-        // given
-        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
-        final org.springframework.dao.ConcurrencyFailureException exception =
-                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+    void recover_allFieldsCorrespondToCorrectSources() throws Exception {
+        // given — deliberately distinct values so any constructor arg swap is detectable
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("distinct-user", "distinct@example.com");
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("unique-constraint-msg");
 
         // when
         sut.recover(exception, event);
 
-        // then — exceptionClassName must be package-qualified, not a simple class name
+        // then — verify each field comes from the correct source
         final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
         verify(failedIntegrationEventRepository).save(captor.capture());
-        final String exceptionClassName = (String) getField(captor.getValue(), "exceptionClassName");
-        assertThat(exceptionClassName).contains(".");
-        assertThat(exceptionClassName).isNotEqualTo(exception.getClass().getSimpleName());
+        final FailedIntegrationEventRecord record = captor.getValue();
+        assertThat(getField(record, "eventClassName")).isEqualTo(event.getClass().getName());
+        assertThat(getField(record, "eventPayload")).isEqualTo(event.toString());
+        assertThat(getField(record, "exceptionMessage")).isEqualTo(exception.getMessage());
+        assertThat(getField(record, "exceptionClassName")).isEqualTo(exception.getClass().getName());
+        assertThat((int) getField(record, "retryCount")).isEqualTo(3);
+        assertThat(getField(record, "status")).isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+        assertThat(getField(record, "createdAt")).isNotNull();
     }
 
     @Test
-    void recover_withConcurrencyFailureException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
-        // given
+    void recover_exceptionClassNameAndMessageAreNotSwapped() throws Exception {
+        // given — exception message and class name are very different; a swap would be obvious
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
-        final org.springframework.dao.ConcurrencyFailureException exception =
-                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("human-readable error text");
 
         // when
         sut.recover(exception, event);
 
-        // then — ConcurrencyFailureException lives in org.springframework.dao
+        // then
         final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
         verify(failedIntegrationEventRepository).save(captor.capture());
-        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
-                .startsWith("org.springframework.dao.");
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo("human-readable error text");
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.DataAccessResourceFailureException");
+    }
+
+    @Test
+    void recover_eventClassNameAndPayloadAreNotSwapped() throws Exception {
+        // given — eventClassName is a FQN, eventPayload is the toString(); structurally different
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String eventClassName = (String) getField(captor.getValue(), "eventClassName");
+        final String eventPayload = (String) getField(captor.getValue(), "eventPayload");
+        assertThat(eventClassName).isEqualTo(UserCreatedIntegrationEvent.class.getName());
+        assertThat(eventPayload).isEqualTo(event.toString());
+        assertThat(eventClassName).isNotEqualTo(eventPayload);
+    }
+
+    @Test
+    void handle_successPath_commandHandlerCalledExactlyOnce_andNoOtherInteractions() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then — exactly one interaction with command handler, zero with repository
+        verify(createTeacherCommandHandler, times(1)).handle(any());
+        verifyNoMoreInteractions(createTeacherCommandHandler);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_onlyInteractsWithRepository_notCommandHandler() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exactly one save, no command handler interaction
+        verify(failedIntegrationEventRepository, times(1)).save(any(FailedIntegrationEventRecord.class));
+        verifyNoMoreInteractions(failedIntegrationEventRepository);
+        verifyNoInteractions(createTeacherCommandHandler);
     }
 
     private Object getField(Object obj, String fieldName) throws Exception {
