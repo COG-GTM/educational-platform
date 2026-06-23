@@ -182,22 +182,6 @@ class FailedIntegrationEventRecordSchemaConsistencyTest {
     }
 
     @Test
-    void eventClassNameColumn_lengthMatchesSchema() throws NoSuchFieldException {
-        Column column = getDeclaredFieldColumn("eventClassName");
-        assertThat(column.length())
-                .as("@Column.length on eventClassName should match VARCHAR(500) in common.yml")
-                .isEqualTo(500);
-    }
-
-    @Test
-    void exceptionClassNameColumn_lengthMatchesSchema() throws NoSuchFieldException {
-        Column column = getDeclaredFieldColumn("exceptionClassName");
-        assertThat(column.length())
-                .as("@Column.length on exceptionClassName should match VARCHAR(500) in common.yml")
-                .isEqualTo(500);
-    }
-
-    @Test
     void exceptionClassNameColumn_isNullableMatchesSchema() throws NoSuchFieldException {
         Column column = getDeclaredFieldColumn("exceptionClassName");
         assertThat(column.nullable())

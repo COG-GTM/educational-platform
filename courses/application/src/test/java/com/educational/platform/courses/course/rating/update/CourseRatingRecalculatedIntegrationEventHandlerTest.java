@@ -1836,6 +1836,98 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
     }
 
+    @Test
+    void constructor_withNullCommandHandler_constructsSuccessfully() {
+        new CourseRatingRecalculatedIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
+    }
+
+    @Test
+    void constructor_withNullRepository_constructsSuccessfully() {
+        new CourseRatingRecalculatedIntegrationEventHandler(mock(UpdateCourseRatingCommandHandler.class), null);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_withNullCommandHandler_throwsNullPointerException() {
+        // given
+        var handler = new CourseRatingRecalculatedIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
+        var event = new CourseRatingRecalculatedIntegrationEvent(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"), 4.5);
+
+        // when/then
+        assertThatThrownBy(() -> handler.handleCourseRatingRecalculatedEvent(event))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void recover_eventPayloadContainsCourseIdAndRating() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "eventPayload"))
+                .contains("123e4567-e89b-12d3-a456-426655440001")
+                .contains("4.5");
+    }
+
+    @Test
+    void recover_withExceptionMessageExceedingColumnLimit_persistsFullMessage() throws Exception {
+        // given — exception message exceeding the 2000-char column limit at Java level
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final String longMessage = "E".repeat(3000);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException(longMessage);
+
+        // when
+        sut.recover(exception, event);
+
+        // then — Java level accepts the full message; DB truncation is a persistence concern
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isEqualTo(longMessage);
+        assertThat(((String) getField(captor.getValue(), "exceptionMessage")).length()).isEqualTo(3000);
+    }
+
+    @Test
+    void recover_withNullEvent_throwsNullPointerException() {
+        // given
+        var exception = new DataAccessResourceFailureException("DB error");
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(exception, null))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_withNullExceptionArg_throwsNullPointerException() {
+        // given — null exception causes NPE on e.getMessage() / e.getClass().getName()
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(null, event))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
+    @Test
+    void recover_withNullRepository_throwsNullPointerException() {
+        // given
+        var handler = new CourseRatingRecalculatedIntegrationEventHandler(mock(UpdateCourseRatingCommandHandler.class), null);
+        var event = new CourseRatingRecalculatedIntegrationEvent(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"), 4.5);
+        var exception = new DataAccessResourceFailureException("DB error");
+
+        // when/then
+        assertThatThrownBy(() -> handler.recover(exception, event))
+                .isInstanceOf(NullPointerException.class);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
