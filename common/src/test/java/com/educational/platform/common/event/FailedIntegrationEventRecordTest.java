@@ -887,6 +887,76 @@ class FailedIntegrationEventRecordTest {
         assertThat(createdAt).isBeforeOrEqualTo(Instant.now());
     }
 
+    @Test
+    void constructor_allStringFieldsAtMaxColumnLimits_accepted() throws Exception {
+        // given — all string fields simultaneously at their column limits
+        String eventClassName = "A".repeat(500);
+        String eventPayload = "B".repeat(4000);
+        String exceptionMessage = "C".repeat(2000);
+        String exceptionClassName = "D".repeat(500);
+
+        // when
+        var record = new FailedIntegrationEventRecord(
+                eventClassName, eventPayload, exceptionMessage, exceptionClassName, 3);
+
+        // then
+        assertThat(getField(record, "eventClassName")).isEqualTo(eventClassName);
+        assertThat(getField(record, "eventPayload")).isEqualTo(eventPayload);
+        assertThat(getField(record, "exceptionMessage")).isEqualTo(exceptionMessage);
+        assertThat(getField(record, "exceptionClassName")).isEqualTo(exceptionClassName);
+        assertThat((int) getField(record, "retryCount")).isEqualTo(3);
+        assertThat(getField(record, "status")).isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+    }
+
+    @Test
+    void constructor_rapidSuccessiveCreation_producesIndependentRecordsWithNonDecreasingTimestamps() throws Exception {
+        // when — create multiple records in rapid succession
+        var record1 = new FailedIntegrationEventRecord("class1", "payload1", "msg1", "exClass1", 1);
+        var record2 = new FailedIntegrationEventRecord("class2", "payload2", "msg2", "exClass2", 2);
+        var record3 = new FailedIntegrationEventRecord("class3", "payload3", "msg3", "exClass3", 3);
+
+        // then — timestamps are monotonically non-decreasing
+        Instant t1 = (Instant) getField(record1, "createdAt");
+        Instant t2 = (Instant) getField(record2, "createdAt");
+        Instant t3 = (Instant) getField(record3, "createdAt");
+        assertThat(t2).isAfterOrEqualTo(t1);
+        assertThat(t3).isAfterOrEqualTo(t2);
+
+        // then — fields are independent
+        assertThat(getField(record1, "eventClassName")).isNotEqualTo(getField(record2, "eventClassName"));
+        assertThat(getField(record2, "retryCount")).isNotEqualTo(getField(record3, "retryCount"));
+    }
+
+    @Test
+    void constructor_statusIsAlwaysFailed_neverResolved() throws Exception {
+        // when — construct with various parameters
+        var record = new FailedIntegrationEventRecord(
+                "eventClass", "payload", "message", "exClass", 5);
+
+        // then — constructor always sets FAILED; there is no way to set RESOLVED via constructor
+        assertThat(getField(record, "status")).isEqualTo(FailedIntegrationEventRecord.Status.FAILED);
+        assertThat(getField(record, "status")).isNotEqualTo(FailedIntegrationEventRecord.Status.RESOLVED);
+    }
+
+    @Test
+    void constructor_allFieldsExceedColumnLimitsSimultaneously_acceptedAtJavaLevel() throws Exception {
+        // given — all string fields exceed their column limits simultaneously
+        String eventClassName = "E".repeat(1000);    // exceeds 500
+        String eventPayload = "F".repeat(10000);     // exceeds 4000
+        String exceptionMessage = "G".repeat(5000);  // exceeds 2000
+        String exceptionClassName = "H".repeat(1000); // exceeds 500
+
+        // when
+        var record = new FailedIntegrationEventRecord(
+                eventClassName, eventPayload, exceptionMessage, exceptionClassName, 3);
+
+        // then — Java object creation succeeds even when all fields exceed DB limits
+        assertThat(((String) getField(record, "eventClassName")).length()).isEqualTo(1000);
+        assertThat(((String) getField(record, "eventPayload")).length()).isEqualTo(10000);
+        assertThat(((String) getField(record, "exceptionMessage")).length()).isEqualTo(5000);
+        assertThat(((String) getField(record, "exceptionClassName")).length()).isEqualTo(1000);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

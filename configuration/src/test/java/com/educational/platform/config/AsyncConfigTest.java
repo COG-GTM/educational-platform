@@ -749,4 +749,55 @@ class AsyncConfigTest {
                 .as("getAsyncUncaughtExceptionHandler should never return null — Spring uses it for async error handling")
                 .isNotNull();
     }
+
+    @Test
+    void getAsyncExecutor_shutdownSettings_areConfiguredTogether() throws Exception {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then — both shutdown settings must be configured together for graceful shutdown
+        java.lang.reflect.Field waitField = org.springframework.scheduling.concurrent.ExecutorConfigurationSupport.class
+                .getDeclaredField("waitForTasksToCompleteOnShutdown");
+        waitField.setAccessible(true);
+        assertThat((boolean) waitField.get(executor))
+                .as("waitForTasksToCompleteOnShutdown must be true for graceful async event processing shutdown")
+                .isTrue();
+        java.lang.reflect.Field awaitField = org.springframework.scheduling.concurrent.ExecutorConfigurationSupport.class
+                .getDeclaredField("awaitTerminationMillis");
+        awaitField.setAccessible(true);
+        assertThat((long) awaitField.get(executor))
+                .as("awaitTerminationMillis must be set when waitForTasks is true")
+                .isEqualTo(30_000L);
+        executor.shutdown();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_innerClass_hasOwnLogger() throws Exception {
+        // given — the inner handler class should have its own logger, not reference AsyncConfig's
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Class<?> handlerClass = handler.getClass();
+
+        // then
+        java.lang.reflect.Field logField = handlerClass.getDeclaredField("log");
+        logField.setAccessible(true);
+        org.slf4j.Logger logger = (org.slf4j.Logger) logField.get(null);
+        assertThat(logger.getName())
+                .as("Inner exception handler should have a logger referencing its own class")
+                .contains("IntegrationEventAsyncExceptionHandler");
+    }
+
+    @Test
+    void getAsyncExecutor_multipleInstances_haveIndependentConfiguration() {
+        // when — each call creates a new executor instance
+        ThreadPoolTaskExecutor exec1 = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        ThreadPoolTaskExecutor exec2 = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then — both have correct config, proving configuration is applied fresh each time
+        assertThat(exec1).isNotSameAs(exec2);
+        assertThat(exec1.getCorePoolSize()).isEqualTo(exec2.getCorePoolSize()).isEqualTo(4);
+        assertThat(exec1.getMaxPoolSize()).isEqualTo(exec2.getMaxPoolSize()).isEqualTo(8);
+        assertThat(exec1.getQueueCapacity()).isEqualTo(exec2.getQueueCapacity()).isEqualTo(100);
+        assertThat(exec1.getThreadNamePrefix()).isEqualTo(exec2.getThreadNamePrefix())
+                .isEqualTo("integration-event-");
+    }
 }
