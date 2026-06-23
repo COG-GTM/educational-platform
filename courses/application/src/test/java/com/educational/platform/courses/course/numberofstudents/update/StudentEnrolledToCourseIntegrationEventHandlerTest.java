@@ -1676,6 +1676,86 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
     }
 
+    @Test
+    void recover_withDataIntegrityViolationException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — DIVE lives in org.springframework.dao, not org.springframework.orm
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_nullMessage_persistsNullMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException((String) null, new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — null message must be persisted without exception
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
+    }
+
+    @Test
+    void constructor_withNullCommandHandler_constructsSuccessfully() {
+        // constructor does not validate — NPE deferred to handleEvent invocation
+        new StudentEnrolledToCourseIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
+    }
+
+    @Test
+    void constructor_withNullRepository_constructsSuccessfully() {
+        // constructor does not validate — NPE deferred to recover() invocation
+        new StudentEnrolledToCourseIntegrationEventHandler(mock(IncreaseNumberOfStudentsCommandHandler.class), null);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_withNullCommandHandler_throwsNullPointerException() {
+        // given
+        var handler = new StudentEnrolledToCourseIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
+        var event = new StudentEnrolledToCourseIntegrationEvent(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"), "student1");
+
+        // when/then
+        assertThatThrownBy(() -> handler.handleStudentEnrolledToCourseEvent(event))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void recover_withNullRepository_throwsNullPointerException() {
+        // given
+        var handler = new StudentEnrolledToCourseIntegrationEventHandler(mock(IncreaseNumberOfStudentsCommandHandler.class), null);
+        var event = new StudentEnrolledToCourseIntegrationEvent(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"), "student1");
+        var exception = new DataAccessResourceFailureException("DB error");
+
+        // when/then
+        assertThatThrownBy(() -> handler.recover(exception, event))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void recover_withNullEvent_throwsNullPointerException() {
+        // given — null event causes NPE in event.getClass().getName()
+        var exception = new DataAccessResourceFailureException("DB error");
+
+        // when/then
+        assertThatThrownBy(() -> sut.recover(exception, null))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(failedIntegrationEventRepository);
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

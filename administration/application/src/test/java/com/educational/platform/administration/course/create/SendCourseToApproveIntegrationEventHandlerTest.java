@@ -1550,6 +1550,40 @@ class SendCourseToApproveIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_withDataIntegrityViolationException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — DIVE lives in org.springframework.dao, not org.springframework.orm
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_nullMessage_persistsNullMessage() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException((String) null, new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — null message must be persisted without exception
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
+    }
+
+    @Test
     void constructor_withNullCommandHandler_constructsSuccessfully() {
         // constructor does not validate — NPE deferred to handleEvent invocation
         new SendCourseToApproveIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));

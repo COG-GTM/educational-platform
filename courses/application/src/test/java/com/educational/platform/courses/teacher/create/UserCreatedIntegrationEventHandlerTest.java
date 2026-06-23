@@ -1654,6 +1654,38 @@ class UserCreatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_withDataIntegrityViolationException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — DIVE lives in org.springframework.dao, not org.springframework.orm
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
+    @Test
+    void recover_withObjectOptimisticLockingFailureException_nullMessage_persistsNullMessage() throws Exception {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        final ObjectOptimisticLockingFailureException exception =
+                new ObjectOptimisticLockingFailureException((String) null, new RuntimeException());
+
+        // when
+        sut.recover(exception, event);
+
+        // then — null message must be persisted without exception
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionMessage")).isNull();
+    }
+
+    @Test
     void constructor_withNullCommandHandler_constructsSuccessfully() {
         new UserCreatedIntegrationEventHandler(null, mock(FailedIntegrationEventRepository.class));
     }
