@@ -745,6 +745,13 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
+    void statusEnum_isDeclaredInsideRecord() {
+        assertThat(FailedIntegrationEventRecord.Status.class.getDeclaringClass())
+                .as("Status enum should be a member class of FailedIntegrationEventRecord")
+                .isEqualTo(FailedIntegrationEventRecord.class);
+    }
+
+    @Test
     void constructor_withVeryLongExceptionClassName_acceptedAtJavaLevel() throws Exception {
         String longClassName = "com.educational.platform." + "a".repeat(200) + ".SomeException";
 

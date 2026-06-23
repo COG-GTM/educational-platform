@@ -237,6 +237,24 @@ class DeadLetterRecordDiagnosticCompletenessTest {
         assertDiagnosticCompleteness(captor.getValue(), event, exception);
     }
 
+    @Test
+    void userCreatedHandler_recover_withBothNullFields_diagnosticRecordStillComplete() throws Exception {
+        // given — both username and email are null
+        var repo = mock(FailedIntegrationEventRepository.class);
+        var handler = new UserCreatedIntegrationEventHandler(
+                mock(CreateTeacherCommandHandler.class), repo);
+        var event = new UserCreatedIntegrationEvent(null, null);
+        var exception = new DataAccessResourceFailureException(EXCEPTION_MSG);
+
+        // when
+        handler.recover(exception, event);
+
+        // then
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(repo).save(captor.capture());
+        assertDiagnosticCompleteness(captor.getValue(), event, exception);
+    }
+
     private void assertDiagnosticCompleteness(FailedIntegrationEventRecord record,
                                                Object event,
                                                DataAccessResourceFailureException exception) throws Exception {

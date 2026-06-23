@@ -148,6 +148,66 @@ class RecoverMethodRepositoryFailureTest {
     }
 
     @Test
+    void courseApprovedHandler_recover_whenRepositoryThrowsRuntimeException_propagates() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+        when(repo.save(any(FailedIntegrationEventRecord.class)))
+                .thenThrow(new NullPointerException("unexpected null in entity manager"));
+        var handler = new CourseApprovedByAdminIntegrationEventHandler(
+                mock(ApproveCourseCommandHandler.class), repo);
+        var event = new CourseApprovedByAdminIntegrationEvent(COURSE_ID);
+        var originalException = new DataAccessResourceFailureException("original");
+
+        assertThatThrownBy(() -> handler.recover(originalException, event))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("unexpected null");
+    }
+
+    @Test
+    void studentEnrolledHandler_recover_whenRepositoryThrowsRuntimeException_propagates() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+        when(repo.save(any(FailedIntegrationEventRecord.class)))
+                .thenThrow(new NullPointerException("unexpected null in entity manager"));
+        var handler = new StudentEnrolledToCourseIntegrationEventHandler(
+                mock(IncreaseNumberOfStudentsCommandHandler.class), repo);
+        var event = new StudentEnrolledToCourseIntegrationEvent(COURSE_ID, "student1");
+        var originalException = new DataAccessResourceFailureException("original");
+
+        assertThatThrownBy(() -> handler.recover(originalException, event))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("unexpected null");
+    }
+
+    @Test
+    void courseRatingHandler_recover_whenRepositoryThrowsRuntimeException_propagates() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+        when(repo.save(any(FailedIntegrationEventRecord.class)))
+                .thenThrow(new NullPointerException("unexpected null in entity manager"));
+        var handler = new CourseRatingRecalculatedIntegrationEventHandler(
+                mock(UpdateCourseRatingCommandHandler.class), repo);
+        var event = new CourseRatingRecalculatedIntegrationEvent(COURSE_ID, 4.5);
+        var originalException = new DataAccessResourceFailureException("original");
+
+        assertThatThrownBy(() -> handler.recover(originalException, event))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("unexpected null");
+    }
+
+    @Test
+    void userCreatedHandler_recover_whenRepositoryThrowsRuntimeException_propagates() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+        when(repo.save(any(FailedIntegrationEventRecord.class)))
+                .thenThrow(new NullPointerException("unexpected null in entity manager"));
+        var handler = new UserCreatedIntegrationEventHandler(
+                mock(CreateTeacherCommandHandler.class), repo);
+        var event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+        var originalException = new DataAccessResourceFailureException("original");
+
+        assertThatThrownBy(() -> handler.recover(originalException, event))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("unexpected null");
+    }
+
+    @Test
     void sendCourseToApproveHandler_recover_repositoryCalledExactlyOnce_evenOnFailure() {
         // given
         var repo = mock(FailedIntegrationEventRepository.class);
@@ -163,6 +223,70 @@ class RecoverMethodRepositoryFailureTest {
         } catch (DataIntegrityViolationException ignored) {}
 
         // then — no retry of the save within recover()
+        verify(repo, times(1)).save(any(FailedIntegrationEventRecord.class));
+    }
+
+    @Test
+    void courseApprovedHandler_recover_repositoryCalledExactlyOnce_evenOnFailure() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+        when(repo.save(any(FailedIntegrationEventRecord.class)))
+                .thenThrow(new DataIntegrityViolationException("constraint"));
+        var handler = new CourseApprovedByAdminIntegrationEventHandler(
+                mock(ApproveCourseCommandHandler.class), repo);
+        var event = new CourseApprovedByAdminIntegrationEvent(COURSE_ID);
+
+        try {
+            handler.recover(new DataAccessResourceFailureException("error"), event);
+        } catch (DataIntegrityViolationException ignored) {}
+
+        verify(repo, times(1)).save(any(FailedIntegrationEventRecord.class));
+    }
+
+    @Test
+    void studentEnrolledHandler_recover_repositoryCalledExactlyOnce_evenOnFailure() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+        when(repo.save(any(FailedIntegrationEventRecord.class)))
+                .thenThrow(new DataIntegrityViolationException("constraint"));
+        var handler = new StudentEnrolledToCourseIntegrationEventHandler(
+                mock(IncreaseNumberOfStudentsCommandHandler.class), repo);
+        var event = new StudentEnrolledToCourseIntegrationEvent(COURSE_ID, "student1");
+
+        try {
+            handler.recover(new DataAccessResourceFailureException("error"), event);
+        } catch (DataIntegrityViolationException ignored) {}
+
+        verify(repo, times(1)).save(any(FailedIntegrationEventRecord.class));
+    }
+
+    @Test
+    void courseRatingHandler_recover_repositoryCalledExactlyOnce_evenOnFailure() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+        when(repo.save(any(FailedIntegrationEventRecord.class)))
+                .thenThrow(new DataIntegrityViolationException("constraint"));
+        var handler = new CourseRatingRecalculatedIntegrationEventHandler(
+                mock(UpdateCourseRatingCommandHandler.class), repo);
+        var event = new CourseRatingRecalculatedIntegrationEvent(COURSE_ID, 4.5);
+
+        try {
+            handler.recover(new DataAccessResourceFailureException("error"), event);
+        } catch (DataIntegrityViolationException ignored) {}
+
+        verify(repo, times(1)).save(any(FailedIntegrationEventRecord.class));
+    }
+
+    @Test
+    void userCreatedHandler_recover_repositoryCalledExactlyOnce_evenOnFailure() {
+        var repo = mock(FailedIntegrationEventRepository.class);
+        when(repo.save(any(FailedIntegrationEventRecord.class)))
+                .thenThrow(new DataIntegrityViolationException("constraint"));
+        var handler = new UserCreatedIntegrationEventHandler(
+                mock(CreateTeacherCommandHandler.class), repo);
+        var event = new UserCreatedIntegrationEvent("teacher1", "teacher1@test.com");
+
+        try {
+            handler.recover(new DataAccessResourceFailureException("error"), event);
+        } catch (DataIntegrityViolationException ignored) {}
+
         verify(repo, times(1)).save(any(FailedIntegrationEventRecord.class));
     }
 }
