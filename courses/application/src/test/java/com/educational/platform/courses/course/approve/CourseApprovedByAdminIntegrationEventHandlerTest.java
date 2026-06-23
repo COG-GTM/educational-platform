@@ -2270,6 +2270,95 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         assertThat(payload).contains("123e4567-e89b-12d3-a456-426655440001");
     }
 
+    @Test
+    void recover_withDataAccessResourceFailureException_exceptionClassNameIsFullyQualified() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — hardcoded FQN assertion catches silent package relocations
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat(getField(captor.getValue(), "exceptionClassName"))
+                .isEqualTo("org.springframework.dao.DataAccessResourceFailureException");
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_exceptionClassName_isNotSimpleName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must be package-qualified, not a simple class name
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String exceptionClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(exceptionClassName).contains(".");
+        assertThat(exceptionClassName).isNotEqualTo(exception.getClass().getSimpleName());
+    }
+
+    @Test
+    void recover_withDataAccessResourceFailureException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final DataAccessResourceFailureException exception = new DataAccessResourceFailureException("DB error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — DARFE lives in org.springframework.dao
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_exceptionClassName_isNotSimpleName() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — exceptionClassName must be package-qualified, not a simple class name
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        final String exceptionClassName = (String) getField(captor.getValue(), "exceptionClassName");
+        assertThat(exceptionClassName).contains(".");
+        assertThat(exceptionClassName).isNotEqualTo(exception.getClass().getSimpleName());
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_exceptionClassNameStartsWithExpectedPackagePrefix() throws Exception {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final org.springframework.dao.ConcurrencyFailureException exception =
+                new org.springframework.dao.ConcurrencyFailureException("Lock contention");
+
+        // when
+        sut.recover(exception, event);
+
+        // then — ConcurrencyFailureException lives in org.springframework.dao
+        final ArgumentCaptor<FailedIntegrationEventRecord> captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedIntegrationEventRepository).save(captor.capture());
+        assertThat((String) getField(captor.getValue(), "exceptionClassName"))
+                .startsWith("org.springframework.dao.");
+    }
+
     private Object getField(Object obj, String fieldName) throws Exception {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
