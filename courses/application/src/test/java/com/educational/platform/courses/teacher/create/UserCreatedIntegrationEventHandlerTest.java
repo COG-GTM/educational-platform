@@ -12,11 +12,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -71,6 +73,30 @@ class UserCreatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void handleUserCreatedEvent_pessimisticLockingException_rethrown() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        doThrow(new PessimisticLockingFailureException("pessimistic lock"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(PessimisticLockingFailureException.class);
+    }
+
+    @Test
+    void handleUserCreatedEvent_successfulHandling_doesNotPersistFailedEvent() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        verify(failedEventRepository, never()).save(any());
+    }
+
+    @Test
     void recover_persistsFailedEvent() {
         // given
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
@@ -84,9 +110,25 @@ class UserCreatedIntegrationEventHandlerTest {
         verify(failedEventRepository).save(argument.capture());
         final FailedIntegrationEventRecord failedEvent = argument.getValue();
         assertThat(failedEvent.getEventClassName()).isEqualTo(UserCreatedIntegrationEvent.class.getName());
+        assertThat(failedEvent.getEventPayload()).isEqualTo(event.toString());
         assertThat(failedEvent.getExceptionMessage()).isEqualTo("DB connection lost");
         assertThat(failedEvent.getRetryCount()).isEqualTo(3);
         assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
+    @Test
+    void recover_withNullExceptionMessage_persistsWithNullMessage() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final Exception exception = new RuntimeException((String) null);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getExceptionMessage()).isNull();
     }
 
 }

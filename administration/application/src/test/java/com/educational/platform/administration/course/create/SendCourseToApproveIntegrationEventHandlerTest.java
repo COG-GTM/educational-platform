@@ -12,6 +12,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 
 import java.util.UUID;
 
@@ -78,6 +79,32 @@ class SendCourseToApproveIntegrationEventHandlerTest {
     }
 
     @Test
+    void handleSendCourseToApproveEvent_pessimisticLockingException_rethrown() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new PessimisticLockingFailureException("pessimistic lock"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
+                .isInstanceOf(PessimisticLockingFailureException.class);
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_successfulHandling_doesNotPersistFailedEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+
+        // when
+        sut.handleSendCourseToApproveEvent(event);
+
+        // then
+        verify(failedEventRepository, never()).save(any());
+    }
+
+    @Test
     void recover_persistsFailedEvent() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -92,9 +119,26 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         verify(failedEventRepository).save(argument.capture());
         final FailedIntegrationEventRecord failedEvent = argument.getValue();
         assertThat(failedEvent.getEventClassName()).isEqualTo(SendCourseToApproveIntegrationEvent.class.getName());
+        assertThat(failedEvent.getEventPayload()).isEqualTo(event.toString());
         assertThat(failedEvent.getExceptionMessage()).isEqualTo("DB connection lost");
         assertThat(failedEvent.getRetryCount()).isEqualTo(3);
         assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
+    @Test
+    void recover_withNullExceptionMessage_persistsWithNullMessage() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final Exception exception = new RuntimeException((String) null);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getExceptionMessage()).isNull();
     }
 
 }

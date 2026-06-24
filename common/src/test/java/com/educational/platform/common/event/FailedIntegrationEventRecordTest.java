@@ -1,0 +1,96 @@
+package com.educational.platform.common.event;
+
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class FailedIntegrationEventRecordTest {
+
+    @Test
+    void constructor_setsAllFieldsCorrectly() {
+        // given
+        final String eventClassName = "com.example.SomeIntegrationEvent";
+        final String eventPayload = "SomeIntegrationEvent[id=123]";
+        final String exceptionMessage = "DB connection lost";
+        final int retryCount = 3;
+
+        // when
+        final Instant before = Instant.now();
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                eventClassName, eventPayload, exceptionMessage, retryCount);
+        final Instant after = Instant.now();
+
+        // then
+        assertThat(record.getEventClassName()).isEqualTo(eventClassName);
+        assertThat(record.getEventPayload()).isEqualTo(eventPayload);
+        assertThat(record.getExceptionMessage()).isEqualTo(exceptionMessage);
+        assertThat(record.getRetryCount()).isEqualTo(retryCount);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+        assertThat(record.getTimestamp()).isNotNull();
+        assertThat(record.getTimestamp()).isBetween(before, after);
+        assertThat(record.getId()).isNull();
+    }
+
+    @Test
+    void resolve_changesStatusFromFailedToResolved() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+
+        // when
+        record.resolve();
+
+        // then
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.RESOLVED);
+    }
+
+    @Test
+    void resolve_calledTwice_remainsResolved() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+
+        // when
+        record.resolve();
+        record.resolve();
+
+        // then
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.RESOLVED);
+    }
+
+    @Test
+    void constructor_withZeroRetryCount_setsRetryCountToZero() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 0);
+
+        // then
+        assertThat(record.getRetryCount()).isZero();
+    }
+
+    @Test
+    void constructor_withEmptyStrings_setsFieldsToEmptyStrings() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "", "", "", 1);
+
+        // then
+        assertThat(record.getEventClassName()).isEmpty();
+        assertThat(record.getEventPayload()).isEmpty();
+        assertThat(record.getExceptionMessage()).isEmpty();
+    }
+
+    @Test
+    void failedEventStatus_hasExpectedValues() {
+        // then
+        assertThat(FailedIntegrationEventRecord.FailedEventStatus.values())
+                .containsExactly(
+                        FailedIntegrationEventRecord.FailedEventStatus.FAILED,
+                        FailedIntegrationEventRecord.FailedEventStatus.RESOLVED
+                );
+    }
+
+}

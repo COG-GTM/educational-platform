@@ -12,6 +12,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 
 import java.util.UUID;
 
@@ -19,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -78,6 +80,32 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void handleCourseRatingRecalculatedEvent_pessimisticLockingException_rethrown() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.7);
+        doThrow(new PessimisticLockingFailureException("pessimistic lock"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isInstanceOf(PessimisticLockingFailureException.class);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_successfulHandling_doesNotPersistFailedEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.7);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        verify(failedEventRepository, never()).save(any());
+    }
+
+    @Test
     void recover_persistsFailedEvent() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -92,9 +120,26 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         verify(failedEventRepository).save(argument.capture());
         final FailedIntegrationEventRecord failedEvent = argument.getValue();
         assertThat(failedEvent.getEventClassName()).isEqualTo(CourseRatingRecalculatedIntegrationEvent.class.getName());
+        assertThat(failedEvent.getEventPayload()).isEqualTo(event.toString());
         assertThat(failedEvent.getExceptionMessage()).isEqualTo("DB connection lost");
         assertThat(failedEvent.getRetryCount()).isEqualTo(3);
         assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
+    @Test
+    void recover_withNullExceptionMessage_persistsWithNullMessage() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.7);
+        final Exception exception = new RuntimeException((String) null);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getExceptionMessage()).isNull();
     }
 
 }
