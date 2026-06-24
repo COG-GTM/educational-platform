@@ -674,6 +674,19 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
+    void constructor_withMaxLengthClassName_setsFieldCorrectly() {
+        // given
+        final String maxClassName = "x".repeat(500);
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                maxClassName, "payload", "error", 3);
+
+        // then
+        assertThat(record.getEventClassName()).hasSize(500);
+    }
+
+    @Test
     void failedEventStatus_hasTwoConstants() {
         assertThat(FailedIntegrationEventRecord.FailedEventStatus.values())
                 .containsExactlyInAnyOrder(
