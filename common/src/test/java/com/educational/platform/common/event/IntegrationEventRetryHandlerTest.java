@@ -168,7 +168,25 @@ class IntegrationEventRetryHandlerTest {
     }
 
     @Test
-    void isRetryable_errorType_returnsFalse() {
+    void isRetryable_error_returnsFalse() {
+        // given
+        final Throwable error = new Error("out of memory");
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(error)).isFalse();
+    }
+
+    @Test
+    void isRetryable_stackOverflowError_returnsFalse() {
+        // given
+        final Throwable error = new StackOverflowError("stack overflow");
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(error)).isFalse();
+    }
+
+    @Test
+    void isRetryable_outOfMemoryError_returnsFalse() {
         // given
         final Throwable error = new OutOfMemoryError("heap space");
 

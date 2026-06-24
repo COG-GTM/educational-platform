@@ -306,6 +306,17 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
+    void columnNameMappings_areCorrectForAllFields() throws NoSuchFieldException {
+        // then
+        assertThat(getColumnName("eventClassName")).isEqualTo("event_class_name");
+        assertThat(getColumnName("eventPayload")).isEqualTo("event_payload");
+        assertThat(getColumnName("exceptionMessage")).isEqualTo("exception_message");
+        assertThat(getColumnName("timestamp")).isEqualTo("timestamp");
+        assertThat(getColumnName("retryCount")).isEqualTo("retry_count");
+        assertThat(getColumnName("status")).isEqualTo("status");
+    }
+
+    @Test
     void constructor_withNullEventClassName_setsFieldToNull() {
         // when
         final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
@@ -327,6 +338,25 @@ class FailedIntegrationEventRecordTest {
         assertThat(record.getEventPayload()).isNull();
         assertThat(record.getEventClassName()).isEqualTo("com.example.Event");
         assertThat(record.getExceptionMessage()).isEqualTo("error");
+    }
+
+    @Test
+    void constructor_withAllNullStrings_setsAllToNull() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                null, null, null, 0);
+
+        // then
+        assertThat(record.getEventClassName()).isNull();
+        assertThat(record.getEventPayload()).isNull();
+        assertThat(record.getExceptionMessage()).isNull();
+        assertThat(record.getRetryCount()).isZero();
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+        assertThat(record.getTimestamp()).isNotNull();
+    }
+
+    private String getColumnName(String fieldName) throws NoSuchFieldException {
+        return FailedIntegrationEventRecord.class.getDeclaredField(fieldName).getAnnotation(Column.class).name();
     }
 
 }

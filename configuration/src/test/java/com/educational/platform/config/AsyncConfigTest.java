@@ -15,6 +15,7 @@ import java.util.concurrent.Executor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import org.springframework.context.annotation.Bean;
 
 class AsyncConfigTest {
 
@@ -222,6 +223,49 @@ class AsyncConfigTest {
         // when / then
         assertThatCode(() -> handler.handleUncaughtException(exception, method, "param1"))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void getAsyncExecutorMethod_hasBeanAnnotation() throws NoSuchMethodException {
+        // when
+        Method method = AsyncConfig.class.getMethod("getAsyncExecutor");
+
+        // then
+        assertThat(method.isAnnotationPresent(Bean.class)).isTrue();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withError_logsWithoutThrowing() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        StackOverflowError error = new StackOverflowError("stack overflow");
+
+        // when / then
+        assertThatCode(() -> handler.handleUncaughtException(error, method, "param1"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withCheckedExceptionAsCause_logsWithoutThrowing() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        Exception exception = new Exception("checked exception");
+
+        // when / then
+        assertThatCode(() -> handler.handleUncaughtException(exception, method, "param1", "param2"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void getAsyncExecutor_executorIsActive() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getThreadPoolExecutor().isTerminated()).isFalse();
+        assertThat(executor.getThreadPoolExecutor().isTerminating()).isFalse();
     }
 
 }
