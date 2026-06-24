@@ -608,4 +608,68 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(argument.getValue().getExceptionMessage()).isEqualTo(PessimisticLockingFailureException.class.getName());
     }
 
+    @Test
+    void constructor_requiresBothDependencies() throws NoSuchMethodException {
+        // when
+        var constructor = SendCourseToApproveIntegrationEventHandler.class.getConstructor(
+                CreateCourseProposalCommandHandler.class,
+                com.educational.platform.common.event.FailedIntegrationEventRepository.class);
+
+        // then
+        assertThat(constructor).isNotNull();
+        assertThat(constructor.getParameterCount()).isEqualTo(2);
+    }
+
+    @Test
+    void handlerMethod_hasExactlyOneParameter() throws NoSuchMethodException {
+        // @EventListener requires exactly one parameter (the event type)
+        // when
+        Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        assertThat(method.getParameterCount()).isEqualTo(1);
+        assertThat(method.getParameterTypes()[0]).isEqualTo(SendCourseToApproveIntegrationEvent.class);
+    }
+
+    @Test
+    void recoverMethod_hasExactlyTwoParameters() throws NoSuchMethodException {
+        // @Recover requires (exception, event) parameter signature
+        // when
+        Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "recover", TransientDataAccessException.class, SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        assertThat(method.getParameterCount()).isEqualTo(2);
+        assertThat(method.getParameterTypes()[0]).isEqualTo(TransientDataAccessException.class);
+        assertThat(method.getParameterTypes()[1]).isEqualTo(SendCourseToApproveIntegrationEvent.class);
+    }
+
+    @Test
+    void handlerAndRecoverMethods_haveMatchingReturnTypes() throws NoSuchMethodException {
+        // Spring Retry requires @Recover return type to match the retryable method
+        // when
+        Method handlerMethod = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+        Method recoverMethod = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "recover", TransientDataAccessException.class, SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        assertThat(handlerMethod.getReturnType()).isEqualTo(recoverMethod.getReturnType());
+    }
+
+    @Test
+    void retryableAnnotation_matchesIntegrationEventRetryHandlerExceptions() throws NoSuchMethodException {
+        // Verify handler's @Retryable config is consistent with centralized RETRYABLE_EXCEPTIONS
+        // when
+        Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+        Retryable retryable = method.getAnnotation(Retryable.class);
+
+        // then
+        assertThat(retryable.retryFor()).containsExactlyInAnyOrder(
+                (Class[]) com.educational.platform.common.event.IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS
+        );
+    }
+
 }

@@ -637,4 +637,100 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThat(argument.getValue().getExceptionMessage()).isEqualTo(PessimisticLockingFailureException.class.getName());
     }
 
+    @Test
+    void constructor_requiresBothDependencies() throws NoSuchMethodException {
+        // when
+        var constructor = CourseRatingRecalculatedIntegrationEventHandler.class.getConstructor(
+                UpdateCourseRatingCommandHandler.class,
+                com.educational.platform.common.event.FailedIntegrationEventRepository.class);
+
+        // then
+        assertThat(constructor).isNotNull();
+        assertThat(constructor.getParameterCount()).isEqualTo(2);
+    }
+
+    @Test
+    void handlerMethod_hasExactlyOneParameter() throws NoSuchMethodException {
+        // @EventListener requires exactly one parameter (the event type)
+        // when
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class.getMethod(
+                "handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+
+        // then
+        assertThat(method.getParameterCount()).isEqualTo(1);
+        assertThat(method.getParameterTypes()[0]).isEqualTo(CourseRatingRecalculatedIntegrationEvent.class);
+    }
+
+    @Test
+    void recoverMethod_hasExactlyTwoParameters() throws NoSuchMethodException {
+        // @Recover requires (exception, event) parameter signature
+        // when
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class.getMethod(
+                "recover", TransientDataAccessException.class, CourseRatingRecalculatedIntegrationEvent.class);
+
+        // then
+        assertThat(method.getParameterCount()).isEqualTo(2);
+        assertThat(method.getParameterTypes()[0]).isEqualTo(TransientDataAccessException.class);
+        assertThat(method.getParameterTypes()[1]).isEqualTo(CourseRatingRecalculatedIntegrationEvent.class);
+    }
+
+    @Test
+    void handlerAndRecoverMethods_haveMatchingReturnTypes() throws NoSuchMethodException {
+        // Spring Retry requires @Recover return type to match the retryable method
+        // when
+        Method handlerMethod = CourseRatingRecalculatedIntegrationEventHandler.class.getMethod(
+                "handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+        Method recoverMethod = CourseRatingRecalculatedIntegrationEventHandler.class.getMethod(
+                "recover", TransientDataAccessException.class, CourseRatingRecalculatedIntegrationEvent.class);
+
+        // then
+        assertThat(handlerMethod.getReturnType()).isEqualTo(recoverMethod.getReturnType());
+    }
+
+    @Test
+    void retryableAnnotation_matchesIntegrationEventRetryHandlerExceptions() throws NoSuchMethodException {
+        // Verify handler's @Retryable config is consistent with centralized RETRYABLE_EXCEPTIONS
+        // when
+        Method method = CourseRatingRecalculatedIntegrationEventHandler.class.getMethod(
+                "handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+        Retryable retryable = method.getAnnotation(Retryable.class);
+
+        // then
+        assertThat(retryable.retryFor()).containsExactlyInAnyOrder(
+                (Class[]) com.educational.platform.common.event.IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS
+        );
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_withZeroRating_passesCorrectValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 0.0);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", 0.0);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_withMaxRating_passesCorrectValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 5.0);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", 5.0);
+    }
+
 }

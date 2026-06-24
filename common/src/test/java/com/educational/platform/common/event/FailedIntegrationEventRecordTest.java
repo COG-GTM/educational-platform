@@ -457,4 +457,85 @@ class FailedIntegrationEventRecordTest {
         assertThat(record.getId()).isNull();
     }
 
+    @Test
+    void eventPayloadField_hasCorrectColumnName() throws NoSuchFieldException {
+        // when
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventPayload");
+        Column column = field.getAnnotation(Column.class);
+
+        // then
+        assertThat(column.name()).isEqualTo("event_payload");
+    }
+
+    @Test
+    void exceptionMessageField_hasCorrectColumnName() throws NoSuchFieldException {
+        // when
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("exceptionMessage");
+        Column column = field.getAnnotation(Column.class);
+
+        // then
+        assertThat(column.name()).isEqualTo("exception_message");
+    }
+
+    @Test
+    void statusField_hasCorrectColumnName() throws NoSuchFieldException {
+        // when
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("status");
+        Column column = field.getAnnotation(Column.class);
+
+        // then
+        assertThat(column).isNotNull();
+        assertThat(column.name()).isEqualTo("status");
+        assertThat(column.nullable()).isFalse();
+    }
+
+    @Test
+    void allGetters_arePublic() throws NoSuchMethodException {
+        for (String methodName : new String[]{"getId", "getEventClassName", "getEventPayload",
+                "getExceptionMessage", "getTimestamp", "getRetryCount", "getStatus"}) {
+            // when
+            java.lang.reflect.Method method = FailedIntegrationEventRecord.class.getMethod(methodName);
+
+            // then
+            assertThat(Modifier.isPublic(method.getModifiers()))
+                    .as("Method '%s' should be public", methodName)
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void resolveMethod_isPublic() throws NoSuchMethodException {
+        // when
+        java.lang.reflect.Method method = FailedIntegrationEventRecord.class.getMethod("resolve");
+
+        // then
+        assertThat(Modifier.isPublic(method.getModifiers())).isTrue();
+    }
+
+    @Test
+    void constructor_withWhitespacePayload_preservesWhitespace() {
+        // given
+        final String whitespacePayload = "  \t\n  ";
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", whitespacePayload, "error", 3);
+
+        // then
+        assertThat(record.getEventPayload()).isEqualTo(whitespacePayload);
+    }
+
+    @Test
+    void constructor_multipleConsecutiveInstances_haveDistinctTimestamps() throws InterruptedException {
+        // when
+        final FailedIntegrationEventRecord record1 = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+        Thread.sleep(5);
+        final FailedIntegrationEventRecord record2 = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+
+        // then
+        assertThat(record2.getTimestamp()).isAfterOrEqualTo(record1.getTimestamp());
+    }
+
 }

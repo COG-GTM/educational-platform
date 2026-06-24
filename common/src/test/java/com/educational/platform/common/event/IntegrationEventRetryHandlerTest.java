@@ -266,4 +266,46 @@ class IntegrationEventRetryHandlerTest {
         assertThat(exceptions).doesNotHaveDuplicates();
     }
 
+    @Test
+    void retryableExceptions_eachTypeMatchesIsRetryableClassification() {
+        // Verify every type in RETRYABLE_EXCEPTIONS is accepted by isRetryable's instanceof checks
+        for (Class<?> exceptionClass : IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS) {
+            // then - each declared retryable type must be one of the types isRetryable checks
+            assertThat(
+                    TransientDataAccessException.class.isAssignableFrom(exceptionClass)
+                    || OptimisticLockingFailureException.class.isAssignableFrom(exceptionClass)
+                    || PessimisticLockingFailureException.class.isAssignableFrom(exceptionClass))
+                    .as("RETRYABLE_EXCEPTIONS entry %s should be covered by isRetryable", exceptionClass.getSimpleName())
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void isRetryable_isStaticMethod() throws NoSuchMethodException {
+        // when
+        java.lang.reflect.Method method = IntegrationEventRetryHandler.class.getMethod("isRetryable", Throwable.class);
+
+        // then
+        assertThat(java.lang.reflect.Modifier.isStatic(method.getModifiers())).isTrue();
+    }
+
+    @Test
+    void retryableExceptions_fieldIsStaticAndFinal() throws NoSuchFieldException {
+        // when
+        java.lang.reflect.Field field = IntegrationEventRetryHandler.class.getField("RETRYABLE_EXCEPTIONS");
+
+        // then
+        assertThat(java.lang.reflect.Modifier.isStatic(field.getModifiers())).isTrue();
+        assertThat(java.lang.reflect.Modifier.isFinal(field.getModifiers())).isTrue();
+    }
+
+    @Test
+    void isRetryable_unsupportedOperationException_returnsFalse() {
+        // given
+        final Throwable exception = new UnsupportedOperationException("not supported");
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isFalse();
+    }
+
 }

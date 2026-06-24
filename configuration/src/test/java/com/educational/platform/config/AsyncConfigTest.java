@@ -351,4 +351,69 @@ class AsyncConfigTest {
         assertThat(executor.getQueueCapacity()).isPositive();
     }
 
+    @Test
+    void getAsyncExecutor_returnsNewInstanceOnEachCall() {
+        // @Bean creates a fresh executor per call; Spring manages singleton scope
+        // when
+        Executor executor1 = asyncConfig.getAsyncExecutor();
+        Executor executor2 = asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor1).isNotSameAs(executor2);
+    }
+
+    @Test
+    void enableRetryOrderIsExactlyOneMoreThanEnableAsyncOrder() {
+        // when
+        EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
+        EnableRetry enableRetry = AsyncConfig.class.getAnnotation(EnableRetry.class);
+
+        // then
+        assertThat(enableRetry.order() - enableAsync.order()).isEqualTo(1);
+    }
+
+    @Test
+    void integrationEventAsyncUncaughtExceptionHandler_canBeInstantiatedDirectly() {
+        // when
+        AsyncConfig.IntegrationEventAsyncUncaughtExceptionHandler handler =
+                new AsyncConfig.IntegrationEventAsyncUncaughtExceptionHandler();
+
+        // then
+        assertThat(handler).isNotNull();
+        assertThat(handler).isInstanceOf(AsyncUncaughtExceptionHandler.class);
+    }
+
+    @Test
+    void getAsyncExecutorMethod_overridesAsyncConfigurerMethod() throws NoSuchMethodException {
+        // when
+        Method method = AsyncConfig.class.getMethod("getAsyncExecutor");
+
+        // then
+        assertThat(method.isAnnotationPresent(Override.class) || method.isAnnotationPresent(Bean.class))
+                .isTrue();
+        assertThat(method.getDeclaringClass()).isEqualTo(AsyncConfig.class);
+    }
+
+    @Test
+    void getAsyncUncaughtExceptionHandlerMethod_overridesAsyncConfigurerMethod() throws NoSuchMethodException {
+        // when
+        Method method = AsyncConfig.class.getMethod("getAsyncUncaughtExceptionHandler");
+
+        // then
+        assertThat(method.getDeclaringClass()).isEqualTo(AsyncConfig.class);
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withManyParams_logsWithoutThrowing() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        RuntimeException exception = new RuntimeException("test error");
+
+        // when / then
+        assertThatCode(() -> handler.handleUncaughtException(exception, method,
+                "param1", "param2", "param3", "param4", "param5"))
+                .doesNotThrowAnyException();
+    }
+
 }
