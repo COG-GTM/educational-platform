@@ -674,14 +674,6 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
-    void eventClassNameField_usesDefaultColumnLength() throws NoSuchFieldException {
-        // eventClassName uses default @Column length (255), unlike eventPayload/exceptionMessage (2000)
-        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventClassName");
-        Column column = field.getAnnotation(Column.class);
-        assertThat(column.length()).isEqualTo(255);
-    }
-
-    @Test
     void failedEventStatus_hasTwoConstants() {
         assertThat(FailedIntegrationEventRecord.FailedEventStatus.values())
                 .containsExactlyInAnyOrder(
@@ -701,6 +693,31 @@ class FailedIntegrationEventRecordTest {
         // then
         assertThat(record1).isNotEqualTo(record2);
         assertThat(record1).isNotSameAs(record2);
+    }
+
+    @Test
+    void constructor_withEventClassNameExceedingColumnLength_setsFieldWithoutTruncation() {
+        // given
+        final String longClassName = "com.example." + "a".repeat(501);
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                longClassName, "payload", "error", 3);
+
+        // then
+        assertThat(record.getEventClassName()).hasSize(longClassName.length());
+        assertThat(record.getEventClassName()).isEqualTo(longClassName);
+    }
+
+    @Test
+    void eventClassNameField_hasColumnAnnotationWithCorrectLength() throws NoSuchFieldException {
+        // when
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventClassName");
+        Column column = field.getAnnotation(Column.class);
+
+        // then
+        assertThat(column).isNotNull();
+        assertThat(column.length()).isEqualTo(500);
     }
 
 }

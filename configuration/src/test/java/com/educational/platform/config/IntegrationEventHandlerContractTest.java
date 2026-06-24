@@ -357,6 +357,38 @@ class IntegrationEventHandlerContractTest {
                 .isEqualTo(5);
     }
 
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodDoesNotHaveRecoverAnnotation(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.isAnnotationPresent(Recover.class))
+                .as("%s @EventListener method should not also have @Recover", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodDoesNotHaveRetryableAnnotation(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.isAnnotationPresent(Retryable.class))
+                .as("%s @Recover method should not also have @Retryable", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_constructorParameterCountIsTwo(Class<?> handlerClass) {
+        boolean hasTwoParamConstructor = Arrays.stream(handlerClass.getDeclaredConstructors())
+                .anyMatch(c -> c.getParameterCount() == 2);
+
+        assertThat(hasTwoParamConstructor)
+                .as("%s should have a constructor with exactly 2 parameters (command handler + repository)",
+                        handlerClass.getSimpleName())
+                .isTrue();
+    }
+
     private Method findEventListenerMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.isAnnotationPresent(EventListener.class))

@@ -787,10 +787,29 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_withExceptionHavingMessageAndCause_persistsOnlyTopLevelMessage() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.7);
+        final RuntimeException cause = new RuntimeException("root cause message");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("top level message", cause);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getExceptionMessage())
+                .isEqualTo("top level message")
+                .doesNotContain("root cause message");
+    }
+
+    @Test
     void handleCourseRatingRecalculatedEvent_withNegativeRating_passesCorrectValue() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, -1.0);
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, -1.5);
 
         // when
         sut.handleCourseRatingRecalculatedEvent(event);
@@ -799,7 +818,24 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
         verify(updateCourseRatingCommandHandler).handle(argument.capture());
         assertThat(argument.getValue())
-                .hasFieldOrPropertyWithValue("rating", -1.0);
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("rating", -1.5);
+    }
+
+    @Test
+    void recover_withNegativeRating_eventPayloadContainsNegativeValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, -2.0);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventPayload()).contains("-2.0");
     }
 
 }

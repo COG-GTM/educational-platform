@@ -725,4 +725,23 @@ class SendCourseToApproveIntegrationEventHandlerTest {
                 .hasMessage("null reference");
     }
 
+    @Test
+    void recover_withExceptionHavingMessageAndCause_persistsOnlyTopLevelMessage() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final RuntimeException cause = new RuntimeException("root cause message");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("top level message", cause);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getExceptionMessage())
+                .isEqualTo("top level message")
+                .doesNotContain("root cause message");
+    }
+
 }

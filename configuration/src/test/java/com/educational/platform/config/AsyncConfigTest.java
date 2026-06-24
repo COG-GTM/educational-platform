@@ -543,5 +543,37 @@ class AsyncConfigTest {
         assertThat(executor.getActiveCount()).isZero();
     }
 
+    @Test
+    void getAsyncExecutor_multipleSubmittedTasks_allComplete() throws Exception {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        var results = new java.util.concurrent.CopyOnWriteArrayList<String>();
+        var latch = new java.util.concurrent.CountDownLatch(5);
+
+        for (int i = 0; i < 5; i++) {
+            final int index = i;
+            executor.submit(() -> {
+                results.add("task-" + index);
+                latch.countDown();
+            });
+        }
+
+        // then
+        assertThat(latch.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        assertThat(results).hasSize(5);
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withEmptyParamsArray_logsWithoutThrowing() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        RuntimeException exception = new RuntimeException("test error");
+
+        // when / then
+        assertThatCode(() -> handler.handleUncaughtException(exception, method, new Object[0]))
+                .doesNotThrowAnyException();
+    }
+
 }
 
