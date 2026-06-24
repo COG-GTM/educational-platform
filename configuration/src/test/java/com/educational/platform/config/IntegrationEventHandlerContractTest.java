@@ -316,6 +316,40 @@ class IntegrationEventHandlerContractTest {
                 .hasSize(1);
     }
 
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_constructorHasExactlyTwoParameters(Class<?> handlerClass) {
+        var constructors = handlerClass.getDeclaredConstructors();
+
+        assertThat(constructors[0].getParameterCount())
+                .as("%s constructor should have exactly 2 parameters (command handler + repository)",
+                        handlerClass.getSimpleName())
+                .isEqualTo(2);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffMaxDelayIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().maxDelay())
+                .as("%s backoff maxDelay should be default (0 = unbounded)",
+                        handlerClass.getSimpleName())
+                .isEqualTo(0);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodIsNamedRecover(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.getName())
+                .as("%s @Recover method should be named 'recover'",
+                        handlerClass.getSimpleName())
+                .isEqualTo("recover");
+    }
+
     @Test
     void allHandlers_totalCountIsFive() {
         assertThat(handlerClasses().count())

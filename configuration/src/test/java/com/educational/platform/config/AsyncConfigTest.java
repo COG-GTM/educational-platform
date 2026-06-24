@@ -534,5 +534,14 @@ class AsyncConfigTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    void getAsyncExecutor_activeCountIsZeroBeforeSubmission() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getActiveCount()).isZero();
+    }
+
 }
 

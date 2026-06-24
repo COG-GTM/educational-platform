@@ -786,4 +786,20 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .hasMessage("null reference");
     }
 
+    @Test
+    void handleCourseRatingRecalculatedEvent_withNegativeRating_passesCorrectValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, -1.0);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", -1.0);
+    }
+
 }

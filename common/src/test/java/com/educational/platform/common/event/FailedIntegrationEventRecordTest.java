@@ -689,5 +689,19 @@ class FailedIntegrationEventRecordTest {
                         FailedIntegrationEventRecord.FailedEventStatus.RESOLVED);
     }
 
+    @Test
+    void constructor_twoRecordsWithSameData_areNotEqual() {
+        // JPA entities use reference equality, not value equality
+        // given
+        final FailedIntegrationEventRecord record1 = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+        final FailedIntegrationEventRecord record2 = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+
+        // then
+        assertThat(record1).isNotEqualTo(record2);
+        assertThat(record1).isNotSameAs(record2);
+    }
+
 }
 
