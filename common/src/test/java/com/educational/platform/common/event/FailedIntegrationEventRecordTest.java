@@ -622,5 +622,50 @@ class FailedIntegrationEventRecordTest {
         assertThat(idField.getType()).isEqualTo(Long.class);
     }
 
+    @Test
+    void timestampField_isInstantType() throws NoSuchFieldException {
+        // when
+        Field timestampField = FailedIntegrationEventRecord.class.getDeclaredField("timestamp");
+
+        // then
+        assertThat(timestampField.getType()).isEqualTo(Instant.class);
+    }
+
+    @Test
+    void statusField_isFailedEventStatusType() throws NoSuchFieldException {
+        // when
+        Field statusField = FailedIntegrationEventRecord.class.getDeclaredField("status");
+
+        // then
+        assertThat(statusField.getType()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.class);
+    }
+
+    @Test
+    void retryCountField_isIntType() throws NoSuchFieldException {
+        // when
+        Field retryCountField = FailedIntegrationEventRecord.class.getDeclaredField("retryCount");
+
+        // then
+        assertThat(retryCountField.getType()).isEqualTo(int.class);
+    }
+
+    @Test
+    void allEntityFields_arePrivate() throws NoSuchFieldException {
+        for (String fieldName : new String[]{"id", "eventClassName", "eventPayload",
+                "exceptionMessage", "timestamp", "retryCount", "status"}) {
+            Field field = FailedIntegrationEventRecord.class.getDeclaredField(fieldName);
+            assertThat(Modifier.isPrivate(field.getModifiers()))
+                    .as("Field '%s' should be private", fieldName)
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void failedEventStatus_isPublicEnum() {
+        // then
+        assertThat(FailedIntegrationEventRecord.FailedEventStatus.class.isEnum()).isTrue();
+        assertThat(Modifier.isPublic(FailedIntegrationEventRecord.FailedEventStatus.class.getModifiers())).isTrue();
+    }
+
 }
 

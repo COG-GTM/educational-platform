@@ -12,6 +12,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
 
 import java.lang.reflect.Method;
 import java.util.concurrent.Executor;
@@ -482,14 +484,14 @@ class AsyncConfigTest {
     }
 
     @Test
-    void asyncUncaughtExceptionHandler_withNullThrowable_doesNotThrow() throws NoSuchMethodException {
-        // given
+    void asyncUncaughtExceptionHandler_withNullThrowable_throwsNullPointerException() throws NoSuchMethodException {
+        // given - null throwable causes NPE on ex.getMessage() call
         AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
         Method method = String.class.getMethod("toString");
 
         // when / then
         assertThatCode(() -> handler.handleUncaughtException(null, method, "param1"))
-                .doesNotThrowAnyException();
+                .isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -506,6 +508,30 @@ class AsyncConfigTest {
         // HIGHEST_PRECEDENCE ensures @Async is the outermost advisor in the proxy chain
         EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
         assertThat(enableAsync.order()).isEqualTo(Integer.MIN_VALUE);
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withPessimisticLockingFailure_logsWithoutThrowing() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        PessimisticLockingFailureException exception = new PessimisticLockingFailureException("deadlock");
+
+        // when / then
+        assertThatCode(() -> handler.handleUncaughtException(exception, method, "event1"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withQueryTimeout_logsWithoutThrowing() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        QueryTimeoutException exception = new QueryTimeoutException("query timed out");
+
+        // when / then
+        assertThatCode(() -> handler.handleUncaughtException(exception, method, "event1"))
+                .doesNotThrowAnyException();
     }
 
 }

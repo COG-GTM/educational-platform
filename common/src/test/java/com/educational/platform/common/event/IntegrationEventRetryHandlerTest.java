@@ -372,5 +372,53 @@ class IntegrationEventRetryHandlerTest {
         }
     }
 
+    @Test
+    void isRetryable_sqlException_returnsFalse() {
+        // given - raw SQL exceptions are not Spring DataAccessExceptions
+        final Throwable exception = new java.sql.SQLException("connection refused");
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isFalse();
+    }
+
+    @Test
+    void isRetryable_retryableExceptionWithNullMessage_returnsTrue() {
+        // given
+        final Throwable exception = new OptimisticLockingFailureException(null);
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
+    }
+
+    @Test
+    void isRetryable_retryableExceptionWithEmptyMessage_returnsTrue() {
+        // given
+        final Throwable exception = new PessimisticLockingFailureException("");
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
+    }
+
+    @Test
+    void isRetryable_retryableExceptionWithCause_returnsTrue() {
+        // given
+        final Throwable cause = new RuntimeException("root cause");
+        final Throwable exception = new OptimisticLockingFailureException("lock", cause);
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
+    }
+
+    @Test
+    void retryableExceptions_allTypesAreSubtypesOfTransientDataAccessException() {
+        // All retryable exception types used in @Retryable fall under TransientDataAccessException,
+        // which is the @Recover parameter type. This ensures the recover method catches all of them.
+        for (Class<?> exceptionClass : IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS) {
+            assertThat(TransientDataAccessException.class.isAssignableFrom(exceptionClass))
+                    .as("%s should be assignable to TransientDataAccessException", exceptionClass.getSimpleName())
+                    .isTrue();
+        }
+    }
+
 }
 
