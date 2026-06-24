@@ -7,6 +7,8 @@ dependencies {
     implementation("org.springframework.boot", "spring-boot-starter-security")
     implementation("org.springframework.boot", "spring-boot-starter-data-jpa")
     implementation("jakarta.inject", "jakarta.inject-api")
+    implementation("org.springframework.retry", "spring-retry", "2.0.11")
+    implementation("org.springframework", "spring-aspects")
 
     testImplementation("org.springframework.boot", "spring-boot-starter-test")
     testImplementation("org.springframework.boot", "spring-boot-jdbc-test")
