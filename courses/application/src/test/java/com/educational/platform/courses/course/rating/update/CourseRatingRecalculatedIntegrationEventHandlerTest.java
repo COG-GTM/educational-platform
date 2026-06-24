@@ -15,6 +15,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
@@ -294,6 +295,72 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
 
         // then
         verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_queryTimeoutException_rethrown() {
+        // given - QueryTimeoutException is a TransientDataAccessException subclass
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        doThrow(new QueryTimeoutException("query timed out"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isInstanceOf(QueryTimeoutException.class)
+                .hasMessage("query timed out");
+    }
+
+    @Test
+    void recover_withQueryTimeoutException_persistsFailedEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final QueryTimeoutException exception = new QueryTimeoutException("query timed out");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord failedEvent = argument.getValue();
+        assertThat(failedEvent.getEventClassName()).isEqualTo(CourseRatingRecalculatedIntegrationEvent.class.getName());
+        assertThat(failedEvent.getExceptionMessage()).isEqualTo("query timed out");
+        assertThat(failedEvent.getRetryCount()).isEqualTo(3);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_passesCorrectRatingToCommand() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.95);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("rating", 4.95);
+    }
+
+    @Test
+    void recover_eventPayloadContainsCourseIdAndRating() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventPayload()).contains("123e4567-e89b-12d3-a456-426655440001");
     }
 
 }

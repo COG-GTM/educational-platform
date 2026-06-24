@@ -4,6 +4,7 @@ import com.educational.platform.common.exception.ResourceNotFoundException;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -138,6 +139,26 @@ class IntegrationEventRetryHandlerTest {
 
         // then
         assertThat(IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS).containsExactly(original);
+    }
+
+    @Test
+    void isRetryable_concurrencyFailureException_returnsTrue() {
+        // ConcurrencyFailureException is a superclass in the hierarchy that includes
+        // OptimisticLockingFailureException and PessimisticLockingFailureException
+        // given
+        final Throwable exception = new ConcurrencyFailureException("concurrency failure");
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
+    }
+
+    @Test
+    void isRetryable_subclassOfOptimisticLockingFailureException_returnsTrue() {
+        // given - anonymous subclass simulates framework subclasses like ObjectOptimisticLockingFailureException
+        final Throwable exception = new OptimisticLockingFailureException("custom subclass") {};
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
     }
 
     @Test

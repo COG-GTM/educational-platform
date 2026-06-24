@@ -15,6 +15,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
@@ -278,6 +279,66 @@ class UserCreatedIntegrationEventHandlerTest {
 
         // then
         verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void handleUserCreatedEvent_queryTimeoutException_rethrown() {
+        // given - QueryTimeoutException is a TransientDataAccessException subclass
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        doThrow(new QueryTimeoutException("query timed out"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(QueryTimeoutException.class)
+                .hasMessage("query timed out");
+    }
+
+    @Test
+    void recover_withQueryTimeoutException_persistsFailedEvent() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final QueryTimeoutException exception = new QueryTimeoutException("query timed out");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord failedEvent = argument.getValue();
+        assertThat(failedEvent.getEventClassName()).isEqualTo(UserCreatedIntegrationEvent.class.getName());
+        assertThat(failedEvent.getExceptionMessage()).isEqualTo("query timed out");
+        assertThat(failedEvent.getRetryCount()).isEqualTo(3);
+    }
+
+    @Test
+    void recover_eventPayloadContainsUsername() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("johndoe", "john@example.com");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventPayload()).contains("johndoe");
+    }
+
+    @Test
+    void handleUserCreatedEvent_passesCorrectUsernameToCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("specialuser", "special@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("username", "specialuser");
     }
 
 }
