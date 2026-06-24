@@ -426,4 +426,21 @@ class FailedIntegrationEventRecordTest {
         assertThat(Modifier.isProtected(constructor.getModifiers())).isTrue();
     }
 
+    @Test
+    void constructor_multipleInstances_haveIndependentState() {
+        // given
+        final FailedIntegrationEventRecord record1 = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload1", "error1", 3);
+        final FailedIntegrationEventRecord record2 = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload2", "error2", 5);
+
+        // when
+        record1.resolve();
+
+        // then
+        assertThat(record1.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.RESOLVED);
+        assertThat(record2.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+        assertThat(record1.getEventPayload()).isNotEqualTo(record2.getEventPayload());
+    }
+
 }

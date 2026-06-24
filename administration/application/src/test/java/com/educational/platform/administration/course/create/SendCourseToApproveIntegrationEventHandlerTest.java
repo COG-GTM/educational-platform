@@ -539,4 +539,37 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         ).isInstanceOf(NoSuchMethodException.class);
     }
 
+    @Test
+    void recoverMethod_parameterTypeCoversAllRetryableExceptions() throws NoSuchMethodException {
+        Method handlerMethod = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        Method recoverMethod = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "recover", TransientDataAccessException.class, SendCourseToApproveIntegrationEvent.class);
+        Class<?> recoverExceptionType = recoverMethod.getParameterTypes()[0];
+
+        for (Class<? extends Throwable> retryForType : retryable.retryFor()) {
+            assertThat(recoverExceptionType.isAssignableFrom(retryForType))
+                    .as("@Recover param %s should be assignable from retryFor type %s",
+                            recoverExceptionType.getSimpleName(), retryForType.getSimpleName())
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_exceptionWithCause_preservesCauseChain() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final RuntimeException rootCause = new RuntimeException("root cause");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("lock failed", rootCause);
+        doThrow(exception).when(createCourseProposalCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
+                .isInstanceOf(OptimisticLockingFailureException.class)
+                .hasCause(rootCause);
+    }
+
 }

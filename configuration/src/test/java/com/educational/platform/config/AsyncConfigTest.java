@@ -321,4 +321,16 @@ class AsyncConfigTest {
         assertThat(enableRetry.order()).isEqualTo(enableAsync.order() + 1);
     }
 
+    @Test
+    void getAsyncExecutor_executorThread_usesConfiguredPrefix() throws Exception {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        var threadNameHolder = new java.util.concurrent.atomic.AtomicReference<String>();
+        executor.submit(() -> threadNameHolder.set(Thread.currentThread().getName()))
+                .get(5, java.util.concurrent.TimeUnit.SECONDS);
+
+        // then
+        assertThat(threadNameHolder.get()).startsWith("integration-event-");
+    }
+
 }

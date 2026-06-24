@@ -523,4 +523,36 @@ class UserCreatedIntegrationEventHandlerTest {
         ).isInstanceOf(NoSuchMethodException.class);
     }
 
+    @Test
+    void recoverMethod_parameterTypeCoversAllRetryableExceptions() throws NoSuchMethodException {
+        Method handlerMethod = UserCreatedIntegrationEventHandler.class.getMethod(
+                "handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        Method recoverMethod = UserCreatedIntegrationEventHandler.class.getMethod(
+                "recover", TransientDataAccessException.class, UserCreatedIntegrationEvent.class);
+        Class<?> recoverExceptionType = recoverMethod.getParameterTypes()[0];
+
+        for (Class<? extends Throwable> retryForType : retryable.retryFor()) {
+            assertThat(recoverExceptionType.isAssignableFrom(retryForType))
+                    .as("@Recover param %s should be assignable from retryFor type %s",
+                            recoverExceptionType.getSimpleName(), retryForType.getSimpleName())
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void handleUserCreatedEvent_exceptionWithCause_preservesCauseChain() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final RuntimeException rootCause = new RuntimeException("root cause");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("lock failed", rootCause);
+        doThrow(exception).when(createTeacherCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(OptimisticLockingFailureException.class)
+                .hasCause(rootCause);
+    }
+
 }

@@ -537,4 +537,37 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         ).isInstanceOf(NoSuchMethodException.class);
     }
 
+    @Test
+    void recoverMethod_parameterTypeCoversAllRetryableExceptions() throws NoSuchMethodException {
+        Method handlerMethod = StudentEnrolledToCourseIntegrationEventHandler.class.getMethod(
+                "handleStudentEnrolledToCourseEvent", StudentEnrolledToCourseIntegrationEvent.class);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        Method recoverMethod = StudentEnrolledToCourseIntegrationEventHandler.class.getMethod(
+                "recover", TransientDataAccessException.class, StudentEnrolledToCourseIntegrationEvent.class);
+        Class<?> recoverExceptionType = recoverMethod.getParameterTypes()[0];
+
+        for (Class<? extends Throwable> retryForType : retryable.retryFor()) {
+            assertThat(recoverExceptionType.isAssignableFrom(retryForType))
+                    .as("@Recover param %s should be assignable from retryFor type %s",
+                            recoverExceptionType.getSimpleName(), retryForType.getSimpleName())
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_exceptionWithCause_preservesCauseChain() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        final RuntimeException rootCause = new RuntimeException("root cause");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("lock failed", rootCause);
+        doThrow(exception).when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isInstanceOf(OptimisticLockingFailureException.class)
+                .hasCause(rootCause);
+    }
+
 }

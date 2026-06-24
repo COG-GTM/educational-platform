@@ -568,4 +568,37 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         ).isInstanceOf(NoSuchMethodException.class);
     }
 
+    @Test
+    void recoverMethod_parameterTypeCoversAllRetryableExceptions() throws NoSuchMethodException {
+        Method handlerMethod = CourseRatingRecalculatedIntegrationEventHandler.class.getMethod(
+                "handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        Method recoverMethod = CourseRatingRecalculatedIntegrationEventHandler.class.getMethod(
+                "recover", TransientDataAccessException.class, CourseRatingRecalculatedIntegrationEvent.class);
+        Class<?> recoverExceptionType = recoverMethod.getParameterTypes()[0];
+
+        for (Class<? extends Throwable> retryForType : retryable.retryFor()) {
+            assertThat(recoverExceptionType.isAssignableFrom(retryForType))
+                    .as("@Recover param %s should be assignable from retryFor type %s",
+                            recoverExceptionType.getSimpleName(), retryForType.getSimpleName())
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_exceptionWithCause_preservesCauseChain() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.7);
+        final RuntimeException rootCause = new RuntimeException("root cause");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("lock failed", rootCause);
+        doThrow(exception).when(updateCourseRatingCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isInstanceOf(OptimisticLockingFailureException.class)
+                .hasCause(rootCause);
+    }
+
 }
