@@ -11,8 +11,17 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
+
+import java.lang.reflect.Method;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -187,6 +196,84 @@ class UserCreatedIntegrationEventHandlerTest {
         try {
             sut.handleUserCreatedEvent(event);
         } catch (OptimisticLockingFailureException ignored) {
+        }
+
+        // then
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void handlerMethod_hasRetryableAnnotationWithCorrectConfig() throws NoSuchMethodException {
+        // when
+        Method method = UserCreatedIntegrationEventHandler.class.getMethod(
+                "handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+        Retryable retryable = method.getAnnotation(Retryable.class);
+
+        // then
+        assertThat(retryable).isNotNull();
+        assertThat(retryable.retryFor()).containsExactlyInAnyOrder(
+                TransientDataAccessException.class,
+                OptimisticLockingFailureException.class,
+                PessimisticLockingFailureException.class
+        );
+        assertThat(retryable.maxAttempts()).isEqualTo(3);
+        assertThat(retryable.backoff().delay()).isEqualTo(500);
+        assertThat(retryable.backoff().multiplier()).isEqualTo(2);
+    }
+
+    @Test
+    void handlerMethod_hasAsyncAndEventListenerAnnotations() throws NoSuchMethodException {
+        // when
+        Method method = UserCreatedIntegrationEventHandler.class.getMethod(
+                "handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(Async.class)).isTrue();
+        assertThat(method.isAnnotationPresent(EventListener.class)).isTrue();
+    }
+
+    @Test
+    void recoverMethod_hasRecoverAnnotationWithCorrectParameterTypes() throws NoSuchMethodException {
+        // when
+        Method method = UserCreatedIntegrationEventHandler.class.getMethod(
+                "recover", DataAccessException.class, UserCreatedIntegrationEvent.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(Recover.class)).isTrue();
+    }
+
+    @Test
+    void class_hasComponentAnnotation() {
+        // then
+        assertThat(UserCreatedIntegrationEventHandler.class.isAnnotationPresent(Component.class)).isTrue();
+    }
+
+    @Test
+    void recover_withEmptyExceptionMessage_persistsEmptyMessage() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getExceptionMessage()).isEmpty();
+    }
+
+    @Test
+    void handleUserCreatedEvent_businessException_doesNotPersistFailedEvent() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        doThrow(new ResourceNotFoundException("User not found"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when
+        try {
+            sut.handleUserCreatedEvent(event);
+        } catch (ResourceNotFoundException ignored) {
         }
 
         // then

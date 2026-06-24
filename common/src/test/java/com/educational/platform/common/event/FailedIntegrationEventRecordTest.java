@@ -1,7 +1,17 @@
 package com.educational.platform.common.event;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -183,6 +193,80 @@ class FailedIntegrationEventRecordTest {
         assertThat(record.getRetryCount()).isEqualTo(5);
         assertThat(record.getTimestamp()).isEqualTo(timestampBefore);
         assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.RESOLVED);
+    }
+
+    @Test
+    void class_hasEntityAnnotation() {
+        // then
+        assertThat(FailedIntegrationEventRecord.class.isAnnotationPresent(Entity.class)).isTrue();
+    }
+
+    @Test
+    void class_hasTableAnnotationWithCorrectName() {
+        // when
+        Table table = FailedIntegrationEventRecord.class.getAnnotation(Table.class);
+
+        // then
+        assertThat(table).isNotNull();
+        assertThat(table.name()).isEqualTo("failed_integration_events");
+    }
+
+    @Test
+    void idField_hasIdAndGeneratedValueAnnotations() throws NoSuchFieldException {
+        // when
+        Field idField = FailedIntegrationEventRecord.class.getDeclaredField("id");
+
+        // then
+        assertThat(idField.isAnnotationPresent(Id.class)).isTrue();
+        GeneratedValue generatedValue = idField.getAnnotation(GeneratedValue.class);
+        assertThat(generatedValue).isNotNull();
+        assertThat(generatedValue.strategy()).isEqualTo(GenerationType.IDENTITY);
+    }
+
+    @Test
+    void eventPayloadField_hasColumnAnnotationWithCorrectLength() throws NoSuchFieldException {
+        // when
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventPayload");
+        Column column = field.getAnnotation(Column.class);
+
+        // then
+        assertThat(column).isNotNull();
+        assertThat(column.nullable()).isFalse();
+        assertThat(column.length()).isEqualTo(2000);
+    }
+
+    @Test
+    void exceptionMessageField_hasColumnAnnotationWithCorrectLength() throws NoSuchFieldException {
+        // when
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("exceptionMessage");
+        Column column = field.getAnnotation(Column.class);
+
+        // then
+        assertThat(column).isNotNull();
+        assertThat(column.nullable()).isFalse();
+        assertThat(column.length()).isEqualTo(2000);
+    }
+
+    @Test
+    void statusField_hasEnumeratedStringAnnotation() throws NoSuchFieldException {
+        // when
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("status");
+        Enumerated enumerated = field.getAnnotation(Enumerated.class);
+
+        // then
+        assertThat(enumerated).isNotNull();
+        assertThat(enumerated.value()).isEqualTo(EnumType.STRING);
+    }
+
+    @Test
+    void requiredFields_haveNonNullableColumnAnnotations() throws NoSuchFieldException {
+        // then
+        for (String fieldName : new String[]{"eventClassName", "eventPayload", "exceptionMessage", "timestamp", "retryCount", "status"}) {
+            Field field = FailedIntegrationEventRecord.class.getDeclaredField(fieldName);
+            Column column = field.getAnnotation(Column.class);
+            assertThat(column).as("Column annotation for field '%s'", fieldName).isNotNull();
+            assertThat(column.nullable()).as("nullable for field '%s'", fieldName).isFalse();
+        }
     }
 
 }

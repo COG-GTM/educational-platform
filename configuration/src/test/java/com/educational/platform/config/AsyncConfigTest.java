@@ -2,7 +2,11 @@ package com.educational.platform.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
-
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
+import org.springframework.retry.annotation.EnableRetry;
+import org.springframework.scheduling.annotation.AsyncConfigurer;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.lang.reflect.Method;
@@ -129,6 +133,61 @@ class AsyncConfigTest {
 
         // then
         assertThat(handler1).isNotSameAs(handler2);
+    }
+
+    @Test
+    void class_hasConfigurationAnnotation() {
+        // then
+        assertThat(AsyncConfig.class.isAnnotationPresent(Configuration.class)).isTrue();
+    }
+
+    @Test
+    void class_implementsAsyncConfigurer() {
+        // then
+        assertThat(AsyncConfigurer.class).isAssignableFrom(AsyncConfig.class);
+    }
+
+    @Test
+    void class_hasEnableAsyncAnnotationWithHighestPrecedenceOrder() {
+        // when
+        EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
+
+        // then
+        assertThat(enableAsync).isNotNull();
+        assertThat(enableAsync.order()).isEqualTo(Ordered.HIGHEST_PRECEDENCE);
+    }
+
+    @Test
+    void class_hasEnableRetryAnnotationWithCorrectOrder() {
+        // when
+        EnableRetry enableRetry = AsyncConfig.class.getAnnotation(EnableRetry.class);
+
+        // then
+        assertThat(enableRetry).isNotNull();
+        assertThat(enableRetry.order()).isEqualTo(Ordered.HIGHEST_PRECEDENCE + 1);
+    }
+
+    @Test
+    void enableAsyncOrderIsLowerThanEnableRetryOrder() {
+        // when
+        EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
+        EnableRetry enableRetry = AsyncConfig.class.getAnnotation(EnableRetry.class);
+
+        // then
+        assertThat(enableAsync.order()).isLessThan(enableRetry.order());
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withNestedCause_logsWithoutThrowing() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        RuntimeException cause = new RuntimeException("root cause");
+        RuntimeException exception = new RuntimeException("wrapper", cause);
+
+        // when / then
+        assertThatCode(() -> handler.handleUncaughtException(exception, method, "param1"))
+                .doesNotThrowAnyException();
     }
 
 }

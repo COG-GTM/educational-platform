@@ -11,9 +11,17 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
 
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -201,6 +209,86 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         try {
             sut.handleSendCourseToApproveEvent(event);
         } catch (OptimisticLockingFailureException ignored) {
+        }
+
+        // then
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void handlerMethod_hasRetryableAnnotationWithCorrectConfig() throws NoSuchMethodException {
+        // when
+        Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+        Retryable retryable = method.getAnnotation(Retryable.class);
+
+        // then
+        assertThat(retryable).isNotNull();
+        assertThat(retryable.retryFor()).containsExactlyInAnyOrder(
+                TransientDataAccessException.class,
+                OptimisticLockingFailureException.class,
+                PessimisticLockingFailureException.class
+        );
+        assertThat(retryable.maxAttempts()).isEqualTo(3);
+        assertThat(retryable.backoff().delay()).isEqualTo(500);
+        assertThat(retryable.backoff().multiplier()).isEqualTo(2);
+    }
+
+    @Test
+    void handlerMethod_hasAsyncAndEventListenerAnnotations() throws NoSuchMethodException {
+        // when
+        Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(Async.class)).isTrue();
+        assertThat(method.isAnnotationPresent(EventListener.class)).isTrue();
+    }
+
+    @Test
+    void recoverMethod_hasRecoverAnnotationWithCorrectParameterTypes() throws NoSuchMethodException {
+        // when
+        Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "recover", DataAccessException.class, SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(Recover.class)).isTrue();
+    }
+
+    @Test
+    void class_hasComponentAnnotation() {
+        // then
+        assertThat(SendCourseToApproveIntegrationEventHandler.class.isAnnotationPresent(Component.class)).isTrue();
+    }
+
+    @Test
+    void recover_withEmptyExceptionMessage_persistsEmptyMessage() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getExceptionMessage()).isEmpty();
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_businessException_doesNotPersistFailedEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new ResourceNotFoundException("Course not found"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when
+        try {
+            sut.handleSendCourseToApproveEvent(event);
+        } catch (ResourceNotFoundException ignored) {
         }
 
         // then

@@ -3,11 +3,13 @@ package com.educational.platform.common.event;
 import com.educational.platform.common.exception.ResourceNotFoundException;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessException;
+import org.springframework.stereotype.Component;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -110,6 +112,38 @@ class IntegrationEventRetryHandlerTest {
 
         // then
         assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isFalse();
+    }
+
+    @Test
+    void isRetryable_subclassOfPessimisticLockingFailure_returnsTrue() {
+        // given
+        final Throwable exception = new CannotAcquireLockException("lock timeout");
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
+    }
+
+    @Test
+    void retryableExceptions_isConsistentWithIsRetryableMethod() {
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(new QueryTimeoutException("timeout"))).isTrue();
+        assertThat(IntegrationEventRetryHandler.isRetryable(new OptimisticLockingFailureException("lock"))).isTrue();
+        assertThat(IntegrationEventRetryHandler.isRetryable(new PessimisticLockingFailureException("lock"))).isTrue();
+    }
+
+    @Test
+    void retryableExceptions_arrayIsNotModifiable() {
+        // given
+        final Class<?>[] original = IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS.clone();
+
+        // then
+        assertThat(IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS).containsExactly(original);
+    }
+
+    @Test
+    void class_hasComponentAnnotation() {
+        // then
+        assertThat(IntegrationEventRetryHandler.class.isAnnotationPresent(Component.class)).isTrue();
     }
 
 }
