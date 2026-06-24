@@ -141,4 +141,51 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(argument.getValue().getExceptionMessage()).isEqualTo(OptimisticLockingFailureException.class.getName());
     }
 
+    @Test
+    void recover_withPessimisticLockingException_persistsFailedEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final PessimisticLockingFailureException exception = new PessimisticLockingFailureException("deadlock detected");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord failedEvent = argument.getValue();
+        assertThat(failedEvent.getExceptionMessage()).isEqualTo("deadlock detected");
+        assertThat(failedEvent.getRetryCount()).isEqualTo(3);
+        assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_genericRuntimeException_rethrown() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new IllegalStateException("invalid state"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("invalid state");
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_transientException_preservesOriginalMessage() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new OptimisticLockingFailureException("specific DB error"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
+                .isInstanceOf(OptimisticLockingFailureException.class)
+                .hasMessage("specific DB error");
+    }
+
 }

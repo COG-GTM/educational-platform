@@ -142,4 +142,51 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThat(argument.getValue().getExceptionMessage()).isEqualTo(OptimisticLockingFailureException.class.getName());
     }
 
+    @Test
+    void recover_withPessimisticLockingException_persistsFailedEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.7);
+        final PessimisticLockingFailureException exception = new PessimisticLockingFailureException("deadlock detected");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord failedEvent = argument.getValue();
+        assertThat(failedEvent.getExceptionMessage()).isEqualTo("deadlock detected");
+        assertThat(failedEvent.getRetryCount()).isEqualTo(3);
+        assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_genericRuntimeException_rethrown() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.7);
+        doThrow(new IllegalStateException("invalid state"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("invalid state");
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_transientException_preservesOriginalMessage() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.7);
+        doThrow(new OptimisticLockingFailureException("specific DB error"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isInstanceOf(OptimisticLockingFailureException.class)
+                .hasMessage("specific DB error");
+    }
+
 }

@@ -90,4 +90,36 @@ class AsyncConfigTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    void asyncUncaughtExceptionHandler_withNullParamValues_logsWithoutThrowing() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        RuntimeException exception = new RuntimeException("test error");
+
+        // when / then
+        assertThatCode(() -> handler.handleUncaughtException(exception, method, (Object) null))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void getAsyncExecutor_isInitializedAndReady() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getThreadPoolExecutor()).isNotNull();
+        assertThat(executor.getThreadPoolExecutor().isShutdown()).isFalse();
+    }
+
+    @Test
+    void getAsyncUncaughtExceptionHandler_returnsFreshInstanceEachCall() {
+        // when
+        AsyncUncaughtExceptionHandler handler1 = asyncConfig.getAsyncUncaughtExceptionHandler();
+        AsyncUncaughtExceptionHandler handler2 = asyncConfig.getAsyncUncaughtExceptionHandler();
+
+        // then
+        assertThat(handler1).isNotSameAs(handler2);
+    }
+
 }

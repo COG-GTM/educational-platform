@@ -119,4 +119,48 @@ class FailedIntegrationEventRecordTest {
                 );
     }
 
+    @Test
+    void constructor_withNegativeRetryCount_setsRetryCount() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", -1);
+
+        // then
+        assertThat(record.getRetryCount()).isEqualTo(-1);
+    }
+
+    @Test
+    void defaultConstructor_createsInstanceWithNullFields() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord();
+
+        // then
+        assertThat(record.getId()).isNull();
+        assertThat(record.getEventClassName()).isNull();
+        assertThat(record.getEventPayload()).isNull();
+        assertThat(record.getExceptionMessage()).isNull();
+        assertThat(record.getTimestamp()).isNull();
+        assertThat(record.getRetryCount()).isZero();
+        assertThat(record.getStatus()).isNull();
+    }
+
+    @Test
+    void resolve_doesNotAffectOtherFields() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error msg", 5);
+        final Instant timestampBefore = record.getTimestamp();
+
+        // when
+        record.resolve();
+
+        // then
+        assertThat(record.getEventClassName()).isEqualTo("com.example.Event");
+        assertThat(record.getEventPayload()).isEqualTo("payload");
+        assertThat(record.getExceptionMessage()).isEqualTo("error msg");
+        assertThat(record.getRetryCount()).isEqualTo(5);
+        assertThat(record.getTimestamp()).isEqualTo(timestampBefore);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.RESOLVED);
+    }
+
 }

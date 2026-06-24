@@ -131,4 +131,48 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(argument.getValue().getExceptionMessage()).isEqualTo(OptimisticLockingFailureException.class.getName());
     }
 
+    @Test
+    void recover_withPessimisticLockingException_persistsFailedEvent() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final PessimisticLockingFailureException exception = new PessimisticLockingFailureException("deadlock detected");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord failedEvent = argument.getValue();
+        assertThat(failedEvent.getExceptionMessage()).isEqualTo("deadlock detected");
+        assertThat(failedEvent.getRetryCount()).isEqualTo(3);
+        assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
+    @Test
+    void handleUserCreatedEvent_genericRuntimeException_rethrown() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        doThrow(new IllegalStateException("invalid state"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("invalid state");
+    }
+
+    @Test
+    void handleUserCreatedEvent_transientException_preservesOriginalMessage() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        doThrow(new OptimisticLockingFailureException("specific DB error"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(OptimisticLockingFailureException.class)
+                .hasMessage("specific DB error");
+    }
+
 }

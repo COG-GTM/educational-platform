@@ -3,6 +3,7 @@ package com.educational.platform.common.event;
 import com.educational.platform.common.exception.ResourceNotFoundException;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
@@ -91,6 +92,15 @@ class IntegrationEventRetryHandlerTest {
                         OptimisticLockingFailureException.class,
                         PessimisticLockingFailureException.class
                 );
+    }
+
+    @Test
+    void isRetryable_dataIntegrityViolationException_returnsFalse() {
+        // given
+        final Throwable exception = new DataIntegrityViolationException("constraint violation");
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isFalse();
     }
 
 }
