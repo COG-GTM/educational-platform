@@ -237,7 +237,7 @@ class UserCreatedIntegrationEventHandlerTest {
     void recoverMethod_hasRecoverAnnotationWithCorrectParameterTypes() throws NoSuchMethodException {
         // when
         Method method = UserCreatedIntegrationEventHandler.class.getMethod(
-                "recover", DataAccessException.class, UserCreatedIntegrationEvent.class);
+                "recover", TransientDataAccessException.class, UserCreatedIntegrationEvent.class);
 
         // then
         assertThat(method.isAnnotationPresent(Recover.class)).isTrue();
@@ -387,7 +387,7 @@ class UserCreatedIntegrationEventHandlerTest {
     void recoverMethod_isPublic() throws NoSuchMethodException {
         // when
         Method method = UserCreatedIntegrationEventHandler.class.getMethod(
-                "recover", DataAccessException.class, UserCreatedIntegrationEvent.class);
+                "recover", TransientDataAccessException.class, UserCreatedIntegrationEvent.class);
 
         // then
         assertThat(java.lang.reflect.Modifier.isPublic(method.getModifiers())).isTrue();
@@ -407,7 +407,7 @@ class UserCreatedIntegrationEventHandlerTest {
     void recoverMethod_returnsVoid() throws NoSuchMethodException {
         // when
         Method method = UserCreatedIntegrationEventHandler.class.getMethod(
-                "recover", DataAccessException.class, UserCreatedIntegrationEvent.class);
+                "recover", TransientDataAccessException.class, UserCreatedIntegrationEvent.class);
 
         // then
         assertThat(method.getReturnType()).isEqualTo(void.class);
@@ -422,6 +422,27 @@ class UserCreatedIntegrationEventHandlerTest {
 
         // then
         assertThat(retryable.noRetryFor()).isEmpty();
+    }
+
+    @Test
+    void class_hasNoRecoverMethodAcceptingGenericException() {
+        // @Recover must accept TransientDataAccessException (not Exception) to prevent
+        // business exceptions from triggering dead-letter persistence
+        assertThatThrownBy(() ->
+                UserCreatedIntegrationEventHandler.class.getMethod(
+                        "recover", Exception.class, UserCreatedIntegrationEvent.class)
+        ).isInstanceOf(NoSuchMethodException.class);
+    }
+
+    @Test
+    void class_hasNoRecoverMethodAcceptingDataAccessException() {
+        // @Recover must accept TransientDataAccessException (not DataAccessException) to
+        // prevent non-transient exceptions like DataIntegrityViolationException from being
+        // silently swallowed with inaccurate retry metadata
+        assertThatThrownBy(() ->
+                UserCreatedIntegrationEventHandler.class.getMethod(
+                        "recover", DataAccessException.class, UserCreatedIntegrationEvent.class)
+        ).isInstanceOf(NoSuchMethodException.class);
     }
 
 }

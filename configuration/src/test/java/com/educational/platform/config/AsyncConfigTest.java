@@ -302,6 +302,13 @@ class AsyncConfigTest {
     }
 
     @Test
+    void integrationEventAsyncUncaughtExceptionHandler_implementsAsyncUncaughtExceptionHandler() {
+        // then
+        assertThat(AsyncUncaughtExceptionHandler.class)
+                .isAssignableFrom(AsyncConfig.IntegrationEventAsyncUncaughtExceptionHandler.class);
+    }
+
+    @Test
     void enableAsyncAndEnableRetry_orderingEnsuresRetryRunsInsideAsyncThread() {
         // The critical invariant: @Async (lower order) is outer advisor, @Retryable (higher order) is inner.
         // This means the method executes in the async thread, and retry wraps the actual method call.

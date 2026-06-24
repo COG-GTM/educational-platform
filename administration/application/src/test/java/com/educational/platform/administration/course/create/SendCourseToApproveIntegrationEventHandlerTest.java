@@ -250,7 +250,7 @@ class SendCourseToApproveIntegrationEventHandlerTest {
     void recoverMethod_hasRecoverAnnotationWithCorrectParameterTypes() throws NoSuchMethodException {
         // when
         Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
-                "recover", DataAccessException.class, SendCourseToApproveIntegrationEvent.class);
+                "recover", TransientDataAccessException.class, SendCourseToApproveIntegrationEvent.class);
 
         // then
         assertThat(method.isAnnotationPresent(Recover.class)).isTrue();
@@ -395,7 +395,7 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         // Spring Retry requires public @Recover methods
         // when
         Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
-                "recover", DataAccessException.class, SendCourseToApproveIntegrationEvent.class);
+                "recover", TransientDataAccessException.class, SendCourseToApproveIntegrationEvent.class);
 
         // then
         assertThat(java.lang.reflect.Modifier.isPublic(method.getModifiers())).isTrue();
@@ -417,7 +417,7 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         // Return type must match handler method for Spring Retry to invoke @Recover
         // when
         Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
-                "recover", DataAccessException.class, SendCourseToApproveIntegrationEvent.class);
+                "recover", TransientDataAccessException.class, SendCourseToApproveIntegrationEvent.class);
 
         // then
         assertThat(method.getReturnType()).isEqualTo(void.class);
@@ -433,6 +433,27 @@ class SendCourseToApproveIntegrationEventHandlerTest {
 
         // then
         assertThat(retryable.noRetryFor()).isEmpty();
+    }
+
+    @Test
+    void class_hasNoRecoverMethodAcceptingGenericException() {
+        // @Recover must accept TransientDataAccessException (not Exception) to prevent
+        // business exceptions from triggering dead-letter persistence
+        assertThatThrownBy(() ->
+                SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                        "recover", Exception.class, SendCourseToApproveIntegrationEvent.class)
+        ).isInstanceOf(NoSuchMethodException.class);
+    }
+
+    @Test
+    void class_hasNoRecoverMethodAcceptingDataAccessException() {
+        // @Recover must accept TransientDataAccessException (not DataAccessException) to
+        // prevent non-transient exceptions like DataIntegrityViolationException from being
+        // silently swallowed with inaccurate retry metadata
+        assertThatThrownBy(() ->
+                SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                        "recover", DataAccessException.class, SendCourseToApproveIntegrationEvent.class)
+        ).isInstanceOf(NoSuchMethodException.class);
     }
 
 }

@@ -7,7 +7,6 @@ import com.educational.platform.course.reviews.integration.event.CourseRatingRec
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
-import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.TransientDataAccessException;
@@ -49,7 +48,7 @@ public class CourseRatingRecalculatedIntegrationEventHandler {
     }
 
     @Recover
-    public void recover(DataAccessException e, CourseRatingRecalculatedIntegrationEvent event) {
+    public void recover(TransientDataAccessException e, CourseRatingRecalculatedIntegrationEvent event) {
         log.error("All retries exhausted for event: {}. Error: {}", event, e.getMessage(), e);
         failedEventRepository.save(new FailedIntegrationEventRecord(
                 event.getClass().getName(),

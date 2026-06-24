@@ -246,4 +246,15 @@ class IntegrationEventRetryHandlerTest {
         assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isFalse();
     }
 
+    @Test
+    void isRetryable_nonRetryableWrappingRetryableCause_returnsFalse() {
+        // only the top-level exception type is classified, not the cause chain
+        // given
+        final Throwable retryableCause = new OptimisticLockingFailureException("lock failure");
+        final Throwable wrapper = new RuntimeException("wrapper", retryableCause);
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(wrapper)).isFalse();
+    }
+
 }

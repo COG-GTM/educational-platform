@@ -7,7 +7,6 @@ import com.educational.platform.course.enrollments.integration.event.StudentEnro
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
-import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.TransientDataAccessException;
@@ -49,7 +48,7 @@ public class StudentEnrolledToCourseIntegrationEventHandler {
     }
 
     @Recover
-    public void recover(DataAccessException e, StudentEnrolledToCourseIntegrationEvent event) {
+    public void recover(TransientDataAccessException e, StudentEnrolledToCourseIntegrationEvent event) {
         log.error("All retries exhausted for event: {}. Error: {}", event, e.getMessage(), e);
         failedEventRepository.save(new FailedIntegrationEventRecord(
                 event.getClass().getName(),

@@ -11,7 +11,9 @@ import jakarta.persistence.Table;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -412,6 +414,16 @@ class FailedIntegrationEventRecordTest {
 
         // then
         assertThat(record.getExceptionMessage()).isEqualTo(unicodeMessage);
+    }
+
+    @Test
+    void defaultConstructor_isProtected() throws NoSuchMethodException {
+        // JPA requires a non-private no-arg constructor, but it should not be public
+        // when
+        Constructor<?> constructor = FailedIntegrationEventRecord.class.getDeclaredConstructor();
+
+        // then
+        assertThat(Modifier.isProtected(constructor.getModifiers())).isTrue();
     }
 
 }

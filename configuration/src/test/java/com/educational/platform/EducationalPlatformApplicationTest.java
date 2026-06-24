@@ -3,6 +3,7 @@ package com.educational.platform;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.PropertySource;
+import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.scheduling.annotation.EnableAsync;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -13,6 +14,12 @@ class EducationalPlatformApplicationTest {
     void class_doesNotHaveEnableAsyncAnnotation() {
         // @EnableAsync was moved to AsyncConfig to co-locate with @EnableRetry ordering
         assertThat(EducationalPlatformApplication.class.isAnnotationPresent(EnableAsync.class)).isFalse();
+    }
+
+    @Test
+    void class_doesNotHaveEnableRetryAnnotation() {
+        // @EnableRetry was moved to AsyncConfig to co-locate with @EnableAsync ordering
+        assertThat(EducationalPlatformApplication.class.isAnnotationPresent(EnableRetry.class)).isFalse();
     }
 
     @Test

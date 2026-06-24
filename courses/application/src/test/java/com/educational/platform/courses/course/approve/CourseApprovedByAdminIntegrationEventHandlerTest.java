@@ -250,7 +250,7 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
     void recoverMethod_hasRecoverAnnotationWithCorrectParameterTypes() throws NoSuchMethodException {
         // when
         Method method = CourseApprovedByAdminIntegrationEventHandler.class.getMethod(
-                "recover", DataAccessException.class, CourseApprovedByAdminIntegrationEvent.class);
+                "recover", TransientDataAccessException.class, CourseApprovedByAdminIntegrationEvent.class);
 
         // then
         assertThat(method.isAnnotationPresent(Recover.class)).isTrue();
@@ -393,7 +393,7 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
     void recoverMethod_isPublic() throws NoSuchMethodException {
         // when
         Method method = CourseApprovedByAdminIntegrationEventHandler.class.getMethod(
-                "recover", DataAccessException.class, CourseApprovedByAdminIntegrationEvent.class);
+                "recover", TransientDataAccessException.class, CourseApprovedByAdminIntegrationEvent.class);
 
         // then
         assertThat(java.lang.reflect.Modifier.isPublic(method.getModifiers())).isTrue();
@@ -413,7 +413,7 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
     void recoverMethod_returnsVoid() throws NoSuchMethodException {
         // when
         Method method = CourseApprovedByAdminIntegrationEventHandler.class.getMethod(
-                "recover", DataAccessException.class, CourseApprovedByAdminIntegrationEvent.class);
+                "recover", TransientDataAccessException.class, CourseApprovedByAdminIntegrationEvent.class);
 
         // then
         assertThat(method.getReturnType()).isEqualTo(void.class);
@@ -428,6 +428,27 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
 
         // then
         assertThat(retryable.noRetryFor()).isEmpty();
+    }
+
+    @Test
+    void class_hasNoRecoverMethodAcceptingGenericException() {
+        // @Recover must accept TransientDataAccessException (not Exception) to prevent
+        // business exceptions from triggering dead-letter persistence
+        assertThatThrownBy(() ->
+                CourseApprovedByAdminIntegrationEventHandler.class.getMethod(
+                        "recover", Exception.class, CourseApprovedByAdminIntegrationEvent.class)
+        ).isInstanceOf(NoSuchMethodException.class);
+    }
+
+    @Test
+    void class_hasNoRecoverMethodAcceptingDataAccessException() {
+        // @Recover must accept TransientDataAccessException (not DataAccessException) to
+        // prevent non-transient exceptions like DataIntegrityViolationException from being
+        // silently swallowed with inaccurate retry metadata
+        assertThatThrownBy(() ->
+                CourseApprovedByAdminIntegrationEventHandler.class.getMethod(
+                        "recover", DataAccessException.class, CourseApprovedByAdminIntegrationEvent.class)
+        ).isInstanceOf(NoSuchMethodException.class);
     }
 
 }
