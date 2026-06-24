@@ -308,4 +308,22 @@ class IntegrationEventRetryHandlerTest {
         assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isFalse();
     }
 
+    @Test
+    void isRetryable_methodIsPublic() throws NoSuchMethodException {
+        // when
+        java.lang.reflect.Method method = IntegrationEventRetryHandler.class.getMethod("isRetryable", Throwable.class);
+
+        // then
+        assertThat(java.lang.reflect.Modifier.isPublic(method.getModifiers())).isTrue();
+    }
+
+    @Test
+    void retryableExceptions_fieldIsPublic() throws NoSuchFieldException {
+        // when
+        java.lang.reflect.Field field = IntegrationEventRetryHandler.class.getField("RETRYABLE_EXCEPTIONS");
+
+        // then
+        assertThat(java.lang.reflect.Modifier.isPublic(field.getModifiers())).isTrue();
+    }
+
 }

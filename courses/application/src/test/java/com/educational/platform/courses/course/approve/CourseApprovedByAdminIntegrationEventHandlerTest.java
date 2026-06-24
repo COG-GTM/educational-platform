@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -665,6 +666,58 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         assertThat(retryable.retryFor()).containsExactlyInAnyOrder(
                 (Class[]) com.educational.platform.common.event.IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS
         );
+    }
+
+    @Test
+    void class_hasNoRecoverMethodAcceptingRuntimeException() {
+        assertThatThrownBy(() ->
+                CourseApprovedByAdminIntegrationEventHandler.class.getMethod(
+                        "recover", RuntimeException.class, CourseApprovedByAdminIntegrationEvent.class)
+        ).isInstanceOf(NoSuchMethodException.class);
+    }
+
+    @Test
+    void recoverMethod_doesNotHaveEventListenerOrAsyncAnnotation() throws NoSuchMethodException {
+        // when
+        Method method = CourseApprovedByAdminIntegrationEventHandler.class.getMethod(
+                "recover", TransientDataAccessException.class, CourseApprovedByAdminIntegrationEvent.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(EventListener.class)).isFalse();
+        assertThat(method.isAnnotationPresent(Async.class)).isFalse();
+    }
+
+    @Test
+    void recover_withConcurrencyFailureException_persistsFailedEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final ConcurrencyFailureException exception = new ConcurrencyFailureException("concurrency failure");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord failedEvent = argument.getValue();
+        assertThat(failedEvent.getExceptionMessage()).isEqualTo("concurrency failure");
+        assertThat(failedEvent.getRetryCount()).isEqualTo(3);
+        assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_nullPointerException_rethrown() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new NullPointerException("null reference"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("null reference");
     }
 
 }

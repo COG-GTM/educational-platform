@@ -10,6 +10,9 @@ import org.springframework.scheduling.annotation.AsyncConfigurer;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
+
 import java.lang.reflect.Method;
 import java.util.concurrent.Executor;
 
@@ -414,6 +417,40 @@ class AsyncConfigTest {
         assertThatCode(() -> handler.handleUncaughtException(exception, method,
                 "param1", "param2", "param3", "param4", "param5"))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withOptimisticLockingFailure_logsWithoutThrowing() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        OptimisticLockingFailureException exception = new OptimisticLockingFailureException("lock conflict");
+
+        // when / then
+        assertThatCode(() -> handler.handleUncaughtException(exception, method, "event1"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withDataIntegrityViolation_logsWithoutThrowing() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        DataIntegrityViolationException exception = new DataIntegrityViolationException("constraint violation");
+
+        // when / then
+        assertThatCode(() -> handler.handleUncaughtException(exception, method, "event1"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void integrationEventAsyncUncaughtExceptionHandler_hasPackagePrivateVisibility() {
+        // when
+        int modifiers = AsyncConfig.IntegrationEventAsyncUncaughtExceptionHandler.class.getModifiers();
+
+        // then
+        assertThat(java.lang.reflect.Modifier.isPublic(modifiers)).isFalse();
+        assertThat(java.lang.reflect.Modifier.isPrivate(modifiers)).isFalse();
     }
 
 }
