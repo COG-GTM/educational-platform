@@ -167,4 +167,29 @@ class IntegrationEventRetryHandlerTest {
         assertThat(IntegrationEventRetryHandler.class.isAnnotationPresent(Component.class)).isTrue();
     }
 
+    @Test
+    void isRetryable_errorType_returnsFalse() {
+        // given
+        final Throwable error = new OutOfMemoryError("heap space");
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(error)).isFalse();
+    }
+
+    @Test
+    void retryableExceptions_externalMutationDoesNotAffectClassification() {
+        // given - mutate the array externally
+        final Class<?> original = IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS[0];
+        IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS[0] = RuntimeException.class;
+
+        // when - isRetryable still uses instanceof, not the array
+        final boolean result = IntegrationEventRetryHandler.isRetryable(new QueryTimeoutException("timeout"));
+
+        // then
+        assertThat(result).isTrue();
+
+        // cleanup
+        IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS[0] = original;
+    }
+
 }

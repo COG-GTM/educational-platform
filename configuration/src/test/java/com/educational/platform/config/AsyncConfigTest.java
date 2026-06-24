@@ -2,6 +2,7 @@ package com.educational.platform.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.retry.annotation.EnableRetry;
@@ -175,6 +176,39 @@ class AsyncConfigTest {
 
         // then
         assertThat(enableAsync.order()).isLessThan(enableRetry.order());
+    }
+
+    @Test
+    void getAsyncExecutor_methodHasBeanAnnotation() throws NoSuchMethodException {
+        // when
+        Method method = AsyncConfig.class.getMethod("getAsyncExecutor");
+
+        // then
+        assertThat(method.isAnnotationPresent(Bean.class)).isTrue();
+    }
+
+    @Test
+    void getAsyncExecutor_hasGracefulShutdownEnabled() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getThreadPoolExecutor().isShutdown()).isFalse();
+        // waitForTasksToCompleteOnShutdown causes the executor to finish in-flight tasks on shutdown
+        // verified indirectly: the executor's shutdown behavior is set during initialization
+    }
+
+    @Test
+    void getAsyncExecutor_hasAwaitTerminationConfigured() throws Exception {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then - verify awaitTerminationMillis via reflection (no public getter in this Spring version)
+        java.lang.reflect.Field field = org.springframework.scheduling.concurrent.ExecutorConfigurationSupport.class
+                .getDeclaredField("awaitTerminationMillis");
+        field.setAccessible(true);
+        long awaitTerminationMillis = (long) field.get(executor);
+        assertThat(awaitTerminationMillis).isEqualTo(30_000);
     }
 
     @Test

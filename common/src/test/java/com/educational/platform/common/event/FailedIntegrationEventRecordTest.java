@@ -269,4 +269,64 @@ class FailedIntegrationEventRecordTest {
         }
     }
 
+    @Test
+    void eventClassNameField_hasColumnAnnotationWithCorrectName() throws NoSuchFieldException {
+        // when
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventClassName");
+        Column column = field.getAnnotation(Column.class);
+
+        // then
+        assertThat(column).isNotNull();
+        assertThat(column.name()).isEqualTo("event_class_name");
+        assertThat(column.nullable()).isFalse();
+    }
+
+    @Test
+    void timestampField_hasColumnAnnotationWithCorrectName() throws NoSuchFieldException {
+        // when
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("timestamp");
+        Column column = field.getAnnotation(Column.class);
+
+        // then
+        assertThat(column).isNotNull();
+        assertThat(column.name()).isEqualTo("timestamp");
+        assertThat(column.nullable()).isFalse();
+    }
+
+    @Test
+    void retryCountField_hasColumnAnnotationWithCorrectName() throws NoSuchFieldException {
+        // when
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("retryCount");
+        Column column = field.getAnnotation(Column.class);
+
+        // then
+        assertThat(column).isNotNull();
+        assertThat(column.name()).isEqualTo("retry_count");
+        assertThat(column.nullable()).isFalse();
+    }
+
+    @Test
+    void constructor_withNullEventClassName_setsFieldToNull() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                null, "payload", "error", 3);
+
+        // then
+        assertThat(record.getEventClassName()).isNull();
+        assertThat(record.getEventPayload()).isEqualTo("payload");
+        assertThat(record.getExceptionMessage()).isEqualTo("error");
+    }
+
+    @Test
+    void constructor_withNullEventPayload_setsFieldToNull() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", null, "error", 3);
+
+        // then
+        assertThat(record.getEventPayload()).isNull();
+        assertThat(record.getEventClassName()).isEqualTo("com.example.Event");
+        assertThat(record.getExceptionMessage()).isEqualTo("error");
+    }
+
 }
