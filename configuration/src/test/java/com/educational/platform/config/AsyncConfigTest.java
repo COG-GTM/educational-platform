@@ -268,4 +268,51 @@ class AsyncConfigTest {
         assertThat(executor.getThreadPoolExecutor().isTerminating()).isFalse();
     }
 
+    @Test
+    void integrationEventAsyncUncaughtExceptionHandler_isStaticInnerClass() {
+        // Static inner class prevents holding a reference to outer AsyncConfig instance (GC-safe)
+        // when
+        int modifiers = AsyncConfig.IntegrationEventAsyncUncaughtExceptionHandler.class.getModifiers();
+
+        // then
+        assertThat(java.lang.reflect.Modifier.isStatic(modifiers)).isTrue();
+    }
+
+    @Test
+    void getAsyncExecutor_waitForTasksToCompleteOnShutdown_isEnabled() throws Exception {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then - verify via reflection that waitForTasksToCompleteOnShutdown is true
+        java.lang.reflect.Field field = org.springframework.scheduling.concurrent.ExecutorConfigurationSupport.class
+                .getDeclaredField("waitForTasksToCompleteOnShutdown");
+        field.setAccessible(true);
+        boolean waitForTasks = (boolean) field.get(executor);
+        assertThat(waitForTasks).isTrue();
+    }
+
+    @Test
+    void getAsyncExecutor_canSubmitAndExecuteTask() throws Exception {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        var future = executor.submit(() -> "done");
+
+        // then
+        assertThat(future.get(5, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo("done");
+    }
+
+    @Test
+    void enableAsyncAndEnableRetry_orderingEnsuresRetryRunsInsideAsyncThread() {
+        // The critical invariant: @Async (lower order) is outer advisor, @Retryable (higher order) is inner.
+        // This means the method executes in the async thread, and retry wraps the actual method call.
+        // when
+        EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
+        EnableRetry enableRetry = AsyncConfig.class.getAnnotation(EnableRetry.class);
+
+        // then - async order must equal HIGHEST_PRECEDENCE (outermost)
+        assertThat(enableAsync.order()).isEqualTo(Ordered.HIGHEST_PRECEDENCE);
+        // retry order must be exactly one more (inner to async)
+        assertThat(enableRetry.order()).isEqualTo(enableAsync.order() + 1);
+    }
+
 }

@@ -365,4 +365,74 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(argument.getValue().getEventPayload()).contains("123e4567-e89b-12d3-a456-426655440001");
     }
 
+    @Test
+    void recover_whenRepositorySaveThrows_exceptionPropagates() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final OptimisticLockingFailureException originalException = new OptimisticLockingFailureException("original");
+        doThrow(new RuntimeException("save failed")).when(failedEventRepository).save(any());
+
+        // when / then - documents that save() failure propagates (not swallowed)
+        assertThatThrownBy(() -> sut.recover(originalException, event))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("save failed");
+    }
+
+    @Test
+    void handlerMethod_isPublic() throws NoSuchMethodException {
+        // Spring AOP requires public methods for proxying @Async and @Retryable
+        // when
+        Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        assertThat(java.lang.reflect.Modifier.isPublic(method.getModifiers())).isTrue();
+    }
+
+    @Test
+    void recoverMethod_isPublic() throws NoSuchMethodException {
+        // Spring Retry requires public @Recover methods
+        // when
+        Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "recover", DataAccessException.class, SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        assertThat(java.lang.reflect.Modifier.isPublic(method.getModifiers())).isTrue();
+    }
+
+    @Test
+    void handlerMethod_returnsVoid() throws NoSuchMethodException {
+        // @Recover method must have same return type as the retryable method
+        // when
+        Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        assertThat(method.getReturnType()).isEqualTo(void.class);
+    }
+
+    @Test
+    void recoverMethod_returnsVoid() throws NoSuchMethodException {
+        // Return type must match handler method for Spring Retry to invoke @Recover
+        // when
+        Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "recover", DataAccessException.class, SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        assertThat(method.getReturnType()).isEqualTo(void.class);
+    }
+
+    @Test
+    void handlerMethod_retryableDoesNotExcludeAnyExceptions() throws NoSuchMethodException {
+        // Verify noRetryFor/exclude is not accidentally configured
+        // when
+        Method method = SendCourseToApproveIntegrationEventHandler.class.getMethod(
+                "handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+        Retryable retryable = method.getAnnotation(Retryable.class);
+
+        // then
+        assertThat(retryable.noRetryFor()).isEmpty();
+    }
+
 }

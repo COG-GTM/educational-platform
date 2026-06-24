@@ -210,4 +210,40 @@ class IntegrationEventRetryHandlerTest {
         IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS[0] = original;
     }
 
+    @Test
+    void retryableExceptions_allEntriesAreNonNull() {
+        // then
+        for (Class<?> exceptionClass : IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS) {
+            assertThat(exceptionClass).isNotNull();
+        }
+    }
+
+    @Test
+    void retryableExceptions_allEntriesAreAssignableFromDataAccessException() {
+        // then - all retryable exception types should be DataAccessException subclasses
+        for (Class<?> exceptionClass : IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS) {
+            assertThat(org.springframework.dao.DataAccessException.class.isAssignableFrom(exceptionClass))
+                    .as("Expected %s to be a DataAccessException subclass", exceptionClass.getName())
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void isRetryable_withCustomTransientDataAccessSubclass_returnsTrue() {
+        // given - anonymous concrete subclass of TransientDataAccessException
+        final Throwable exception = new TransientDataAccessException("custom transient") {};
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
+    }
+
+    @Test
+    void isRetryable_withIllegalStateException_returnsFalse() {
+        // given
+        final Throwable exception = new IllegalStateException("illegal state");
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isFalse();
+    }
+
 }

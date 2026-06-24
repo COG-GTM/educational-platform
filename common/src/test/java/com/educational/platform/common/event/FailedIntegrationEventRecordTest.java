@@ -359,4 +359,59 @@ class FailedIntegrationEventRecordTest {
         return FailedIntegrationEventRecord.class.getDeclaredField(fieldName).getAnnotation(Column.class).name();
     }
 
+    @Test
+    void failedEventStatus_valueOf_roundTrip() {
+        // then - valueOf(name()) should return the same enum constant
+        for (FailedIntegrationEventRecord.FailedEventStatus status : FailedIntegrationEventRecord.FailedEventStatus.values()) {
+            assertThat(FailedIntegrationEventRecord.FailedEventStatus.valueOf(status.name())).isEqualTo(status);
+        }
+    }
+
+    @Test
+    void failedEventStatus_failedName_matchesDatabaseValue() {
+        // Enum is stored as STRING in database, so name() must match expected DB column value
+        // then
+        assertThat(FailedIntegrationEventRecord.FailedEventStatus.FAILED.name()).isEqualTo("FAILED");
+        assertThat(FailedIntegrationEventRecord.FailedEventStatus.RESOLVED.name()).isEqualTo("RESOLVED");
+    }
+
+    @Test
+    void resolve_fromDefaultConstructor_setsStatusToResolved() {
+        // given - default constructor leaves status as null
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord();
+        assertThat(record.getStatus()).isNull();
+
+        // when - resolve sets status to RESOLVED regardless of previous state
+        record.resolve();
+
+        // then
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.RESOLVED);
+    }
+
+    @Test
+    void constructor_withSpecialCharactersInPayload_setsFieldCorrectly() {
+        // given
+        final String specialPayload = "Event{id='test', data=\"json: {\\\"key\\\": \\\"value\\\"}\"}";
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", specialPayload, "error", 3);
+
+        // then
+        assertThat(record.getEventPayload()).isEqualTo(specialPayload);
+    }
+
+    @Test
+    void constructor_withUnicodeInExceptionMessage_setsFieldCorrectly() {
+        // given
+        final String unicodeMessage = "Ошибка подключения к базе данных";
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", unicodeMessage, 3);
+
+        // then
+        assertThat(record.getExceptionMessage()).isEqualTo(unicodeMessage);
+    }
+
 }
