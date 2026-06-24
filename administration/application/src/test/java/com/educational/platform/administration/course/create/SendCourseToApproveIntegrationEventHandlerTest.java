@@ -12,7 +12,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.event.EventListener;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
@@ -433,6 +435,87 @@ class SendCourseToApproveIntegrationEventHandlerTest {
 
         // then
         assertThat(retryable.noRetryFor()).isEmpty();
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_cannotAcquireLockException_rethrown() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new CannotAcquireLockException("lock timeout"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
+                .isInstanceOf(CannotAcquireLockException.class)
+                .hasMessage("lock timeout");
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_dataIntegrityViolationException_rethrown() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new DataIntegrityViolationException("constraint violation"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessage("constraint violation");
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_dataIntegrityViolationException_doesNotPersistFailedEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new DataIntegrityViolationException("constraint violation"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when
+        try {
+            sut.handleSendCourseToApproveEvent(event);
+        } catch (DataIntegrityViolationException ignored) {
+        }
+
+        // then
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void recover_setsNonNullTimestampOnFailedEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getTimestamp()).isNotNull();
+    }
+
+    @Test
+    void recover_withCannotAcquireLockException_persistsFailedEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final CannotAcquireLockException exception = new CannotAcquireLockException("lock timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord failedEvent = argument.getValue();
+        assertThat(failedEvent.getExceptionMessage()).isEqualTo("lock timeout");
+        assertThat(failedEvent.getRetryCount()).isEqualTo(3);
+        assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
     }
 
 }

@@ -15,7 +15,6 @@ import java.util.concurrent.Executor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import org.springframework.context.annotation.Bean;
 
 class AsyncConfigTest {
 
