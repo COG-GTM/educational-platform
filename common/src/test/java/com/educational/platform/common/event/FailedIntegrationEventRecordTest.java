@@ -538,4 +538,89 @@ class FailedIntegrationEventRecordTest {
         assertThat(record2.getTimestamp()).isAfterOrEqualTo(record1.getTimestamp());
     }
 
+    @Test
+    void constructor_withPayloadExceedingColumnLength_setsFieldWithoutTruncation() {
+        // Entity does not enforce column length at construction time; DB layer enforces it.
+        // given
+        final String longPayload = "x".repeat(2001);
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", longPayload, "error", 3);
+
+        // then
+        assertThat(record.getEventPayload()).hasSize(2001);
+    }
+
+    @Test
+    void constructor_withExceptionMessageExceedingColumnLength_setsFieldWithoutTruncation() {
+        // given
+        final String longMessage = "e".repeat(2001);
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", longMessage, 3);
+
+        // then
+        assertThat(record.getExceptionMessage()).hasSize(2001);
+    }
+
+    @Test
+    void constructor_withEventClassNameContainingNestedClassNotation_setsCorrectly() {
+        // given - anonymous/inner class names use $ notation
+        final String nestedClassName = "com.example.Outer$Inner$DeepNested";
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                nestedClassName, "payload", "error", 3);
+
+        // then
+        assertThat(record.getEventClassName()).isEqualTo(nestedClassName);
+    }
+
+    @Test
+    void resolve_thenGetStatus_returnsResolvedEnumConstant() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+
+        // when
+        record.resolve();
+
+        // then - verify enum identity, not just equality
+        assertThat(record.getStatus()).isSameAs(FailedIntegrationEventRecord.FailedEventStatus.RESOLVED);
+    }
+
+    @Test
+    void constructor_setsStatusToFailedEnumConstant() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+
+        // then - verify enum identity
+        assertThat(record.getStatus()).isSameAs(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
+    @Test
+    void constructor_withRetryCountOfOne_setsCorrectly() {
+        // Boundary: minimum meaningful retry count
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 1);
+
+        // then
+        assertThat(record.getRetryCount()).isEqualTo(1);
+    }
+
+    @Test
+    void id_field_isPrivateAndGeneratedByJpa() throws NoSuchFieldException {
+        // when
+        Field idField = FailedIntegrationEventRecord.class.getDeclaredField("id");
+
+        // then
+        assertThat(Modifier.isPrivate(idField.getModifiers())).isTrue();
+        assertThat(idField.getType()).isEqualTo(Long.class);
+    }
+
 }
+

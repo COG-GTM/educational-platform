@@ -453,4 +453,60 @@ class AsyncConfigTest {
         assertThat(java.lang.reflect.Modifier.isPrivate(modifiers)).isFalse();
     }
 
+    @Test
+    void getAsyncExecutor_threadPoolExecutor_hasDefaultRejectionPolicy() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then - default ThreadPoolTaskExecutor uses AbortPolicy
+        assertThat(executor.getThreadPoolExecutor().getRejectedExecutionHandler())
+                .isInstanceOf(java.util.concurrent.ThreadPoolExecutor.AbortPolicy.class);
+    }
+
+    @Test
+    void getAsyncExecutor_corePoolSizeIsPositive() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getCorePoolSize()).isPositive();
+    }
+
+    @Test
+    void getAsyncExecutor_maxPoolSizeIsPositive() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getMaxPoolSize()).isPositive();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withNullThrowable_doesNotThrow() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+
+        // when / then
+        assertThatCode(() -> handler.handleUncaughtException(null, method, "param1"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void getAsyncExecutor_threadNamePrefix_isNotEmpty() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getThreadNamePrefix()).isNotEmpty();
+    }
+
+    @Test
+    void class_enableAsyncOrderIsHighestPrecedence() {
+        // HIGHEST_PRECEDENCE ensures @Async is the outermost advisor in the proxy chain
+        EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
+        assertThat(enableAsync.order()).isEqualTo(Integer.MIN_VALUE);
+    }
+
 }
+

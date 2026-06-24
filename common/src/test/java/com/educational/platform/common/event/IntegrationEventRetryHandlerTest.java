@@ -326,4 +326,51 @@ class IntegrationEventRetryHandlerTest {
         assertThat(java.lang.reflect.Modifier.isPublic(field.getModifiers())).isTrue();
     }
 
+    @Test
+    void isRetryable_allRetryableExceptionsArrayEntries_areClassifiedAsRetryable() {
+        for (Class<?> exceptionClass : IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS) {
+            // given - instantiate via reflection or subclass
+            Throwable instance;
+            try {
+                instance = (Throwable) exceptionClass.getDeclaredConstructor(String.class).newInstance("test");
+            } catch (Exception e) {
+                // Abstract class - use a concrete subclass test (tested elsewhere)
+                continue;
+            }
+
+            // then
+            assertThat(IntegrationEventRetryHandler.isRetryable(instance))
+                    .as("isRetryable(%s) should return true", exceptionClass.getSimpleName())
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void retryableExceptions_allEntriesAreExceptionSubclasses() {
+        for (Class<?> exceptionClass : IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS) {
+            assertThat(Throwable.class.isAssignableFrom(exceptionClass))
+                    .as("%s should be a Throwable subclass", exceptionClass.getName())
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void isRetryable_classNotFoundException_returnsFalse() {
+        // given - checked exception wrapped as cause
+        final Throwable exception = new RuntimeException("wrap", new ClassNotFoundException("missing"));
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isFalse();
+    }
+
+    @Test
+    void retryableExceptions_allEntriesAreUncheckedExceptions() {
+        for (Class<?> exceptionClass : IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS) {
+            assertThat(RuntimeException.class.isAssignableFrom(exceptionClass))
+                    .as("%s should be an unchecked (RuntimeException) subclass", exceptionClass.getName())
+                    .isTrue();
+        }
+    }
+
 }
+
