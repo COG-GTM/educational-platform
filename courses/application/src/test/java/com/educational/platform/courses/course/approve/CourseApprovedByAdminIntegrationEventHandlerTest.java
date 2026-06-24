@@ -126,11 +126,11 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
     }
 
     @Test
-    void recover_withNullExceptionMessage_persistsWithNullMessage() {
+    void recover_withNullExceptionMessage_usesExceptionClassName() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
-        final Exception exception = new RuntimeException((String) null);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException(null);
 
         // when
         sut.recover(exception, event);
@@ -138,7 +138,7 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         // then
         final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
         verify(failedEventRepository).save(argument.capture());
-        assertThat(argument.getValue().getExceptionMessage()).isNull();
+        assertThat(argument.getValue().getExceptionMessage()).isEqualTo(OptimisticLockingFailureException.class.getName());
     }
 
 }

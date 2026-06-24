@@ -76,6 +76,12 @@ class IntegrationEventRetryHandlerTest {
     }
 
     @Test
+    void isRetryable_nullThrowable_returnsFalse() {
+        // when / then
+        assertThat(IntegrationEventRetryHandler.isRetryable(null)).isFalse();
+    }
+
+    @Test
     void retryableExceptions_containsExactlyThreeExpectedTypes() {
         // then
         assertThat(IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS)

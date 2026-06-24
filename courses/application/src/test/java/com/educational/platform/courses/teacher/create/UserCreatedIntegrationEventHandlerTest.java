@@ -117,10 +117,10 @@ class UserCreatedIntegrationEventHandlerTest {
     }
 
     @Test
-    void recover_withNullExceptionMessage_persistsWithNullMessage() {
+    void recover_withNullExceptionMessage_usesExceptionClassName() {
         // given
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
-        final Exception exception = new RuntimeException((String) null);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException(null);
 
         // when
         sut.recover(exception, event);
@@ -128,7 +128,7 @@ class UserCreatedIntegrationEventHandlerTest {
         // then
         final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
         verify(failedEventRepository).save(argument.capture());
-        assertThat(argument.getValue().getExceptionMessage()).isNull();
+        assertThat(argument.getValue().getExceptionMessage()).isEqualTo(OptimisticLockingFailureException.class.getName());
     }
 
 }

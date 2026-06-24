@@ -84,6 +84,32 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
+    void constructor_withMaxLengthPayload_setsPayloadCorrectly() {
+        // given
+        final String maxPayload = "x".repeat(2000);
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", maxPayload, "error", 3);
+
+        // then
+        assertThat(record.getEventPayload()).hasSize(2000);
+    }
+
+    @Test
+    void constructor_setsTimestampCloseToNow() {
+        // when
+        final Instant before = Instant.now();
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+        final Instant after = Instant.now();
+
+        // then
+        assertThat(record.getTimestamp()).isAfterOrEqualTo(before);
+        assertThat(record.getTimestamp()).isBeforeOrEqualTo(after);
+    }
+
+    @Test
     void failedEventStatus_hasExpectedValues() {
         // then
         assertThat(FailedIntegrationEventRecord.FailedEventStatus.values())
