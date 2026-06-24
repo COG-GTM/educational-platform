@@ -22,7 +22,7 @@ public class FailedIntegrationEventRecord {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "event_class_name", nullable = false)
+    @Column(name = "event_class_name", nullable = false, length = 500)
     private String eventClassName;
 
     @Column(name = "event_payload", nullable = false, length = 2000)
