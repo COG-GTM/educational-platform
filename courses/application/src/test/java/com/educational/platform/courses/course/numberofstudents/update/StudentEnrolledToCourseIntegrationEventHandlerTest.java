@@ -84,7 +84,7 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
-        final Exception exception = new OptimisticLockingFailureException("DB connection lost");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("DB connection lost");
 
         // when
         sut.recover(exception, event);

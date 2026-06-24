@@ -7,6 +7,7 @@ import com.educational.platform.courses.integration.event.SendCourseToApproveInt
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.TransientDataAccessException;
@@ -48,12 +49,12 @@ public class SendCourseToApproveIntegrationEventHandler {
     }
 
     @Recover
-    public void recover(Exception e, SendCourseToApproveIntegrationEvent event) {
+    public void recover(DataAccessException e, SendCourseToApproveIntegrationEvent event) {
         log.error("All retries exhausted for event: {}. Error: {}", event, e.getMessage(), e);
         failedEventRepository.save(new FailedIntegrationEventRecord(
                 event.getClass().getName(),
                 event.toString(),
-                e.getMessage(),
+                e.getMessage() != null ? e.getMessage() : e.getClass().getName(),
                 3
         ));
     }

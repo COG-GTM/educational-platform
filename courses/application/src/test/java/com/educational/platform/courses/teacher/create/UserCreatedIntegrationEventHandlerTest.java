@@ -74,7 +74,7 @@ class UserCreatedIntegrationEventHandlerTest {
     void recover_persistsFailedEvent() {
         // given
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
-        final Exception exception = new OptimisticLockingFailureException("DB connection lost");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("DB connection lost");
 
         // when
         sut.recover(exception, event);
