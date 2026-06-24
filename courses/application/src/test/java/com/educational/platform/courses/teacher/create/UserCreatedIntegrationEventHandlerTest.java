@@ -20,6 +20,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class UserCreatedIntegrationEventHandlerTest {
@@ -173,6 +174,23 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
                 .isInstanceOf(OptimisticLockingFailureException.class)
                 .hasMessage("specific DB error");
+    }
+
+    @Test
+    void handleUserCreatedEvent_transientException_doesNotPersistFailedEvent() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        doThrow(new OptimisticLockingFailureException("DB connection lost"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when
+        try {
+            sut.handleUserCreatedEvent(event);
+        } catch (OptimisticLockingFailureException ignored) {
+        }
+
+        // then
+        verifyNoInteractions(failedEventRepository);
     }
 
 }

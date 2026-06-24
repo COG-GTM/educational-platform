@@ -113,6 +113,15 @@ class AsyncConfigTest {
     }
 
     @Test
+    void getAsyncExecutor_hasCorrectQueueCapacity() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getQueueCapacity()).isEqualTo(100);
+    }
+
+    @Test
     void getAsyncUncaughtExceptionHandler_returnsFreshInstanceEachCall() {
         // when
         AsyncUncaughtExceptionHandler handler1 = asyncConfig.getAsyncUncaughtExceptionHandler();

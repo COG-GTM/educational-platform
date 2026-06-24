@@ -145,6 +145,28 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
+    void constructor_withNullExceptionMessage_setsFieldToNull() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", null, 3);
+
+        // then
+        assertThat(record.getExceptionMessage()).isNull();
+        assertThat(record.getEventClassName()).isEqualTo("com.example.Event");
+        assertThat(record.getEventPayload()).isEqualTo("payload");
+    }
+
+    @Test
+    void constructor_withLargeRetryCount_setsRetryCount() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", Integer.MAX_VALUE);
+
+        // then
+        assertThat(record.getRetryCount()).isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
     void resolve_doesNotAffectOtherFields() {
         // given
         final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(

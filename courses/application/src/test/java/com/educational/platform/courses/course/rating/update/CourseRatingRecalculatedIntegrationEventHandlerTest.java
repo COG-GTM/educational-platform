@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 public class CourseRatingRecalculatedIntegrationEventHandlerTest {
@@ -187,6 +188,24 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
                 .isInstanceOf(OptimisticLockingFailureException.class)
                 .hasMessage("specific DB error");
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_transientException_doesNotPersistFailedEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.7);
+        doThrow(new OptimisticLockingFailureException("DB connection lost"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when
+        try {
+            sut.handleCourseRatingRecalculatedEvent(event);
+        } catch (OptimisticLockingFailureException ignored) {
+        }
+
+        // then
+        verifyNoInteractions(failedEventRepository);
     }
 
 }

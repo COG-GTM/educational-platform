@@ -103,4 +103,13 @@ class IntegrationEventRetryHandlerTest {
         assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isFalse();
     }
 
+    @Test
+    void isRetryable_checkedExceptionWrappedInRuntime_returnsFalse() {
+        // given
+        final Throwable exception = new RuntimeException(new java.sql.SQLException("connection refused"));
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isFalse();
+    }
+
 }

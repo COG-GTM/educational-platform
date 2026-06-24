@@ -20,8 +20,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class SendCourseToApproveIntegrationEventHandlerTest {
@@ -186,6 +187,24 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
                 .isInstanceOf(OptimisticLockingFailureException.class)
                 .hasMessage("specific DB error");
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_transientException_doesNotPersistFailedEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doThrow(new OptimisticLockingFailureException("DB connection lost"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when
+        try {
+            sut.handleSendCourseToApproveEvent(event);
+        } catch (OptimisticLockingFailureException ignored) {
+        }
+
+        // then
+        verifyNoInteractions(failedEventRepository);
     }
 
 }

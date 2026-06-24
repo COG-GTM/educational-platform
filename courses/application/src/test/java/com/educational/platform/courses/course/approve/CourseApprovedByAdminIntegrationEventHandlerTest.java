@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 public class CourseApprovedByAdminIntegrationEventHandlerTest {
@@ -186,6 +187,24 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
                 .isInstanceOf(OptimisticLockingFailureException.class)
                 .hasMessage("specific DB error");
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_transientException_doesNotPersistFailedEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doThrow(new OptimisticLockingFailureException("DB connection lost"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when
+        try {
+            sut.handleCourseApprovedByAdminEvent(event);
+        } catch (OptimisticLockingFailureException ignored) {
+        }
+
+        // then
+        verifyNoInteractions(failedEventRepository);
     }
 
 }
