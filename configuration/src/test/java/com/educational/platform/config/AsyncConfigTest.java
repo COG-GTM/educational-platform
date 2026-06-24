@@ -333,4 +333,22 @@ class AsyncConfigTest {
         assertThat(threadNameHolder.get()).startsWith("integration-event-");
     }
 
+    @Test
+    void getAsyncExecutor_corePoolSizeDoesNotExceedMaxPoolSize() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getCorePoolSize()).isLessThanOrEqualTo(executor.getMaxPoolSize());
+    }
+
+    @Test
+    void getAsyncExecutor_queueCapacityIsPositive() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getQueueCapacity()).isPositive();
+    }
+
 }

@@ -567,4 +567,40 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
                 .hasCause(rootCause);
     }
 
+    @Test
+    void recover_retryCountMatchesRetryableMaxAttempts() throws NoSuchMethodException {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        Method method = CourseApprovedByAdminIntegrationEventHandler.class.getMethod(
+                "handleCourseApprovedByAdminEvent", CourseApprovedByAdminIntegrationEvent.class);
+        int maxAttempts = method.getAnnotation(Retryable.class).maxAttempts();
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getRetryCount()).isEqualTo(maxAttempts);
+    }
+
+    @Test
+    void recover_withNullMessagePessimisticLocking_usesClassName() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final PessimisticLockingFailureException exception = new PessimisticLockingFailureException(null);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getExceptionMessage()).isEqualTo(PessimisticLockingFailureException.class.getName());
+    }
+
 }

@@ -555,4 +555,38 @@ class UserCreatedIntegrationEventHandlerTest {
                 .hasCause(rootCause);
     }
 
+    @Test
+    void recover_retryCountMatchesRetryableMaxAttempts() throws NoSuchMethodException {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        Method method = UserCreatedIntegrationEventHandler.class.getMethod(
+                "handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+        int maxAttempts = method.getAnnotation(Retryable.class).maxAttempts();
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getRetryCount()).isEqualTo(maxAttempts);
+    }
+
+    @Test
+    void recover_withNullMessagePessimisticLocking_usesClassName() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final PessimisticLockingFailureException exception = new PessimisticLockingFailureException(null);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getExceptionMessage()).isEqualTo(PessimisticLockingFailureException.class.getName());
+    }
+
 }

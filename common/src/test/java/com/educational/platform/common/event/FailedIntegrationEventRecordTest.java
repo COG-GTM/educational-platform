@@ -443,4 +443,18 @@ class FailedIntegrationEventRecordTest {
         assertThat(record1.getEventPayload()).isNotEqualTo(record2.getEventPayload());
     }
 
+    @Test
+    void resolve_idRemainsNullWithoutPersistence() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+        assertThat(record.getId()).isNull();
+
+        // when
+        record.resolve();
+
+        // then
+        assertThat(record.getId()).isNull();
+    }
+
 }

@@ -257,4 +257,13 @@ class IntegrationEventRetryHandlerTest {
         assertThat(IntegrationEventRetryHandler.isRetryable(wrapper)).isFalse();
     }
 
+    @Test
+    void retryableExceptions_noDuplicateEntries() {
+        // given
+        final Class<?>[] exceptions = IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS;
+
+        // then
+        assertThat(exceptions).doesNotHaveDuplicates();
+    }
+
 }
