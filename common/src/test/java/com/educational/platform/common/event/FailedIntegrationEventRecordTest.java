@@ -667,5 +667,27 @@ class FailedIntegrationEventRecordTest {
         assertThat(Modifier.isPublic(FailedIntegrationEventRecord.FailedEventStatus.class.getModifiers())).isTrue();
     }
 
+    @Test
+    void class_isNotFinal() {
+        // JPA entities must not be final for Hibernate proxy creation
+        assertThat(Modifier.isFinal(FailedIntegrationEventRecord.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void eventClassNameField_usesDefaultColumnLength() throws NoSuchFieldException {
+        // eventClassName uses default @Column length (255), unlike eventPayload/exceptionMessage (2000)
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventClassName");
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column.length()).isEqualTo(255);
+    }
+
+    @Test
+    void failedEventStatus_hasTwoConstants() {
+        assertThat(FailedIntegrationEventRecord.FailedEventStatus.values())
+                .containsExactlyInAnyOrder(
+                        FailedIntegrationEventRecord.FailedEventStatus.FAILED,
+                        FailedIntegrationEventRecord.FailedEventStatus.RESOLVED);
+    }
+
 }
 

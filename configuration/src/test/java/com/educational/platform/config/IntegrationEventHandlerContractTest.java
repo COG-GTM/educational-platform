@@ -280,6 +280,42 @@ class IntegrationEventHandlerContractTest {
                 .isFalse();
     }
 
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classIsNotFinal(Class<?> handlerClass) {
+        assertThat(Modifier.isFinal(handlerClass.getModifiers()))
+                .as("%s must not be final for CGLIB proxying (@Async, @Retryable)", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodIsNotFinal(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(Modifier.isFinal(handlerMethod.getModifiers()))
+                .as("%s handler method must not be final for AOP proxying", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodIsNotFinal(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(Modifier.isFinal(recoverMethod.getModifiers()))
+                .as("%s @Recover method must not be final for Spring Retry", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_haveExactlyOneConstructor(Class<?> handlerClass) {
+        assertThat(handlerClass.getDeclaredConstructors())
+                .as("%s should have exactly 1 constructor for unambiguous DI", handlerClass.getSimpleName())
+                .hasSize(1);
+    }
+
     @Test
     void allHandlers_totalCountIsFive() {
         assertThat(handlerClasses().count())
