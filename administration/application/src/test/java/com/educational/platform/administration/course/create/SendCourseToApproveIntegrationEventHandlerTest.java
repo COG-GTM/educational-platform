@@ -26,6 +26,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -742,6 +743,26 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(argument.getValue().getExceptionMessage())
                 .isEqualTo("top level message")
                 .doesNotContain("root cause message");
+    }
+
+    @Test
+    void recover_timestampIsRecentlyGenerated() {
+        // given
+        final Instant before = Instant.now();
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final Instant after = Instant.now();
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getTimestamp())
+                .isAfterOrEqualTo(before)
+                .isBeforeOrEqualTo(after);
     }
 
 }

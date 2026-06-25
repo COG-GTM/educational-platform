@@ -522,6 +522,18 @@ class IntegrationEventHandlerContractTest {
 
     @ParameterizedTest
     @MethodSource("handlerClasses")
+    void allHandlers_retryableLabelIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.label())
+                .as("%s @Retryable label should be default (empty)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
     void allHandlers_retryableExcludeIsEmpty(Class<?> handlerClass) {
         Method handlerMethod = findEventListenerMethod(handlerClass);
         Retryable retryable = handlerMethod.getAnnotation(Retryable.class);

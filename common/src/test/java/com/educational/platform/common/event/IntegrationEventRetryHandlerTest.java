@@ -410,6 +410,15 @@ class IntegrationEventRetryHandlerTest {
     }
 
     @Test
+    void isRetryable_withInterruptedException_returnsFalse() {
+        // given
+        final Throwable exception = new InterruptedException("thread interrupted");
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isFalse();
+    }
+
+    @Test
     void retryableExceptions_allTypesAreSubtypesOfTransientDataAccessException() {
         // All retryable exception types used in @Retryable fall under TransientDataAccessException,
         // which is the @Recover parameter type. This ensures the recover method catches all of them.

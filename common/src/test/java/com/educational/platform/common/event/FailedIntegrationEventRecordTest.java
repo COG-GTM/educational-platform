@@ -794,6 +794,12 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
+    void class_isNotAbstract() {
+        // JPA entities must be concrete classes for Hibernate instantiation
+        assertThat(Modifier.isAbstract(FailedIntegrationEventRecord.class.getModifiers())).isFalse();
+    }
+
+    @Test
     void constructor_withMaxLengthExceptionMessage_setsFieldCorrectly() {
         // given - exactly 2000 chars, matching the @Column(length = 2000) boundary
         final String maxMessage = "e".repeat(2000);
