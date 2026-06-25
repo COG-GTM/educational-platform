@@ -642,6 +642,24 @@ class IntegrationEventRetryHandlerTest {
     }
 
     @Test
+    void isRetryable_independentOfRetryableExceptionsArrayMutation() {
+        // given - save original contents and mutate the public array
+        Class<?>[] original = IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS.clone();
+        IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS[0] = null;
+
+        try {
+            // isRetryable uses instanceof checks, not the array, so it should still work
+            assertThat(IntegrationEventRetryHandler.isRetryable(new QueryTimeoutException("test"))).isTrue();
+            assertThat(IntegrationEventRetryHandler.isRetryable(new OptimisticLockingFailureException("test"))).isTrue();
+            assertThat(IntegrationEventRetryHandler.isRetryable(new PessimisticLockingFailureException("test"))).isTrue();
+            assertThat(IntegrationEventRetryHandler.isRetryable(new RuntimeException("test"))).isFalse();
+        } finally {
+            // restore original array contents
+            System.arraycopy(original, 0, IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS, 0, original.length);
+        }
+    }
+
+    @Test
     void class_hasNoPublicConstructors() {
         var constructors = IntegrationEventRetryHandler.class.getDeclaredConstructors();
         for (var constructor : constructors) {

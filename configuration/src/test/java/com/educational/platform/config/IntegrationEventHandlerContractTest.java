@@ -785,6 +785,20 @@ class IntegrationEventHandlerContractTest {
                 .isFalse();
     }
 
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_loggerIsPrivateStaticFinal(Class<?> handlerClass) {
+        boolean loggerFieldExists = Arrays.stream(handlerClass.getDeclaredFields())
+                .filter(f -> f.getType() == Logger.class)
+                .filter(f -> Modifier.isPrivate(f.getModifiers()))
+                .anyMatch(f -> Modifier.isStatic(f.getModifiers()) && Modifier.isFinal(f.getModifiers()));
+
+        assertThat(loggerFieldExists)
+                .as("%s Logger should be private static final",
+                        handlerClass.getSimpleName())
+                .isTrue();
+    }
+
     private Method findEventListenerMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.isAnnotationPresent(EventListener.class))

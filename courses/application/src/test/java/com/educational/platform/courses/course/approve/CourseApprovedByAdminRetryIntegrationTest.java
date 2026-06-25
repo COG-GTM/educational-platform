@@ -11,6 +11,7 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
@@ -263,6 +264,24 @@ class CourseApprovedByAdminRetryIntegrationTest {
         var captor = org.mockito.ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
         verify(failedEventRepository).save(captor.capture());
         assertThat(captor.getValue().getExceptionMessage()).isEqualTo("attempt 3");
+    }
+
+    @Test
+    void retryable_cannotAcquireLockException_retriesAndRecovers() {
+        // given - CannotAcquireLockException extends PessimisticLockingFailureException
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-42665544000b");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new CannotAcquireLockException("lock wait timeout exceeded");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseApprovedByAdminEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository).save(any(FailedIntegrationEventRecord.class));
     }
 
     @Configuration
