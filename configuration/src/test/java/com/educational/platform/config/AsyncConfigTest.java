@@ -969,5 +969,16 @@ class AsyncConfigTest {
         assertThat(logger.getName()).isEqualTo(AsyncConfig.class.getName());
     }
 
+    @Test
+    void getAsyncExecutor_maxPoolSizeIsDoubleCorePoolSize() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then
+        assertThat(executor.getMaxPoolSize())
+                .as("maxPoolSize should be exactly 2x corePoolSize per design convention")
+                .isEqualTo(executor.getCorePoolSize() * 2);
+    }
+
 }
 

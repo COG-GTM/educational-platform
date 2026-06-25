@@ -671,5 +671,16 @@ class IntegrationEventRetryHandlerTest {
         }
     }
 
+    @Test
+    void isRetryable_recoverableDataAccessException_returnsFalse() {
+        // RecoverableDataAccessException extends DataAccessException directly, NOT TransientDataAccessException.
+        // Despite its name suggesting recoverability, it is not in the retryable set.
+        // given
+        final Throwable exception = new org.springframework.dao.RecoverableDataAccessException("connection reset");
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isFalse();
+    }
+
 }
 
