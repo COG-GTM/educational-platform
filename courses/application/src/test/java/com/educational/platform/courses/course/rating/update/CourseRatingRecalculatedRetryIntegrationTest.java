@@ -21,6 +21,7 @@ import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -326,6 +327,92 @@ class CourseRatingRecalculatedRetryIntegrationTest {
                 .hasMessage("repository unavailable");
 
         assertThat(invocationCounter.get()).isEqualTo(3);
+    }
+
+    @Test
+    void retryable_withNaNRating_retriesAndPersistsNaNInPayload() {
+        // given - NaN is a valid IEEE 754 double value; should pass through retry+recover without corruption
+        final UUID uuid = UUID.fromString("550e8400-e29b-41d4-a716-44665544000d");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.NaN);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new QueryTimeoutException("timeout with NaN rating");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        FailedIntegrationEventRecord record = captor.getValue();
+        assertThat(record.getEventPayload()).contains("NaN");
+        assertThat(record.getEventClassName()).isEqualTo(CourseRatingRecalculatedIntegrationEvent.class.getName());
+        assertThat(record.getExceptionMessage()).isEqualTo("timeout with NaN rating");
+    }
+
+    @Test
+    void retryable_withPositiveInfinityRating_retriesAndPersistsInfinityInPayload() {
+        // given - POSITIVE_INFINITY is a boundary double value
+        final UUID uuid = UUID.fromString("550e8400-e29b-41d4-a716-44665544000e");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.POSITIVE_INFINITY);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new PessimisticLockingFailureException("lock with infinity");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getEventPayload()).contains("Infinity");
+    }
+
+    @Test
+    void retryable_withZeroRating_retriesAndPersistsZeroInPayload() {
+        // given - zero rating is a valid boundary value
+        final UUID uuid = UUID.fromString("550e8400-e29b-41d4-a716-44665544000f");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 0.0);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new OptimisticLockingFailureException("lock with zero rating");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getEventPayload()).contains("0.0");
+        assertThat(captor.getValue().getEventClassName()).isEqualTo(CourseRatingRecalculatedIntegrationEvent.class.getName());
+    }
+
+    @Test
+    void recover_timestampIsAfterTestStart() {
+        // given - timestamp in dead-letter record should be close to when recovery happens
+        final Instant testStart = Instant.now();
+        final UUID uuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440010");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.0);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new QueryTimeoutException("timeout for timestamp test");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getTimestamp())
+                .as("Dead-letter record timestamp should be after the test started")
+                .isAfter(testStart.minusMillis(1));
     }
 
     @Configuration

@@ -23,6 +23,7 @@ import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -310,6 +311,73 @@ class StudentEnrolledRetryIntegrationTest {
                 .hasMessage("repository unavailable");
 
         assertThat(invocationCounter.get()).isEqualTo(3);
+    }
+
+    @Test
+    void retryable_withNullUsername_retriesAndPersistsNullInPayload() {
+        // given - null username is an edge case that should not corrupt retry/recovery flow
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-42665544000d");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, null);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new OptimisticLockingFailureException("lock with null username");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        FailedIntegrationEventRecord record = captor.getValue();
+        assertThat(record.getEventPayload()).contains("null");
+        assertThat(record.getEventClassName()).isEqualTo(StudentEnrolledToCourseIntegrationEvent.class.getName());
+        assertThat(record.getExceptionMessage()).isEqualTo("lock with null username");
+    }
+
+    @Test
+    void retryable_withEmptyUsername_retriesAndPersistsEmptyInPayload() {
+        // given - empty username tests boundary string handling through retry flow
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-42665544000e");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "");
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new PessimisticLockingFailureException("lock with empty username");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getEventClassName()).isEqualTo(StudentEnrolledToCourseIntegrationEvent.class.getName());
+        assertThat(captor.getValue().getEventPayload()).contains(uuid.toString());
+    }
+
+    @Test
+    void recover_timestampIsBetweenTestStartAndEnd() {
+        // given - timestamp should be set when the FailedIntegrationEventRecord is constructed during recovery
+        final Instant testStart = Instant.now();
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-42665544000f");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student");
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new QueryTimeoutException("timeout for timestamp verification");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleStudentEnrolledToCourseEvent(event);
+        final Instant testEnd = Instant.now();
+
+        // then
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getTimestamp())
+                .isAfterOrEqualTo(testStart)
+                .isBeforeOrEqualTo(testEnd);
     }
 
     @Configuration
