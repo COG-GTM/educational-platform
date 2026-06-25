@@ -869,5 +869,54 @@ class AsyncConfigTest {
         assertThat(executor.getQueueCapacity()).isGreaterThanOrEqualTo(0);
     }
 
+    @Test
+    void enableRetry_proxyTargetClassIsDefault() {
+        // @EnableRetry should use default proxyTargetClass for CGLIB-based proxying
+        EnableRetry enableRetry = AsyncConfig.class.getAnnotation(EnableRetry.class);
+
+        assertThat(enableRetry.proxyTargetClass())
+                .as("proxyTargetClass should be default (false)")
+                .isFalse();
+    }
+
+    @Test
+    void getAsyncExecutor_multipleTasksExecuteInParallel() throws Exception {
+        // given
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        var latch = new java.util.concurrent.CountDownLatch(1);
+        var threadsUsed = new java.util.concurrent.CopyOnWriteArrayList<String>();
+
+        // when - submit tasks that block until latch is released
+        var futures = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+        for (int i = 0; i < 4; i++) {
+            futures.add(executor.submit(() -> {
+                threadsUsed.add(Thread.currentThread().getName());
+                try { latch.await(5, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            }));
+        }
+
+        // then - all 4 core threads should be occupied
+        Thread.sleep(200);
+        assertThat(threadsUsed).hasSize(4);
+        assertThat(threadsUsed.stream().distinct().count())
+                .as("4 tasks should use 4 distinct threads (corePoolSize=4)")
+                .isEqualTo(4);
+
+        latch.countDown();
+        for (var f : futures) f.get(5, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withPessimisticLockingFailure_logsWithoutThrowing() throws NoSuchMethodException {
+        // given
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        PessimisticLockingFailureException exception = new PessimisticLockingFailureException("deadlock detected");
+
+        // when / then
+        assertThatCode(() -> handler.handleUncaughtException(exception, method, "event1"))
+                .doesNotThrowAnyException();
+    }
+
 }
 

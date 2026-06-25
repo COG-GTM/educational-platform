@@ -1077,5 +1077,69 @@ class FailedIntegrationEventRecordTest {
         assertThat(record.getId()).isNull();
     }
 
+    @Test
+    void eventClassName_columnLength_matchesLiquibaseSchema() throws NoSuchFieldException {
+        // Liquibase schema defines event_class_name as VARCHAR(500)
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventClassName");
+        Column column = field.getAnnotation(Column.class);
+
+        assertThat(column.length())
+                .as("eventClassName @Column length must match Liquibase schema (500)")
+                .isEqualTo(500);
+    }
+
+    @Test
+    void eventPayload_columnLength_matchesLiquibaseSchema() throws NoSuchFieldException {
+        // Liquibase schema defines event_payload as VARCHAR(2000)
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("eventPayload");
+        Column column = field.getAnnotation(Column.class);
+
+        assertThat(column.length())
+                .as("eventPayload @Column length must match Liquibase schema (2000)")
+                .isEqualTo(2000);
+    }
+
+    @Test
+    void exceptionMessage_columnLength_matchesLiquibaseSchema() throws NoSuchFieldException {
+        // Liquibase schema defines exception_message as VARCHAR(2000)
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("exceptionMessage");
+        Column column = field.getAnnotation(Column.class);
+
+        assertThat(column.length())
+                .as("exceptionMessage @Column length must match Liquibase schema (2000)")
+                .isEqualTo(2000);
+    }
+
+    @Test
+    void constructor_withNegativeRetryCount_setsRetryCount() {
+        // negative retry count is technically invalid but constructor does not validate
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", -1);
+
+        assertThat(record.getRetryCount()).isEqualTo(-1);
+    }
+
+    @Test
+    void constructor_withZeroRetryCount_setsStatusToFailed() {
+        // even with zero retries, the initial status must still be FAILED
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 0);
+
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
+    @Test
+    void allFields_haveNonNullColumnConstraint() {
+        // All data fields in the entity must be non-nullable per schema
+        for (Field field : FailedIntegrationEventRecord.class.getDeclaredFields()) {
+            Column column = field.getAnnotation(Column.class);
+            if (column != null) {
+                assertThat(column.nullable())
+                        .as("Field '%s' @Column must have nullable=false", field.getName())
+                        .isFalse();
+            }
+        }
+    }
+
 }
 

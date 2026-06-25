@@ -965,4 +965,41 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
     }
 
+    @Test
+    void recover_retryCountIsAlwaysThree_matchingMaxAttempts() {
+        // given - the retry count persisted must match @Retryable(maxAttempts=3)
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("lock");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getRetryCount())
+                .as("Persisted retry count must equal @Retryable.maxAttempts")
+                .isEqualTo(3);
+    }
+
+    @Test
+    void recover_exceptionWithCauseChain_persistsOnlyTopLevelMessage() {
+        // given - exception with nested cause; only the top-level message should be persisted
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final RuntimeException rootCause = new RuntimeException("root cause detail");
+        final QueryTimeoutException exception = new QueryTimeoutException("top level timeout", rootCause);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getExceptionMessage())
+                .isEqualTo("top level timeout")
+                .doesNotContain("root cause detail");
+    }
+
 }
