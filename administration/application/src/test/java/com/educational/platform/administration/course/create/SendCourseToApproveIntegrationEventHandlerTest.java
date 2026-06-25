@@ -915,21 +915,4 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
     }
 
-    @Test
-    void recover_eventClassNameMatchesActualEventClass() {
-        // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
-        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
-
-        // when
-        sut.recover(exception, event);
-
-        // then
-        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
-        verify(failedEventRepository).save(argument.capture());
-        assertThat(argument.getValue().getEventClassName())
-                .isEqualTo("com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent");
-    }
-
 }

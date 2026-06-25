@@ -587,5 +587,20 @@ class IntegrationEventRetryHandlerTest {
                 .isEqualTo(TransientDataAccessException.class);
     }
 
+    @Test
+    void isRetryable_queryTimeoutException_returnsTrue() {
+        assertThat(IntegrationEventRetryHandler.isRetryable(new QueryTimeoutException("query timed out")))
+                .isTrue();
+    }
+
+    @Test
+    void retryableExceptions_allEntriesAreDistinctTypes() {
+        Class<?>[] exceptions = IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS;
+        long distinctCount = java.util.Arrays.stream(exceptions).distinct().count();
+        assertThat(distinctCount)
+                .as("All retryable exception types should be distinct")
+                .isEqualTo(exceptions.length);
+    }
+
 }
 

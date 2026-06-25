@@ -935,6 +935,38 @@ class UserCreatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_eventPayloadContainsEmail() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("johndoe", "johndoe@example.com");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventPayload()).contains("johndoe@example.com");
+    }
+
+    @Test
+    void recover_eventPayloadContainsBothUsernameAndEmail() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("admin", "admin@platform.com");
+        final QueryTimeoutException exception = new QueryTimeoutException("timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventPayload())
+                .contains("admin")
+                .contains("admin@platform.com");
+    }
+
+    @Test
     void handleUserCreatedEvent_successFollowedByException_bothEventsProcessed() {
         // given
         final UserCreatedIntegrationEvent event1 = new UserCreatedIntegrationEvent("user1", "user1@example.com");

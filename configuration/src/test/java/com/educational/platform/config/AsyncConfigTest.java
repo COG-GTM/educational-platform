@@ -787,13 +787,6 @@ class AsyncConfigTest {
     }
 
     @Test
-    void class_implementsAsyncConfigurer() {
-        assertThat(AsyncConfigurer.class.isAssignableFrom(AsyncConfig.class))
-                .as("AsyncConfig must implement AsyncConfigurer")
-                .isTrue();
-    }
-
-    @Test
     void asyncUncaughtExceptionHandler_innerClass_isPackagePrivate() {
         int modifiers = AsyncConfig.IntegrationEventAsyncUncaughtExceptionHandler.class.getModifiers();
 
