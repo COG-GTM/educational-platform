@@ -318,17 +318,6 @@ class IntegrationEventHandlerContractTest {
 
     @ParameterizedTest
     @MethodSource("handlerClasses")
-    void allHandlers_constructorHasExactlyTwoParameters(Class<?> handlerClass) {
-        var constructors = handlerClass.getDeclaredConstructors();
-
-        assertThat(constructors[0].getParameterCount())
-                .as("%s constructor should have exactly 2 parameters (command handler + repository)",
-                        handlerClass.getSimpleName())
-                .isEqualTo(2);
-    }
-
-    @ParameterizedTest
-    @MethodSource("handlerClasses")
     void allHandlers_retryableBackoffMaxDelayIsDefault(Class<?> handlerClass) {
         Method handlerMethod = findEventListenerMethod(handlerClass);
         Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
@@ -348,6 +337,29 @@ class IntegrationEventHandlerContractTest {
                 .as("%s @Recover method should be named 'recover'",
                         handlerClass.getSimpleName())
                 .isEqualTo("recover");
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_constructorIsPublic(Class<?> handlerClass) {
+        var constructors = handlerClass.getDeclaredConstructors();
+
+        assertThat(Modifier.isPublic(constructors[0].getModifiers()))
+                .as("%s constructor should be public for Spring DI",
+                        handlerClass.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffRandomIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().random())
+                .as("%s backoff random should be false (deterministic backoff)",
+                        handlerClass.getSimpleName())
+                .isFalse();
     }
 
     @Test

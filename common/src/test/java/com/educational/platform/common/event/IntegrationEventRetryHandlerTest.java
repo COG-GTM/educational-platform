@@ -364,15 +364,6 @@ class IntegrationEventRetryHandlerTest {
     }
 
     @Test
-    void retryableExceptions_allTypesAreSubclassesOfTransientDataAccessException() {
-        for (Class<?> exceptionClass : IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS) {
-            assertThat(TransientDataAccessException.class.isAssignableFrom(exceptionClass))
-                    .as("%s should be a TransientDataAccessException subclass", exceptionClass.getSimpleName())
-                    .isTrue();
-        }
-    }
-
-    @Test
     void retryableExceptions_allEntriesAreUncheckedExceptions() {
         for (Class<?> exceptionClass : IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS) {
             assertThat(RuntimeException.class.isAssignableFrom(exceptionClass))

@@ -37,7 +37,6 @@ dependencies {
     testImplementation("org.assertj", "assertj-core", libs.versions.assertj.get())
     testImplementation("org.springframework", "spring-tx")
     testImplementation("com.tngtech.archunit", "archunit-junit5", libs.versions.archunit.get())
-    testImplementation("org.springframework", "spring-tx")
 }
 
 tasks.test {
