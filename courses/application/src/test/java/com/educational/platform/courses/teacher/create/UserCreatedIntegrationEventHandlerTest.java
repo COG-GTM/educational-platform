@@ -26,6 +26,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -734,6 +735,102 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(argument.getValue().getExceptionMessage())
                 .isEqualTo("top level message")
                 .doesNotContain("root cause message");
+    }
+
+    @Test
+    void handleUserCreatedEvent_withSpecialCharactersInUsername_passesCorrectValue() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user+test@domain.com", "test@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("username", "user+test@domain.com");
+    }
+
+    @Test
+    void handleUserCreatedEvent_withUnicodeUsername_passesCorrectValue() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("用户名", "unicode@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("username", "用户名");
+    }
+
+    @Test
+    void recover_timestampIsRecentlyGenerated() {
+        // given
+        final Instant before = Instant.now();
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final Instant after = Instant.now();
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getTimestamp())
+                .isAfterOrEqualTo(before)
+                .isBeforeOrEqualTo(after);
+    }
+
+    @Test
+    void recover_eventClassNameMatchesActualEventClass() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventClassName())
+                .isEqualTo("com.educational.platform.users.integration.event.UserCreatedIntegrationEvent");
+    }
+
+    @Test
+    void handleUserCreatedEvent_withLongUsername_passesCorrectValue() {
+        // given
+        final String longUsername = "a".repeat(255);
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent(longUsername, "test@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("username", longUsername);
+    }
+
+    @Test
+    void recover_withCannotAcquireLockException_persistsCorrectExceptionMessage() {
+        // given - CannotAcquireLockException is a common PessimisticLockingFailureException subclass
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final CannotAcquireLockException exception = new CannotAcquireLockException("deadlock detected in user creation");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord failedEvent = argument.getValue();
+        assertThat(failedEvent.getExceptionMessage()).isEqualTo("deadlock detected in user creation");
+        assertThat(failedEvent.getRetryCount()).isEqualTo(3);
+        assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
     }
 
 }

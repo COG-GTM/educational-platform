@@ -625,5 +625,74 @@ class AsyncConfigTest {
         assertThat(method.getReturnType()).isEqualTo(Executor.class);
     }
 
+    @Test
+    void getAsyncExecutor_concurrentTasks_useMultipleThreads() throws Exception {
+        // Verifies the thread pool actually uses multiple threads for concurrent tasks
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        var threadNames = new java.util.concurrent.CopyOnWriteArraySet<String>();
+        var barrier = new java.util.concurrent.CyclicBarrier(4);
+        var latch = new java.util.concurrent.CountDownLatch(4);
+
+        for (int i = 0; i < 4; i++) {
+            executor.submit(() -> {
+                try {
+                    threadNames.add(Thread.currentThread().getName());
+                    barrier.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        // then
+        assertThat(latch.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        assertThat(threadNames).hasSizeGreaterThan(1);
+        threadNames.forEach(name -> assertThat(name).startsWith("integration-event-"));
+    }
+
+    @Test
+    void getAsyncExecutor_threadNamesAreSequentiallyNumbered() throws Exception {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        var threadNames = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+        var latch = new java.util.concurrent.CountDownLatch(3);
+
+        for (int i = 0; i < 3; i++) {
+            executor.submit(() -> {
+                threadNames.add(Thread.currentThread().getName());
+                latch.countDown();
+            });
+        }
+
+        // then
+        assertThat(latch.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        for (String name : threadNames) {
+            assertThat(name).matches("integration-event-\\d+");
+        }
+    }
+
+    @Test
+    void getAsyncExecutor_queueCapacityPlusMaxPool_definesRejectionBoundary() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then - total capacity before rejection is queue + maxPoolSize
+        assertThat(executor.getQueueCapacity() + executor.getMaxPoolSize())
+                .as("Total capacity (queue + maxPool) before rejection")
+                .isEqualTo(108);
+    }
+
+    @Test
+    void class_enableRetryOrderIsOneMoreThanHighestPrecedence() {
+        // when
+        EnableRetry enableRetry = AsyncConfig.class.getAnnotation(EnableRetry.class);
+
+        // then
+        assertThat(enableRetry.order()).isEqualTo(Integer.MIN_VALUE + 1);
+    }
+
 }
 

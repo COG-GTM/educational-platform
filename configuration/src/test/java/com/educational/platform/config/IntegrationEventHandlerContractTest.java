@@ -18,6 +18,8 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
+import org.springframework.transaction.annotation.Transactional;
+
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
@@ -417,9 +419,82 @@ class IntegrationEventHandlerContractTest {
     @MethodSource("handlerClasses")
     void allHandlers_classIsNotAbstract(Class<?> handlerClass) {
         assertThat(Modifier.isAbstract(handlerClass.getModifiers()))
-                .as("%s must not be abstract for Spring component scanning",
+                .as("%s must not be abstract for Spring to instantiate it", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classIsNotAnInterface(Class<?> handlerClass) {
+        assertThat(handlerClass.isInterface())
+                .as("%s must not be an interface", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodDeclaresNoCheckedExceptions(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.getExceptionTypes())
+                .as("%s handler method should not declare checked exceptions", handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodDeclaresNoCheckedExceptions(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.getExceptionTypes())
+                .as("%s recover method should not declare checked exceptions", handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableStatefulIsDefaultFalse(Class<?> handlerClass) {
+        // stateful=true is incompatible with @Async because it requires thread-local state
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.stateful())
+                .as("%s @Retryable stateful must be false for @Async compatibility",
                         handlerClass.getSimpleName())
                 .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classDoesNotHaveTransactionalAnnotation(Class<?> handlerClass) {
+        // @Transactional on the class would conflict with @Async event processing
+        assertThat(handlerClass.isAnnotationPresent(Transactional.class))
+                .as("%s should not have @Transactional (conflicts with @Async)",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_handlerMethodDoesNotHaveTransactionalAnnotation(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.isAnnotationPresent(Transactional.class))
+                .as("%s handler method should not have @Transactional", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableIncludeIsEmpty(Class<?> handlerClass) {
+        // include/value should not duplicate retryFor
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.include())
+                .as("%s @Retryable include should be empty (retryFor is used instead)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
     }
 
     @ParameterizedTest
@@ -442,6 +517,17 @@ class IntegrationEventHandlerContractTest {
                 .as("%s @Recover method must not be static",
                         handlerClass.getSimpleName())
                 .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableExcludeIsEmpty(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.exclude())
+                .as("%s @Retryable exclude should be empty", handlerClass.getSimpleName())
+                .isEmpty();
     }
 
     private Method findEventListenerMethod(Class<?> handlerClass) {

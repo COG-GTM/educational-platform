@@ -457,5 +457,94 @@ class IntegrationEventRetryHandlerTest {
         assertThat(IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS).isNotEmpty();
     }
 
+    @Test
+    void isRetryable_concurrentCallsFromMultipleThreads_allReturnCorrectResult() throws Exception {
+        // Verifies thread-safety: isRetryable is stateless and safe for concurrent invocation
+        var latch = new java.util.concurrent.CountDownLatch(1);
+        int threadCount = 10;
+        var threads = new Thread[threadCount];
+        var trueCount = new java.util.concurrent.atomic.AtomicInteger(0);
+        var falseCount = new java.util.concurrent.atomic.AtomicInteger(0);
+
+        for (int i = 0; i < threadCount; i++) {
+            final int idx = i;
+            threads[i] = new Thread(() -> {
+                try {
+                    latch.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                Throwable exception = idx % 2 == 0
+                        ? new OptimisticLockingFailureException("lock")
+                        : new IllegalArgumentException("bad arg");
+                if (IntegrationEventRetryHandler.isRetryable(exception)) {
+                    trueCount.incrementAndGet();
+                } else {
+                    falseCount.incrementAndGet();
+                }
+            });
+            threads[i].start();
+        }
+
+        latch.countDown();
+        for (Thread t : threads) {
+            t.join(5000);
+        }
+
+        // 5 even-indexed threads pass retryable exceptions, 5 odd-indexed pass non-retryable
+        assertThat(trueCount.get()).isEqualTo(5);
+        assertThat(falseCount.get()).isEqualTo(5);
+    }
+
+    @Test
+    void isRetryable_cannotAcquireLockExceptionSubclass_returnsTrue() {
+        // CannotAcquireLockException extends PessimisticLockingFailureException - common in production
+        final Throwable exception = new CannotAcquireLockException("deadlock detected");
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
+    }
+
+    @Test
+    void isRetryable_methodReturnsBoolean() throws NoSuchMethodException {
+        java.lang.reflect.Method method = IntegrationEventRetryHandler.class.getMethod("isRetryable", Throwable.class);
+
+        assertThat(method.getReturnType()).isEqualTo(boolean.class);
+    }
+
+    @Test
+    void isRetryable_methodAcceptsThrowableParameter() throws NoSuchMethodException {
+        java.lang.reflect.Method method = IntegrationEventRetryHandler.class.getMethod("isRetryable", Throwable.class);
+
+        assertThat(method.getParameterCount()).isEqualTo(1);
+        assertThat(method.getParameterTypes()[0]).isEqualTo(Throwable.class);
+    }
+
+    @Test
+    void retryableExceptions_arrayLengthMatchesIsRetryableInstanceofChecks() {
+        // isRetryable checks 3 types: TransientDataAccessException, OptimisticLocking, PessimisticLocking
+        assertThat(IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS).hasSize(3);
+    }
+
+    @Test
+    void class_hasNoInstanceFields() {
+        // IntegrationEventRetryHandler should be stateless - all methods are static
+        java.lang.reflect.Field[] fields = IntegrationEventRetryHandler.class.getDeclaredFields();
+        for (java.lang.reflect.Field field : fields) {
+            assertThat(java.lang.reflect.Modifier.isStatic(field.getModifiers()))
+                    .as("Field '%s' should be static (handler must be stateless)", field.getName())
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void isRetryable_withExceptionHavingNullCause_returnsCorrectResult() {
+        // given
+        final Throwable retryable = new OptimisticLockingFailureException("lock", null);
+        final Throwable nonRetryable = new RuntimeException("error", null);
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(retryable)).isTrue();
+        assertThat(IntegrationEventRetryHandler.isRetryable(nonRetryable)).isFalse();
+    }
+
 }
 
