@@ -1,0 +1,956 @@
+package com.educational.platform.config;
+
+import com.educational.platform.administration.course.create.SendCourseToApproveIntegrationEventHandler;
+import com.educational.platform.courses.course.approve.CourseApprovedByAdminIntegrationEventHandler;
+import com.educational.platform.courses.course.numberofsudents.update.StudentEnrolledToCourseIntegrationEventHandler;
+import com.educational.platform.courses.course.rating.update.CourseRatingRecalculatedIntegrationEventHandler;
+import com.educational.platform.courses.teacher.create.UserCreatedIntegrationEventHandler;
+import com.educational.platform.common.event.IntegrationEventRetryHandler;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
+
+import org.slf4j.Logger;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.stream.Stream;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Verifies all 5 integration event handlers maintain identical retry/recover contract.
+ * Catches drift where one handler's configuration diverges from the others.
+ */
+class IntegrationEventHandlerContractTest {
+
+    static Stream<Class<?>> handlerClasses() {
+        return Stream.of(
+                SendCourseToApproveIntegrationEventHandler.class,
+                CourseApprovedByAdminIntegrationEventHandler.class,
+                StudentEnrolledToCourseIntegrationEventHandler.class,
+                CourseRatingRecalculatedIntegrationEventHandler.class,
+                UserCreatedIntegrationEventHandler.class
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_haveComponentAnnotation(Class<?> handlerClass) {
+        assertThat(handlerClass.isAnnotationPresent(Component.class))
+                .as("%s should have @Component", handlerClass.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_haveExactlyOneEventListenerMethod(Class<?> handlerClass) {
+        long eventListenerMethods = Arrays.stream(handlerClass.getDeclaredMethods())
+                .filter(m -> m.isAnnotationPresent(EventListener.class))
+                .count();
+
+        assertThat(eventListenerMethods)
+                .as("%s should have exactly 1 @EventListener method", handlerClass.getSimpleName())
+                .isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodHasAsyncAnnotation(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.isAnnotationPresent(Async.class))
+                .as("%s handler method should have @Async", handlerClass.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableConfigIsConsistent(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable)
+                .as("%s handler method should have @Retryable", handlerClass.getSimpleName())
+                .isNotNull();
+        assertThat(retryable.maxAttempts())
+                .as("%s maxAttempts", handlerClass.getSimpleName())
+                .isEqualTo(3);
+        assertThat(retryable.backoff().delay())
+                .as("%s backoff delay", handlerClass.getSimpleName())
+                .isEqualTo(500);
+        assertThat(retryable.backoff().multiplier())
+                .as("%s backoff multiplier", handlerClass.getSimpleName())
+                .isEqualTo(2);
+        assertThat(retryable.noRetryFor())
+                .as("%s should have no exclusions", handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryForMatchesCentralizedRetryableExceptions(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.retryFor())
+                .as("%s retryFor types should match IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS",
+                        handlerClass.getSimpleName())
+                .containsExactlyInAnyOrder(
+                        (Class[]) IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS
+                );
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_haveExactlyOneRecoverMethod(Class<?> handlerClass) {
+        long recoverMethods = Arrays.stream(handlerClass.getDeclaredMethods())
+                .filter(m -> m.isAnnotationPresent(Recover.class))
+                .count();
+
+        assertThat(recoverMethods)
+                .as("%s should have exactly 1 @Recover method", handlerClass.getSimpleName())
+                .isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodAcceptsTransientDataAccessException(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.getParameterTypes()[0])
+                .as("%s @Recover first param should be TransientDataAccessException",
+                        handlerClass.getSimpleName())
+                .isEqualTo(TransientDataAccessException.class);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodReturnsVoid(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.getReturnType())
+                .as("%s @Recover should return void", handlerClass.getSimpleName())
+                .isEqualTo(void.class);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodIsPublic(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(Modifier.isPublic(handlerMethod.getModifiers()))
+                .as("%s handler method should be public for AOP proxying",
+                        handlerClass.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodIsPublic(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(Modifier.isPublic(recoverMethod.getModifiers()))
+                .as("%s @Recover method should be public for Spring Retry",
+                        handlerClass.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodReturnsVoid(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.getReturnType())
+                .as("%s handler method should return void", handlerClass.getSimpleName())
+                .isEqualTo(void.class);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_handlerAndRecoverReturnTypesMatch(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(handlerMethod.getReturnType())
+                .as("%s handler and recover return types must match for Spring Retry",
+                        handlerClass.getSimpleName())
+                .isEqualTo(recoverMethod.getReturnType());
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverParameterTypeCoversAllRetryForTypes(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+        Method recoverMethod = findRecoverMethod(handlerClass);
+        Class<?> recoverExceptionType = recoverMethod.getParameterTypes()[0];
+
+        for (Class<? extends Throwable> retryForType : retryable.retryFor()) {
+            assertThat(recoverExceptionType.isAssignableFrom(retryForType))
+                    .as("%s: @Recover param %s should be assignable from retryFor type %s",
+                            handlerClass.getSimpleName(),
+                            recoverExceptionType.getSimpleName(),
+                            retryForType.getSimpleName())
+                    .isTrue();
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_noRecoverMethodAcceptingGenericException(Class<?> handlerClass) {
+        boolean hasGenericRecover = Arrays.stream(handlerClass.getDeclaredMethods())
+                .filter(m -> m.isAnnotationPresent(Recover.class))
+                .anyMatch(m -> m.getParameterTypes()[0] == Exception.class
+                        || m.getParameterTypes()[0] == RuntimeException.class);
+
+        assertThat(hasGenericRecover)
+                .as("%s should not have @Recover accepting Exception/RuntimeException",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodHasTwoParameters(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.getParameterCount())
+                .as("%s @Recover method should have 2 params (exception, event)",
+                        handlerClass.getSimpleName())
+                .isEqualTo(2);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodHasOneParameter(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.getParameterCount())
+                .as("%s handler method should have 1 param (the event)",
+                        handlerClass.getSimpleName())
+                .isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverSecondParamMatchesEventListenerParam(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        Class<?> eventListenerParamType = handlerMethod.getParameterTypes()[0];
+        Class<?> recoverSecondParamType = recoverMethod.getParameterTypes()[1];
+
+        assertThat(recoverSecondParamType)
+                .as("%s @Recover second param must match @EventListener param for Spring Retry binding",
+                        handlerClass.getSimpleName())
+                .isEqualTo(eventListenerParamType);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_haveFailedIntegrationEventRepositoryDependency(Class<?> handlerClass) {
+        boolean hasRepoDependency = Arrays.stream(handlerClass.getDeclaredConstructors())
+                .anyMatch(c -> Arrays.stream(c.getParameterTypes())
+                        .anyMatch(p -> p == com.educational.platform.common.event.FailedIntegrationEventRepository.class));
+
+        assertThat(hasRepoDependency)
+                .as("%s should depend on FailedIntegrationEventRepository",
+                        handlerClass.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodDoesNotHaveEventListenerAnnotation(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.isAnnotationPresent(EventListener.class))
+                .as("%s @Recover should not also be @EventListener", handlerClass.getSimpleName())
+                .isFalse();
+        assertThat(recoverMethod.isAnnotationPresent(Async.class))
+                .as("%s @Recover should not also be @Async", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classIsNotFinal(Class<?> handlerClass) {
+        assertThat(Modifier.isFinal(handlerClass.getModifiers()))
+                .as("%s must not be final for CGLIB proxying (@Async, @Retryable)", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodIsNotFinal(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(Modifier.isFinal(handlerMethod.getModifiers()))
+                .as("%s handler method must not be final for AOP proxying", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodIsNotFinal(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(Modifier.isFinal(recoverMethod.getModifiers()))
+                .as("%s @Recover method must not be final for Spring Retry", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_haveExactlyOneConstructor(Class<?> handlerClass) {
+        assertThat(handlerClass.getDeclaredConstructors())
+                .as("%s should have exactly 1 constructor for unambiguous DI", handlerClass.getSimpleName())
+                .hasSize(1);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffMaxDelayIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().maxDelay())
+                .as("%s backoff maxDelay should be default (0 = unbounded)",
+                        handlerClass.getSimpleName())
+                .isEqualTo(0);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodIsNamedRecover(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.getName())
+                .as("%s @Recover method should be named 'recover'",
+                        handlerClass.getSimpleName())
+                .isEqualTo("recover");
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_constructorIsPublic(Class<?> handlerClass) {
+        var constructors = handlerClass.getDeclaredConstructors();
+
+        assertThat(Modifier.isPublic(constructors[0].getModifiers()))
+                .as("%s constructor should be public for Spring DI",
+                        handlerClass.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffRandomIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().random())
+                .as("%s backoff random should be false (deterministic backoff)",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @Test
+    void allHandlers_totalCountIsFive() {
+        assertThat(handlerClasses().count())
+                .as("Should test exactly 5 integration event handlers")
+                .isEqualTo(5);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodDoesNotHaveRecoverAnnotation(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.isAnnotationPresent(Recover.class))
+                .as("%s @EventListener method should not also have @Recover", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodDoesNotHaveRetryableAnnotation(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.isAnnotationPresent(Retryable.class))
+                .as("%s @Recover method should not also have @Retryable", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_constructorParameterCountIsTwo(Class<?> handlerClass) {
+        boolean hasTwoParamConstructor = Arrays.stream(handlerClass.getDeclaredConstructors())
+                .anyMatch(c -> c.getParameterCount() == 2);
+
+        assertThat(hasTwoParamConstructor)
+                .as("%s should have a constructor with exactly 2 parameters (command handler + repository)",
+                        handlerClass.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableRecoverAttributeIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.recover())
+                .as("%s @Retryable.recover should be empty for auto-discovery",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classIsNotAbstract(Class<?> handlerClass) {
+        assertThat(Modifier.isAbstract(handlerClass.getModifiers()))
+                .as("%s must not be abstract for Spring to instantiate it", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classIsNotAnInterface(Class<?> handlerClass) {
+        assertThat(handlerClass.isInterface())
+                .as("%s must not be an interface", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodDeclaresNoCheckedExceptions(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.getExceptionTypes())
+                .as("%s handler method should not declare checked exceptions", handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodDeclaresNoCheckedExceptions(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.getExceptionTypes())
+                .as("%s recover method should not declare checked exceptions", handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableStatefulIsDefaultFalse(Class<?> handlerClass) {
+        // stateful=true is incompatible with @Async because it requires thread-local state
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.stateful())
+                .as("%s @Retryable stateful must be false for @Async compatibility",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classDoesNotHaveTransactionalAnnotation(Class<?> handlerClass) {
+        // @Transactional on the class would conflict with @Async event processing
+        assertThat(handlerClass.isAnnotationPresent(Transactional.class))
+                .as("%s should not have @Transactional (conflicts with @Async)",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_handlerMethodDoesNotHaveTransactionalAnnotation(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.isAnnotationPresent(Transactional.class))
+                .as("%s handler method should not have @Transactional", handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableIncludeIsEmpty(Class<?> handlerClass) {
+        // include/value should not duplicate retryFor
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.include())
+                .as("%s @Retryable include should be empty (retryFor is used instead)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodIsNotStatic(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(Modifier.isStatic(handlerMethod.getModifiers()))
+                .as("%s @EventListener method must not be static",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodIsNotStatic(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(Modifier.isStatic(recoverMethod.getModifiers()))
+                .as("%s @Recover method must not be static",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableLabelIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.label())
+                .as("%s @Retryable label should be default (empty)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableExcludeIsEmpty(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.exclude())
+                .as("%s @Retryable exclude should be empty", handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_noRecoverMethodAcceptingDataAccessException(Class<?> handlerClass) {
+        boolean hasDataAccessRecover = Arrays.stream(handlerClass.getDeclaredMethods())
+                .filter(m -> m.isAnnotationPresent(Recover.class))
+                .anyMatch(m -> m.getParameterTypes()[0] == DataAccessException.class);
+
+        assertThat(hasDataAccessRecover)
+                .as("%s should not have @Recover accepting DataAccessException (would silently catch non-transient exceptions like DataIntegrityViolationException)",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_haveExactlyTwoDeclaredPublicMethods(Class<?> handlerClass) {
+        long publicMethodCount = Arrays.stream(handlerClass.getDeclaredMethods())
+                .filter(m -> Modifier.isPublic(m.getModifiers()))
+                .count();
+
+        assertThat(publicMethodCount)
+                .as("%s should have exactly 2 public methods (handler + recover)",
+                        handlerClass.getSimpleName())
+                .isEqualTo(2);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableRetryForHasExactlyThreeExceptionTypes(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.retryFor())
+                .as("%s @Retryable.retryFor should have exactly 3 exception types",
+                        handlerClass.getSimpleName())
+                .hasSize(3);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_haveFailedIntegrationEventRepositoryAsLastConstructorParam(Class<?> handlerClass) {
+        var constructor = handlerClass.getDeclaredConstructors()[0];
+        Class<?>[] paramTypes = constructor.getParameterTypes();
+
+        assertThat(paramTypes[paramTypes.length - 1])
+                .as("%s last constructor param should be FailedIntegrationEventRepository",
+                        handlerClass.getSimpleName())
+                .isEqualTo(com.educational.platform.common.event.FailedIntegrationEventRepository.class);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableListenersIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.listeners())
+                .as("%s @Retryable listeners should be empty (no custom retry listener)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_asyncAnnotationValueIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Async async = handlerMethod.getAnnotation(Async.class);
+
+        assertThat(async.value())
+                .as("%s @Async should use default executor (empty value)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_handlerMethodDoesNotHaveRecoverAnnotation(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.isAnnotationPresent(Recover.class))
+                .as("%s @EventListener method must not have @Recover",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableMaxAttemptsExpressionIsEmpty(Class<?> handlerClass) {
+        // maxAttemptsExpression must be empty to prevent SpEL-based override of maxAttempts literal
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.maxAttemptsExpression())
+                .as("%s @Retryable.maxAttemptsExpression should be empty (no SpEL override)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_haveStaticFinalLoggerField(Class<?> handlerClass) {
+        // Logger must be static final for thread-safety in @Async handlers
+        boolean hasStaticFinalLogger = Arrays.stream(handlerClass.getDeclaredFields())
+                .filter(f -> f.getType() == Logger.class)
+                .anyMatch(f -> Modifier.isStatic(f.getModifiers()) && Modifier.isFinal(f.getModifiers()));
+
+        assertThat(hasStaticFinalLogger)
+                .as("%s must have a static final Logger for thread-safety in async context",
+                        handlerClass.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffDelayExpressionIsEmpty(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().delayExpression())
+                .as("%s @Backoff.delayExpression should be empty (no externalized config)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffMultiplierExpressionIsEmpty(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().multiplierExpression())
+                .as("%s @Backoff.multiplierExpression should be empty (no externalized config)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_backoffMaxDelayExpressionIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().maxDelayExpression())
+                .as("%s @Backoff maxDelayExpression should be empty (no expression-based max delay)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodNameStartsWithHandle(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.getName())
+                .as("%s @EventListener method should follow 'handle...' naming convention",
+                        handlerClass.getSimpleName())
+                .startsWith("handle");
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerParameterIsARecord(Class<?> handlerClass) {
+        // Integration events are Java records for immutability and automatic toString
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Class<?> eventType = handlerMethod.getParameterTypes()[0];
+
+        assertThat(eventType.isRecord())
+                .as("%s event parameter %s must be a Java record",
+                        handlerClass.getSimpleName(), eventType.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodDoesNotHaveAsyncAnnotation(Class<?> handlerClass) {
+        // @Recover already runs in the async thread; adding @Async would cause double-dispatch
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.isAnnotationPresent(Async.class))
+                .as("%s @Recover must not have @Async (already runs in async context)",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodHasExactlyThreeAnnotations(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.getAnnotations())
+                .as("%s handler method should have exactly 3 annotations (@Async, @Retryable, @EventListener)",
+                        handlerClass.getSimpleName())
+                .hasSize(3);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodDoesNotHaveTransactionalAnnotation(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.isAnnotationPresent(Transactional.class))
+                .as("%s @Recover must not have @Transactional (runs inside @Async thread)",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_loggerFieldIsNamedLog(Class<?> handlerClass) {
+        boolean hasLogField = Arrays.stream(handlerClass.getDeclaredFields())
+                .filter(f -> f.getType() == Logger.class)
+                .anyMatch(f -> f.getName().equals("log"));
+
+        assertThat(hasLogField)
+                .as("%s must have Logger field named 'log' for consistent logging",
+                        handlerClass.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodHasExactlyOneAnnotation(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.getAnnotations())
+                .as("%s @Recover method should have exactly 1 annotation (@Recover only)",
+                        handlerClass.getSimpleName())
+                .hasSize(1);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classDoesNotHaveScopeAnnotation(Class<?> handlerClass) {
+        boolean hasScope = Arrays.stream(handlerClass.getAnnotations())
+                .anyMatch(a -> a.annotationType().getSimpleName().equals("Scope"));
+
+        assertThat(hasScope)
+                .as("%s should use default singleton scope (no @Scope annotation)",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_loggerIsPrivateStaticFinal(Class<?> handlerClass) {
+        boolean loggerFieldExists = Arrays.stream(handlerClass.getDeclaredFields())
+                .filter(f -> f.getType() == Logger.class)
+                .filter(f -> Modifier.isPrivate(f.getModifiers()))
+                .anyMatch(f -> Modifier.isStatic(f.getModifiers()) && Modifier.isFinal(f.getModifiers()));
+
+        assertThat(loggerFieldExists)
+                .as("%s Logger should be private static final",
+                        handlerClass.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_loggerIsInitializedWithCorrectClass(Class<?> handlerClass) throws Exception {
+        java.lang.reflect.Field logField = Arrays.stream(handlerClass.getDeclaredFields())
+                .filter(f -> f.getType() == Logger.class)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(handlerClass.getSimpleName() + " has no Logger field"));
+        logField.setAccessible(true);
+        Logger logger = (Logger) logField.get(null);
+
+        assertThat(logger.getName())
+                .as("%s Logger must be initialized with its own class to avoid copy-paste errors",
+                        handlerClass.getSimpleName())
+                .isEqualTo(handlerClass.getName());
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffDelayIsPositive(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().delay())
+                .as("%s backoff delay must be positive to prevent tight retry loops",
+                        handlerClass.getSimpleName())
+                .isGreaterThan(0);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffMultiplierIsGreaterThanOne(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().multiplier())
+                .as("%s backoff multiplier must be >1 for exponential backoff",
+                        handlerClass.getSimpleName())
+                .isGreaterThan(1.0);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableMaxAttemptsIsAtLeastTwo(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.maxAttempts())
+                .as("%s maxAttempts must be >= 2 for retry to be meaningful",
+                        handlerClass.getSimpleName())
+                .isGreaterThanOrEqualTo(2);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodNameIsLowerCase(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.getName())
+                .as("%s @Recover method name should be lowercase",
+                        handlerClass.getSimpleName())
+                .isEqualTo(recoverMethod.getName().toLowerCase());
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryForExceptionOrderMatchesCentralizedArray(Class<?> handlerClass) {
+        // Position stability: retryFor types must appear in the same order as RETRYABLE_EXCEPTIONS
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        Class<? extends Throwable>[] retryFor = retryable.retryFor();
+        Class<?>[] centralizedExceptions = IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS;
+
+        assertThat(retryFor)
+                .as("%s retryFor order must exactly match IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS",
+                        handlerClass.getSimpleName())
+                .containsExactly((Class[]) centralizedExceptions);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventClassNameFitsWithinDatabaseColumnLength(Class<?> handlerClass) {
+        // event.getClass().getName() is stored in @Column(length = 500)
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Class<?> eventType = handlerMethod.getParameterTypes()[0];
+
+        assertThat(eventType.getName().length())
+                .as("%s event class name '%s' (%d chars) must fit within database column (max 500)",
+                        handlerClass.getSimpleName(), eventType.getName(), eventType.getName().length())
+                .isLessThanOrEqualTo(500);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_instanceFieldsAreFinal(Class<?> handlerClass) {
+        // All non-static fields must be final for thread safety in @Async context
+        var nonFinalInstanceFields = Arrays.stream(handlerClass.getDeclaredFields())
+                .filter(f -> !Modifier.isStatic(f.getModifiers()))
+                .filter(f -> !Modifier.isFinal(f.getModifiers()))
+                .map(f -> f.getName())
+                .toList();
+
+        assertThat(nonFinalInstanceFields)
+                .as("%s all instance fields must be final for thread safety in @Async context",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodNameIsExactlyRecover(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.getName())
+                .as("%s @Recover method should be named exactly 'recover' for consistency",
+                        handlerClass.getSimpleName())
+                .isEqualTo("recover");
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classDoesNotExtendAnyClass(Class<?> handlerClass) {
+        // Handlers should be simple POJOs, not extending framework classes
+        assertThat(handlerClass.getSuperclass())
+                .as("%s should extend only Object (POJO handler, no framework superclass)",
+                        handlerClass.getSimpleName())
+                .isEqualTo(Object.class);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classDoesNotImplementAnyInterface(Class<?> handlerClass) {
+        // Handlers should not implement interfaces that might interfere with proxying
+        assertThat(handlerClass.getInterfaces())
+                .as("%s should not implement any interface",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    private Method findEventListenerMethod(Class<?> handlerClass) {
+        return Arrays.stream(handlerClass.getDeclaredMethods())
+                .filter(m -> m.isAnnotationPresent(EventListener.class))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        handlerClass.getSimpleName() + " has no @EventListener method"));
+    }
+
+    private Method findRecoverMethod(Class<?> handlerClass) {
+        return Arrays.stream(handlerClass.getDeclaredMethods())
+                .filter(m -> m.isAnnotationPresent(Recover.class))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        handlerClass.getSimpleName() + " has no @Recover method"));
+    }
+}
