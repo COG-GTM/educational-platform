@@ -305,6 +305,51 @@ class CourseApprovedByAdminRetryIntegrationTest {
         assertThat(invocationCounter.get()).isEqualTo(3);
     }
 
+    @Test
+    void retryable_retryableExceptionThenNonRetryable_stopsRetryAndPropagates() {
+        // given - first attempt throws retryable, second throws non-retryable
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-42665544000d");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            int count = invocationCounter.incrementAndGet();
+            if (count == 1) {
+                throw new QueryTimeoutException("transient on first attempt");
+            }
+            throw new IllegalArgumentException("business error on second attempt");
+        }).when(commandHandler).handle(any());
+
+        // when / then - Spring Retry retries after first (retryable) exception,
+        // but second (non-retryable) exception exhausts retry without calling @Recover
+        assertThatThrownBy(() -> handler.handleCourseApprovedByAdminEvent(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("business error on second attempt");
+
+        assertThat(invocationCounter.get()).isEqualTo(2);
+        verify(failedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void retryable_retryableExceptionsThenNonRetryableOnLastAttempt_propagatesWithoutRecover() {
+        // given - two retryable exceptions, then non-retryable on final attempt
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-42665544000e");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            int count = invocationCounter.incrementAndGet();
+            if (count <= 2) {
+                throw new OptimisticLockingFailureException("retryable attempt " + count);
+            }
+            throw new NullPointerException("unexpected null on final attempt");
+        }).when(commandHandler).handle(any());
+
+        // when / then - all 3 attempts used; last throws non-retryable, so @Recover is NOT invoked
+        assertThatThrownBy(() -> handler.handleCourseApprovedByAdminEvent(event))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("unexpected null on final attempt");
+
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository, never()).save(any());
+    }
+
     @Configuration
     @EnableRetry
     static class RetryTestConfig {

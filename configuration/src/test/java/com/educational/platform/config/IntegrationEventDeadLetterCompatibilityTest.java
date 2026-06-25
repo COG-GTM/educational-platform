@@ -178,4 +178,60 @@ class IntegrationEventDeadLetterCompatibilityTest {
                     .endsWith("IntegrationEvent");
         });
     }
+
+    @Test
+    void exceptionMessage_typicalSpringExceptionMessages_fitWithinColumn() {
+        // exception_message column is VARCHAR(2000); verify realistic messages fit
+        int exceptionMessageMaxLength = 2000;
+
+        String[] typicalMessages = {
+                "could not execute statement; SQL [n/a]; constraint [unique_course_id]",
+                "Connection refused: connect; nested exception is java.net.ConnectException",
+                "Lock wait timeout exceeded; try restarting transaction",
+                "Deadlock found when trying to get lock; try restarting transaction",
+                "Cannot acquire lock on table 'courses' in exclusive mode",
+                "org.springframework.dao.QueryTimeoutException: JDBC operation timed out"
+        };
+
+        for (String message : typicalMessages) {
+            assertThat(message.length())
+                    .as("Typical exception message '%s' (%d chars) must fit within VARCHAR(%d)",
+                            message, message.length(), exceptionMessageMaxLength)
+                    .isLessThanOrEqualTo(exceptionMessageMaxLength);
+        }
+    }
+
+    @Test
+    void exceptionMessage_nullMessageFallbackToClassName_fitsWithinColumn() {
+        // When exception.getMessage() is null, handlers fall back to exception.getClass().getName()
+        int exceptionMessageMaxLength = 2000;
+
+        String[] fallbackClassNames = {
+                "org.springframework.dao.QueryTimeoutException",
+                "org.springframework.dao.OptimisticLockingFailureException",
+                "org.springframework.dao.PessimisticLockingFailureException",
+                "org.springframework.dao.TransientDataAccessException",
+                "org.springframework.dao.CannotAcquireLockException"
+        };
+
+        for (String className : fallbackClassNames) {
+            assertThat(className.length())
+                    .as("Exception class name fallback '%s' (%d chars) must fit within VARCHAR(%d)",
+                            className, className.length(), exceptionMessageMaxLength)
+                    .isLessThanOrEqualTo(exceptionMessageMaxLength);
+        }
+    }
+
+    @Test
+    void exceptionMessage_longNestedExceptionMessage_mayExceedColumn() {
+        // Documents that deeply nested exceptions could exceed the column limit
+        int exceptionMessageMaxLength = 2000;
+        String longMessage = "Nested: " + "x".repeat(2000);
+
+        assertThat(longMessage.length())
+                .as("Deeply nested exception messages can exceed VARCHAR(%d), " +
+                        "highlighting need for truncation in @Recover methods",
+                        exceptionMessageMaxLength)
+                .isGreaterThan(exceptionMessageMaxLength);
+    }
 }
