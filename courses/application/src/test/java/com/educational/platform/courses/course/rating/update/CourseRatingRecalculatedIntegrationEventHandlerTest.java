@@ -1057,6 +1057,71 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void handleCourseRatingRecalculatedEvent_withPositiveInfinityRating_passesValueThrough() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.POSITIVE_INFINITY);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", Double.POSITIVE_INFINITY);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_withNegativeInfinityRating_passesValueThrough() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.NEGATIVE_INFINITY);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", Double.NEGATIVE_INFINITY);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_withMinValueRating_passesCorrectValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.MIN_VALUE);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", uuid)
+                .hasFieldOrPropertyWithValue("rating", Double.MIN_VALUE);
+    }
+
+    @Test
+    void recover_withPositiveInfinityRating_eventPayloadContainsInfinity() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.POSITIVE_INFINITY);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventPayload()).contains("Infinity");
+    }
+
+    @Test
     void recover_withMultipleFieldsPopulated_allFieldsArePersisted() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

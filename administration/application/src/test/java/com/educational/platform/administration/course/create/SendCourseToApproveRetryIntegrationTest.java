@@ -255,6 +255,32 @@ class SendCourseToApproveRetryIntegrationTest {
         verify(failedEventRepository, never()).save(any());
     }
 
+    @Test
+    void recover_persistsCorrectFieldsAfterExhaustedRetries() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-42665544000b");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new OptimisticLockingFailureException("specific lock conflict");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleSendCourseToApproveEvent(event);
+
+        // then
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        FailedIntegrationEventRecord record = captor.getValue();
+        assertThat(record.getEventClassName()).isEqualTo(SendCourseToApproveIntegrationEvent.class.getName());
+        assertThat(record.getEventPayload()).contains(uuid.toString());
+        assertThat(record.getExceptionMessage()).isEqualTo("specific lock conflict");
+        assertThat(record.getRetryCount()).isEqualTo(3);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+        assertThat(record.getTimestamp()).isNotNull();
+        assertThat(record.getId()).isNull();
+    }
+
     @Configuration
     @EnableRetry
     static class RetryTestConfig {

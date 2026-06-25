@@ -229,6 +229,69 @@ class UserCreatedRetryIntegrationTest {
         assertThat(record.getTimestamp()).isNotNull();
     }
 
+    @Test
+    void retryable_optimisticLockingFailure_retriesAndRecovers() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher9", "teacher9@example.com");
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new OptimisticLockingFailureException("version mismatch");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleUserCreatedEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository).save(any(FailedIntegrationEventRecord.class));
+    }
+
+    @Test
+    void retryable_succeedsOnSecondAttempt_noRecovery() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher10", "teacher10@example.com");
+        doAnswer(invocation -> {
+            int count = invocationCounter.incrementAndGet();
+            if (count < 2) {
+                throw new QueryTimeoutException("transient failure");
+            }
+            return null;
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleUserCreatedEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(2);
+        verify(failedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void recover_persistsCorrectFieldsAfterExhaustedRetries() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("john.smith", "john.smith@example.com");
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new PessimisticLockingFailureException("specific deadlock message");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleUserCreatedEvent(event);
+
+        // then
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        FailedIntegrationEventRecord record = captor.getValue();
+        assertThat(record.getEventClassName()).isEqualTo(UserCreatedIntegrationEvent.class.getName());
+        assertThat(record.getEventPayload()).contains("john.smith");
+        assertThat(record.getEventPayload()).contains("john.smith@example.com");
+        assertThat(record.getExceptionMessage()).isEqualTo("specific deadlock message");
+        assertThat(record.getRetryCount()).isEqualTo(3);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+        assertThat(record.getTimestamp()).isNotNull();
+        assertThat(record.getId()).isNull();
+    }
+
     @Configuration
     @EnableRetry
     static class RetryTestConfig {

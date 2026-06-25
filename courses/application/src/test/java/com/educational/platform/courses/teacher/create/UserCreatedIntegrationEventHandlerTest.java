@@ -1003,6 +1003,38 @@ class UserCreatedIntegrationEventHandlerTest {
     }
 
     @Test
+    void handleUserCreatedEvent_withNullEmail_passesNullToCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", null);
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("username", "testuser");
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void recover_withNullEmail_eventPayloadIsRecordToString() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", null);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventPayload()).contains("testuser");
+        assertThat(argument.getValue().getEventPayload()).contains("null");
+    }
+
+    @Test
     void recover_withMultipleFieldsPopulated_allFieldsArePersisted() {
         // given
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");

@@ -264,6 +264,33 @@ class StudentEnrolledRetryIntegrationTest {
         assertThat(captor.getValue().getEventPayload()).contains("student-lock");
     }
 
+    @Test
+    void recover_persistsCorrectFieldsAfterExhaustedRetries() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-42665544000a");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "jane.doe");
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new OptimisticLockingFailureException("specific lock message");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        FailedIntegrationEventRecord record = captor.getValue();
+        assertThat(record.getEventClassName()).isEqualTo(StudentEnrolledToCourseIntegrationEvent.class.getName());
+        assertThat(record.getEventPayload()).contains(uuid.toString());
+        assertThat(record.getEventPayload()).contains("jane.doe");
+        assertThat(record.getExceptionMessage()).isEqualTo("specific lock message");
+        assertThat(record.getRetryCount()).isEqualTo(3);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+        assertThat(record.getTimestamp()).isNotNull();
+        assertThat(record.getId()).isNull();
+    }
+
     @Configuration
     @EnableRetry
     static class RetryTestConfig {

@@ -241,6 +241,72 @@ class CourseRatingRecalculatedRetryIntegrationTest {
         assertThat(captor.getValue().getExceptionMessage()).isEqualTo("attempt 3");
     }
 
+    @Test
+    void retryable_optimisticLocking_retriesAndRecovers() {
+        // given
+        final UUID uuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440009");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new OptimisticLockingFailureException("version mismatch");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository).save(any(FailedIntegrationEventRecord.class));
+    }
+
+    @Test
+    void retryable_succeedsOnThirdAttempt_noRecovery() {
+        // given
+        final UUID uuid = UUID.fromString("550e8400-e29b-41d4-a716-44665544000a");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.0);
+        doAnswer(invocation -> {
+            int count = invocationCounter.incrementAndGet();
+            if (count < 3) {
+                throw new PessimisticLockingFailureException("retry " + count);
+            }
+            return null;
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void recover_persistsCorrectFieldsAfterExhaustedRetries() {
+        // given
+        final UUID uuid = UUID.fromString("550e8400-e29b-41d4-a716-44665544000b");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.25);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new QueryTimeoutException("specific timeout message");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        FailedIntegrationEventRecord record = captor.getValue();
+        assertThat(record.getEventClassName()).isEqualTo(CourseRatingRecalculatedIntegrationEvent.class.getName());
+        assertThat(record.getEventPayload()).contains(uuid.toString());
+        assertThat(record.getEventPayload()).contains("4.25");
+        assertThat(record.getExceptionMessage()).isEqualTo("specific timeout message");
+        assertThat(record.getRetryCount()).isEqualTo(3);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+        assertThat(record.getTimestamp()).isNotNull();
+        assertThat(record.getId()).isNull();
+    }
+
     @Configuration
     @EnableRetry
     static class RetryTestConfig {
