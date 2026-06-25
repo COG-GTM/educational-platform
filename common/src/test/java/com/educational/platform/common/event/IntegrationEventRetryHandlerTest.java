@@ -420,5 +420,42 @@ class IntegrationEventRetryHandlerTest {
         }
     }
 
+    @Test
+    void class_canBeInstantiated() {
+        // @Component requires a no-arg or injectable constructor
+        IntegrationEventRetryHandler handler = new IntegrationEventRetryHandler();
+        assertThat(handler).isNotNull();
+    }
+
+    @Test
+    void class_isNotAbstract() {
+        assertThat(java.lang.reflect.Modifier.isAbstract(IntegrationEventRetryHandler.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void class_isNotFinal() {
+        assertThat(java.lang.reflect.Modifier.isFinal(IntegrationEventRetryHandler.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void isRetryable_withTransientDataAccessResourceException_returnsTrue() {
+        // TransientDataAccessResourceException is a concrete subclass of TransientDataAccessException
+        // commonly thrown for JDBC connection failures
+        final Throwable exception = new org.springframework.dao.TransientDataAccessResourceException("connection lost");
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
+    }
+
+    @Test
+    void isRetryable_withDeadlockLoserDataAccessException_returnsTrue() {
+        // DeadlockLoserDataAccessException extends PessimisticLockingFailureException
+        final Throwable exception = new org.springframework.dao.DeadlockLoserDataAccessException("deadlock", null);
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
+    }
+
+    @Test
+    void retryableExceptions_isNotEmpty() {
+        assertThat(IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS).isNotEmpty();
+    }
+
 }
 

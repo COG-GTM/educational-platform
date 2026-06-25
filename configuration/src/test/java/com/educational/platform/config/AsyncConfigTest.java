@@ -575,5 +575,55 @@ class AsyncConfigTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    void getAsyncExecutor_keepAliveSecondsIsDefault() {
+        // when
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // then - default keep-alive is 60 seconds
+        assertThat(executor.getKeepAliveSeconds()).isEqualTo(60);
+    }
+
+    @Test
+    void class_isNotAbstract() {
+        // Spring @Configuration classes must be instantiable
+        assertThat(java.lang.reflect.Modifier.isAbstract(AsyncConfig.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void class_isNotFinal() {
+        // Spring @Configuration uses CGLIB proxying which requires non-final classes
+        assertThat(java.lang.reflect.Modifier.isFinal(AsyncConfig.class.getModifiers())).isFalse();
+    }
+
+    @Test
+    void class_hasExactlyThreeClassAnnotations() {
+        // @EnableAsync, @EnableRetry, @Configuration
+        int annotationCount = 0;
+        if (AsyncConfig.class.isAnnotationPresent(EnableAsync.class)) annotationCount++;
+        if (AsyncConfig.class.isAnnotationPresent(EnableRetry.class)) annotationCount++;
+        if (AsyncConfig.class.isAnnotationPresent(Configuration.class)) annotationCount++;
+
+        assertThat(annotationCount).isEqualTo(3);
+    }
+
+    @Test
+    void getAsyncUncaughtExceptionHandler_methodOverridesAsyncConfigurer() throws NoSuchMethodException {
+        // when
+        Method method = AsyncConfig.class.getMethod("getAsyncUncaughtExceptionHandler");
+
+        // then
+        assertThat(method.getReturnType()).isEqualTo(AsyncUncaughtExceptionHandler.class);
+    }
+
+    @Test
+    void getAsyncExecutor_methodReturnType_isExecutor() throws NoSuchMethodException {
+        // when
+        Method method = AsyncConfig.class.getMethod("getAsyncExecutor");
+
+        // then
+        assertThat(method.getReturnType()).isEqualTo(Executor.class);
+    }
+
 }
 

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.time.Instant;
 
@@ -731,6 +732,64 @@ class FailedIntegrationEventRecordTest {
         // then
         assertThat(column).isNotNull();
         assertThat(column.length()).isEqualTo(500);
+    }
+
+    @Test
+    void constructor_withIntMinValueRetryCount_setsRetryCount() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", Integer.MIN_VALUE);
+
+        // then
+        assertThat(record.getRetryCount()).isEqualTo(Integer.MIN_VALUE);
+    }
+
+    @Test
+    void failedEventStatus_isStaticInnerEnum() {
+        // Enum must be accessible from other packages for status checks
+        assertThat(Modifier.isStatic(FailedIntegrationEventRecord.FailedEventStatus.class.getModifiers())).isTrue();
+    }
+
+    @Test
+    void getTimestamp_afterConstruction_returnsInstant() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+
+        // then
+        assertThat(record.getTimestamp()).isInstanceOf(Instant.class);
+    }
+
+    @Test
+    void resolveMethod_returnTypeIsVoid() throws NoSuchMethodException {
+        Method resolveMethod = FailedIntegrationEventRecord.class.getMethod("resolve");
+        assertThat(resolveMethod.getReturnType()).isEqualTo(void.class);
+    }
+
+    @Test
+    void constructor_withEventClassNameAtExactColumnLength_setsFieldCorrectly() {
+        // given - exactly 500 chars, matching the @Column(length = 500) boundary
+        final String boundaryClassName = "com." + "a".repeat(496);
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                boundaryClassName, "payload", "error", 3);
+
+        // then
+        assertThat(record.getEventClassName()).hasSize(500);
+        assertThat(record.getEventClassName()).isEqualTo(boundaryClassName);
+    }
+
+    @Test
+    void constructor_publicConstructor_hasFourParameters() throws NoSuchMethodException {
+        // when
+        Constructor<?> constructor = FailedIntegrationEventRecord.class.getConstructor(
+                String.class, String.class, String.class, int.class);
+
+        // then
+        assertThat(constructor).isNotNull();
+        assertThat(constructor.getParameterCount()).isEqualTo(4);
+        assertThat(Modifier.isPublic(constructor.getModifiers())).isTrue();
     }
 
 }

@@ -401,6 +401,61 @@ class IntegrationEventHandlerContractTest {
                 .isTrue();
     }
 
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffRandomIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().random())
+                .as("%s backoff.random should be false for deterministic retry intervals",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableRecoverAttributeIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.recover())
+                .as("%s @Retryable.recover should be empty for auto-discovery",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classIsNotAbstract(Class<?> handlerClass) {
+        assertThat(Modifier.isAbstract(handlerClass.getModifiers()))
+                .as("%s must not be abstract for Spring component scanning",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodIsNotStatic(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(Modifier.isStatic(handlerMethod.getModifiers()))
+                .as("%s @EventListener method must not be static",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodIsNotStatic(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(Modifier.isStatic(recoverMethod.getModifiers()))
+                .as("%s @Recover method must not be static",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
     private Method findEventListenerMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.isAnnotationPresent(EventListener.class))
