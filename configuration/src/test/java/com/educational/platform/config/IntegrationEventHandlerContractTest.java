@@ -878,6 +878,66 @@ class IntegrationEventHandlerContractTest {
                 .containsExactly((Class[]) centralizedExceptions);
     }
 
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventClassNameFitsWithinDatabaseColumnLength(Class<?> handlerClass) {
+        // event.getClass().getName() is stored in @Column(length = 500)
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Class<?> eventType = handlerMethod.getParameterTypes()[0];
+
+        assertThat(eventType.getName().length())
+                .as("%s event class name '%s' (%d chars) must fit within database column (max 500)",
+                        handlerClass.getSimpleName(), eventType.getName(), eventType.getName().length())
+                .isLessThanOrEqualTo(500);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_instanceFieldsAreFinal(Class<?> handlerClass) {
+        // All non-static fields must be final for thread safety in @Async context
+        var nonFinalInstanceFields = Arrays.stream(handlerClass.getDeclaredFields())
+                .filter(f -> !Modifier.isStatic(f.getModifiers()))
+                .filter(f -> !Modifier.isFinal(f.getModifiers()))
+                .map(f -> f.getName())
+                .toList();
+
+        assertThat(nonFinalInstanceFields)
+                .as("%s all instance fields must be final for thread safety in @Async context",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodNameIsExactlyRecover(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.getName())
+                .as("%s @Recover method should be named exactly 'recover' for consistency",
+                        handlerClass.getSimpleName())
+                .isEqualTo("recover");
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classDoesNotExtendAnyClass(Class<?> handlerClass) {
+        // Handlers should be simple POJOs, not extending framework classes
+        assertThat(handlerClass.getSuperclass())
+                .as("%s should extend only Object (POJO handler, no framework superclass)",
+                        handlerClass.getSimpleName())
+                .isEqualTo(Object.class);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classDoesNotImplementAnyInterface(Class<?> handlerClass) {
+        // Handlers should not implement interfaces that might interfere with proxying
+        assertThat(handlerClass.getInterfaces())
+                .as("%s should not implement any interface",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
     private Method findEventListenerMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.isAnnotationPresent(EventListener.class))
