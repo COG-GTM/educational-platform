@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -305,6 +306,26 @@ class CourseRatingRecalculatedRetryIntegrationTest {
         assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
         assertThat(record.getTimestamp()).isNotNull();
         assertThat(record.getId()).isNull();
+    }
+
+    @Test
+    void retryable_recoverMethodThrowsException_propagatesOutOfRetryFramework() {
+        // given - when @Recover itself throws (e.g., repository is down), exception escapes Spring Retry
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-42665544000c");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.5);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new QueryTimeoutException("transient failure");
+        }).when(commandHandler).handle(any());
+        doThrow(new RuntimeException("repository unavailable"))
+                .when(failedEventRepository).save(any(FailedIntegrationEventRecord.class));
+
+        // when / then - after exhausting retries, recover is called but throws, propagating out
+        assertThatThrownBy(() -> handler.handleCourseRatingRecalculatedEvent(event))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("repository unavailable");
+
+        assertThat(invocationCounter.get()).isEqualTo(3);
     }
 
     @Configuration

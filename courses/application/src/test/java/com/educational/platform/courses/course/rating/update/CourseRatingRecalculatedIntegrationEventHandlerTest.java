@@ -1242,4 +1242,33 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         verifyNoInteractions(failedEventRepository);
     }
 
+    @Test
+    void recover_whenRepositorySaveThrows_propagatesException() {
+        // given - if dead-letter persistence itself fails, the exception must propagate
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final QueryTimeoutException originalException = new QueryTimeoutException("connection timeout");
+        final DataIntegrityViolationException saveException = new DataIntegrityViolationException("constraint violation");
+        doThrow(saveException).when(failedEventRepository).save(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.recover(originalException, event))
+                .isSameAs(saveException);
+    }
+
+    @Test
+    void recover_whenRepositorySaveThrows_doesNotSwallowException() {
+        // given - verifies no try-catch around save() that would lose the exception
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final OptimisticLockingFailureException originalException = new OptimisticLockingFailureException("lock");
+        final RuntimeException saveException = new RuntimeException("unexpected DB failure");
+        doThrow(saveException).when(failedEventRepository).save(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.recover(originalException, event))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("unexpected DB failure");
+    }
+
 }

@@ -1118,4 +1118,31 @@ class UserCreatedIntegrationEventHandlerTest {
         verifyNoInteractions(failedEventRepository);
     }
 
+    @Test
+    void recover_whenRepositorySaveThrows_propagatesException() {
+        // given - if dead-letter persistence itself fails, the exception must propagate
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final QueryTimeoutException originalException = new QueryTimeoutException("connection timeout");
+        final DataIntegrityViolationException saveException = new DataIntegrityViolationException("constraint violation");
+        doThrow(saveException).when(failedEventRepository).save(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.recover(originalException, event))
+                .isSameAs(saveException);
+    }
+
+    @Test
+    void recover_whenRepositorySaveThrows_doesNotSwallowException() {
+        // given - verifies no try-catch around save() that would lose the exception
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final OptimisticLockingFailureException originalException = new OptimisticLockingFailureException("lock");
+        final RuntimeException saveException = new RuntimeException("unexpected DB failure");
+        doThrow(saveException).when(failedEventRepository).save(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.recover(originalException, event))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("unexpected DB failure");
+    }
+
 }

@@ -862,6 +862,22 @@ class IntegrationEventHandlerContractTest {
                 .isEqualTo(recoverMethod.getName().toLowerCase());
     }
 
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryForExceptionOrderMatchesCentralizedArray(Class<?> handlerClass) {
+        // Position stability: retryFor types must appear in the same order as RETRYABLE_EXCEPTIONS
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        Class<? extends Throwable>[] retryFor = retryable.retryFor();
+        Class<?>[] centralizedExceptions = IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS;
+
+        assertThat(retryFor)
+                .as("%s retryFor order must exactly match IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS",
+                        handlerClass.getSimpleName())
+                .containsExactly((Class[]) centralizedExceptions);
+    }
+
     private Method findEventListenerMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.isAnnotationPresent(EventListener.class))
