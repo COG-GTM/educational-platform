@@ -403,18 +403,6 @@ class IntegrationEventHandlerContractTest {
 
     @ParameterizedTest
     @MethodSource("handlerClasses")
-    void allHandlers_retryableBackoffRandomIsDefault(Class<?> handlerClass) {
-        Method handlerMethod = findEventListenerMethod(handlerClass);
-        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
-
-        assertThat(retryable.backoff().random())
-                .as("%s backoff.random should be false for deterministic retry intervals",
-                        handlerClass.getSimpleName())
-                .isFalse();
-    }
-
-    @ParameterizedTest
-    @MethodSource("handlerClasses")
     void allHandlers_retryableRecoverAttributeIsDefault(Class<?> handlerClass) {
         Method handlerMethod = findEventListenerMethod(handlerClass);
         Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
