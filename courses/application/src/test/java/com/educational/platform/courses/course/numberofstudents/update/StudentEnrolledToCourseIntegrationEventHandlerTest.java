@@ -947,4 +947,59 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         verifyNoInteractions(failedEventRepository);
     }
 
+    @Test
+    void handleStudentEnrolledToCourseEvent_errorSubclass_propagatesUnchanged() {
+        // given - StackOverflowError is an Error, not an Exception, so it bypasses catch(Exception)
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        final StackOverflowError error = new StackOverflowError("stack overflow in handler");
+        org.mockito.Mockito.doThrow(error).when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isInstanceOf(StackOverflowError.class)
+                .hasMessage("stack overflow in handler");
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_passesCorrectCourseIdToCommand() {
+        // given
+        final UUID uuid = UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> argument = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void recover_withMultipleFieldsPopulated_allFieldsArePersisted() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "testuser");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("all fields test");
+
+        // when
+        final Instant before = Instant.now();
+        sut.recover(exception, event);
+        final Instant after = Instant.now();
+
+        // then - all 7 fields of FailedIntegrationEventRecord are verified
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord record = argument.getValue();
+        assertThat(record.getId()).isNull();
+        assertThat(record.getEventClassName()).isEqualTo(StudentEnrolledToCourseIntegrationEvent.class.getName());
+        assertThat(record.getEventPayload()).isEqualTo(event.toString());
+        assertThat(record.getExceptionMessage()).isEqualTo("all fields test");
+        assertThat(record.getRetryCount()).isEqualTo(3);
+        assertThat(record.getTimestamp()).isBetween(before, after);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
 }

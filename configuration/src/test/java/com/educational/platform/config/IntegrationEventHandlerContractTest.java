@@ -681,6 +681,18 @@ class IntegrationEventHandlerContractTest {
 
     @ParameterizedTest
     @MethodSource("handlerClasses")
+    void allHandlers_backoffMaxDelayExpressionIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().maxDelayExpression())
+                .as("%s @Backoff maxDelayExpression should be empty (no expression-based max delay)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
     void allHandlers_eventListenerMethodNameStartsWithHandle(Class<?> handlerClass) {
         Method handlerMethod = findEventListenerMethod(handlerClass);
 

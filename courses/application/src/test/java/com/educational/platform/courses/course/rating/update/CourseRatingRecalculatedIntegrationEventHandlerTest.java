@@ -1041,4 +1041,44 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         verifyNoInteractions(failedEventRepository);
     }
 
+    @Test
+    void handleCourseRatingRecalculatedEvent_errorSubclass_propagatesUnchanged() {
+        // given - StackOverflowError is an Error, not an Exception, so it bypasses catch(Exception)
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final StackOverflowError error = new StackOverflowError("stack overflow in handler");
+        org.mockito.Mockito.doThrow(error).when(updateCourseRatingCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event))
+                .isInstanceOf(StackOverflowError.class)
+                .hasMessage("stack overflow in handler");
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void recover_withMultipleFieldsPopulated_allFieldsArePersisted() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.5);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("all fields test");
+
+        // when
+        final Instant before = Instant.now();
+        sut.recover(exception, event);
+        final Instant after = Instant.now();
+
+        // then - all 7 fields of FailedIntegrationEventRecord are verified
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord record = argument.getValue();
+        assertThat(record.getId()).isNull();
+        assertThat(record.getEventClassName()).isEqualTo(CourseRatingRecalculatedIntegrationEvent.class.getName());
+        assertThat(record.getEventPayload()).isEqualTo(event.toString());
+        assertThat(record.getExceptionMessage()).isEqualTo("all fields test");
+        assertThat(record.getRetryCount()).isEqualTo(3);
+        assertThat(record.getTimestamp()).isBetween(before, after);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
 }

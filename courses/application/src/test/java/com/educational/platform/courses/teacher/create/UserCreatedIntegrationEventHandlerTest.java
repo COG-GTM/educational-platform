@@ -988,4 +988,42 @@ class UserCreatedIntegrationEventHandlerTest {
         verifyNoInteractions(failedEventRepository);
     }
 
+    @Test
+    void handleUserCreatedEvent_errorSubclass_propagatesUnchanged() {
+        // given - StackOverflowError is an Error, not an Exception, so it bypasses catch(Exception)
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final StackOverflowError error = new StackOverflowError("stack overflow in handler");
+        org.mockito.Mockito.doThrow(error).when(createTeacherCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(StackOverflowError.class)
+                .hasMessage("stack overflow in handler");
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void recover_withMultipleFieldsPopulated_allFieldsArePersisted() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("all fields test");
+
+        // when
+        final Instant before = Instant.now();
+        sut.recover(exception, event);
+        final Instant after = Instant.now();
+
+        // then - all 7 fields of FailedIntegrationEventRecord are verified
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord record = argument.getValue();
+        assertThat(record.getId()).isNull();
+        assertThat(record.getEventClassName()).isEqualTo(UserCreatedIntegrationEvent.class.getName());
+        assertThat(record.getEventPayload()).isEqualTo(event.toString());
+        assertThat(record.getExceptionMessage()).isEqualTo("all fields test");
+        assertThat(record.getRetryCount()).isEqualTo(3);
+        assertThat(record.getTimestamp()).isBetween(before, after);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
 }
