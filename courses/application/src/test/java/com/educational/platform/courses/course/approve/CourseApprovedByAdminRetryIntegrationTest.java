@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.retry.ExhaustedRetryException;
@@ -163,6 +164,105 @@ class CourseApprovedByAdminRetryIntegrationTest {
         assertThat(record.getRetryCount()).isEqualTo(3);
         assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
         assertThat(record.getTimestamp()).isNotNull();
+    }
+
+    @Test
+    void retryable_pessimisticLockingFailure_retriesAndRecovers() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440006");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new PessimisticLockingFailureException("table locked");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseApprovedByAdminEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository, times(1)).save(any(FailedIntegrationEventRecord.class));
+    }
+
+    @Test
+    void retryable_succeedsOnFirstAttempt_noRetryNoRecovery() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440007");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            return null;
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseApprovedByAdminEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(1);
+        verify(failedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void recover_withNullExceptionMessage_usesClassName() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440008");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new QueryTimeoutException(null);
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseApprovedByAdminEvent(event);
+
+        // then
+        var captor = org.mockito.ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getExceptionMessage())
+                .isEqualTo(QueryTimeoutException.class.getName());
+    }
+
+    @Test
+    void retryable_succeedsOnThirdAttempt_noRecovery() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440009");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            int count = invocationCounter.incrementAndGet();
+            if (count < 3) {
+                throw new OptimisticLockingFailureException("retry " + count);
+            }
+            return null;
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseApprovedByAdminEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void retryable_mixedExceptions_retriesUntilExhausted() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-42665544000a");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            int count = invocationCounter.incrementAndGet();
+            if (count == 1) throw new OptimisticLockingFailureException("attempt 1");
+            if (count == 2) throw new PessimisticLockingFailureException("attempt 2");
+            throw new QueryTimeoutException("attempt 3");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseApprovedByAdminEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        var captor = org.mockito.ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getExceptionMessage()).isEqualTo("attempt 3");
     }
 
     @Configuration

@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.retry.ExhaustedRetryException;
 import org.springframework.retry.annotation.EnableRetry;
@@ -147,6 +148,85 @@ class UserCreatedRetryIntegrationTest {
         verify(failedEventRepository).save(captor.capture());
         assertThat(captor.getValue().getExceptionMessage())
                 .isEqualTo(OptimisticLockingFailureException.class.getName());
+    }
+
+    @Test
+    void retryable_queryTimeout_retriesAndRecovers() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher6", "teacher6@example.com");
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new QueryTimeoutException("query exceeded 30s");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleUserCreatedEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository).save(any(FailedIntegrationEventRecord.class));
+    }
+
+    @Test
+    void retryable_succeedsOnFirstAttempt_noRetryNoRecovery() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher7", "teacher7@example.com");
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            return null;
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleUserCreatedEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(1);
+        verify(failedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void retryable_mixedExceptions_retriesUntilExhausted() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher8", "teacher8@example.com");
+        doAnswer(invocation -> {
+            int count = invocationCounter.incrementAndGet();
+            if (count == 1) throw new OptimisticLockingFailureException("attempt 1");
+            if (count == 2) throw new PessimisticLockingFailureException("attempt 2");
+            throw new TransientDataAccessResourceException("attempt 3");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleUserCreatedEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getExceptionMessage()).isEqualTo("attempt 3");
+    }
+
+    @Test
+    void recover_eventPayloadContainsUsernameAndEmail() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("john.doe", "john.doe@example.com");
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new QueryTimeoutException("db timeout");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleUserCreatedEvent(event);
+
+        // then
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        FailedIntegrationEventRecord record = captor.getValue();
+        assertThat(record.getEventPayload()).contains("john.doe");
+        assertThat(record.getEventPayload()).contains("john.doe@example.com");
+        assertThat(record.getEventClassName()).isEqualTo(UserCreatedIntegrationEvent.class.getName());
+        assertThat(record.getRetryCount()).isEqualTo(3);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+        assertThat(record.getTimestamp()).isNotNull();
     }
 
     @Configuration

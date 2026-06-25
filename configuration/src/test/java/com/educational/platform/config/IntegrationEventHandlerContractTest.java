@@ -727,6 +727,64 @@ class IntegrationEventHandlerContractTest {
                 .isFalse();
     }
 
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodHasExactlyThreeAnnotations(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.getAnnotations())
+                .as("%s handler method should have exactly 3 annotations (@Async, @Retryable, @EventListener)",
+                        handlerClass.getSimpleName())
+                .hasSize(3);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodDoesNotHaveTransactionalAnnotation(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.isAnnotationPresent(Transactional.class))
+                .as("%s @Recover must not have @Transactional (runs inside @Async thread)",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_loggerFieldIsNamedLog(Class<?> handlerClass) {
+        boolean hasLogField = Arrays.stream(handlerClass.getDeclaredFields())
+                .filter(f -> f.getType() == Logger.class)
+                .anyMatch(f -> f.getName().equals("log"));
+
+        assertThat(hasLogField)
+                .as("%s must have Logger field named 'log' for consistent logging",
+                        handlerClass.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodHasExactlyOneAnnotation(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.getAnnotations())
+                .as("%s @Recover method should have exactly 1 annotation (@Recover only)",
+                        handlerClass.getSimpleName())
+                .hasSize(1);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classDoesNotHaveScopeAnnotation(Class<?> handlerClass) {
+        boolean hasScope = Arrays.stream(handlerClass.getAnnotations())
+                .anyMatch(a -> a.annotationType().getSimpleName().equals("Scope"));
+
+        assertThat(hasScope)
+                .as("%s should use default singleton scope (no @Scope annotation)",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
     private Method findEventListenerMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.isAnnotationPresent(EventListener.class))

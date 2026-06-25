@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.retry.ExhaustedRetryException;
 import org.springframework.retry.annotation.EnableRetry;
@@ -157,6 +158,87 @@ class CourseRatingRecalculatedRetryIntegrationTest {
         ratingCaptor.getAllValues().forEach(cmd ->
                 assertThat(cmd).hasFieldOrPropertyWithValue("rating", 2.5)
         );
+    }
+
+    @Test
+    void retryable_pessimisticLocking_retriesAndRecovers() {
+        // given
+        final UUID uuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440005");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 4.0);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new PessimisticLockingFailureException("table locked");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository).save(any(FailedIntegrationEventRecord.class));
+    }
+
+    @Test
+    void retryable_succeedsOnSecondAttempt_noRecovery() {
+        // given
+        final UUID uuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440006");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 3.5);
+        doAnswer(invocation -> {
+            int count = invocationCounter.incrementAndGet();
+            if (count < 2) {
+                throw new OptimisticLockingFailureException("version conflict");
+            }
+            return null;
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(2);
+        verify(failedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void recover_withNullExceptionMessage_usesClassName() {
+        // given
+        final UUID uuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440007");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 1.0);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new DeadlockLoserDataAccessException(null, null);
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getExceptionMessage())
+                .isEqualTo(DeadlockLoserDataAccessException.class.getName());
+    }
+
+    @Test
+    void retryable_mixedExceptions_retriesUntilExhausted() {
+        // given
+        final UUID uuid = UUID.fromString("550e8400-e29b-41d4-a716-446655440008");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, 2.0);
+        doAnswer(invocation -> {
+            int count = invocationCounter.incrementAndGet();
+            if (count == 1) throw new OptimisticLockingFailureException("attempt 1");
+            if (count == 2) throw new PessimisticLockingFailureException("attempt 2");
+            throw new QueryTimeoutException("attempt 3");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getExceptionMessage()).isEqualTo("attempt 3");
     }
 
     @Configuration

@@ -161,6 +161,87 @@ class StudentEnrolledRetryIntegrationTest {
         assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
     }
 
+    @Test
+    void retryable_queryTimeout_retriesAndRecovers() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440006");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student6");
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new QueryTimeoutException("query exceeded 30s");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository).save(any(FailedIntegrationEventRecord.class));
+    }
+
+    @Test
+    void retryable_succeedsOnThirdAttempt_noRecovery() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440007");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student7");
+        doAnswer(invocation -> {
+            int count = invocationCounter.incrementAndGet();
+            if (count < 3) {
+                throw new OptimisticLockingFailureException("retry " + count);
+            }
+            return null;
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void retryable_mixedExceptions_retriesUntilExhausted() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440008");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student8");
+        doAnswer(invocation -> {
+            int count = invocationCounter.incrementAndGet();
+            if (count == 1) throw new OptimisticLockingFailureException("attempt 1");
+            if (count == 2) throw new PessimisticLockingFailureException("attempt 2");
+            throw new QueryTimeoutException("attempt 3");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getExceptionMessage()).isEqualTo("attempt 3");
+    }
+
+    @Test
+    void recover_withNullExceptionMessage_usesClassName() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440009");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student9");
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new PessimisticLockingFailureException(null);
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getExceptionMessage())
+                .isEqualTo(PessimisticLockingFailureException.class.getName());
+    }
+
     @Configuration
     @EnableRetry
     static class RetryTestConfig {

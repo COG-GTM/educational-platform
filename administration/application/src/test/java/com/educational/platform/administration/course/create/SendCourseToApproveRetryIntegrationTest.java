@@ -160,6 +160,101 @@ class SendCourseToApproveRetryIntegrationTest {
         assertThat(captor.getValue().getExceptionMessage()).isEqualTo("attempt 3");
     }
 
+    @Test
+    void retryable_optimisticLockingFailure_retriesAndRecovers() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440006");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new OptimisticLockingFailureException("version mismatch");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleSendCourseToApproveEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository).save(any(FailedIntegrationEventRecord.class));
+    }
+
+    @Test
+    void retryable_pessimisticLockingFailure_retriesAndRecovers() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440007");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new PessimisticLockingFailureException("table locked");
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleSendCourseToApproveEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository).save(any(FailedIntegrationEventRecord.class));
+    }
+
+    @Test
+    void retryable_succeedsOnFirstAttempt_noRetryNoRecovery() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440008");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            return null;
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleSendCourseToApproveEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(1);
+        verify(failedEventRepository, never()).save(any());
+    }
+
+    @Test
+    void recover_withNullExceptionMessage_usesClassName() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440009");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            invocationCounter.incrementAndGet();
+            throw new PessimisticLockingFailureException(null);
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleSendCourseToApproveEvent(event);
+
+        // then
+        var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getExceptionMessage())
+                .isEqualTo(PessimisticLockingFailureException.class.getName());
+    }
+
+    @Test
+    void retryable_succeedsOnThirdAttempt_noRecovery() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-42665544000a");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        doAnswer(invocation -> {
+            int count = invocationCounter.incrementAndGet();
+            if (count < 3) {
+                throw new QueryTimeoutException("retry " + count);
+            }
+            return null;
+        }).when(commandHandler).handle(any());
+
+        // when
+        handler.handleSendCourseToApproveEvent(event);
+
+        // then
+        assertThat(invocationCounter.get()).isEqualTo(3);
+        verify(failedEventRepository, never()).save(any());
+    }
+
     @Configuration
     @EnableRetry
     static class RetryTestConfig {

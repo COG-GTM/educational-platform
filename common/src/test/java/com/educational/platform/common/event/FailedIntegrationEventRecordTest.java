@@ -1039,5 +1039,43 @@ class FailedIntegrationEventRecordTest {
                 .isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.RESOLVED);
     }
 
+    @Test
+    void entity_hasTotalOfSevenDeclaredFields() {
+        java.lang.reflect.Field[] fields = FailedIntegrationEventRecord.class.getDeclaredFields();
+
+        assertThat(fields)
+                .as("Entity should have exactly 7 fields (id + 6 data fields); new fields need test coverage")
+                .hasSize(7);
+    }
+
+    @Test
+    void allColumnNames_useSnakeCaseConvention() {
+        for (java.lang.reflect.Field field : FailedIntegrationEventRecord.class.getDeclaredFields()) {
+            jakarta.persistence.Column column = field.getAnnotation(jakarta.persistence.Column.class);
+            if (column != null && !column.name().isEmpty()) {
+                assertThat(column.name())
+                        .as("Column name for field '%s' must use snake_case", field.getName())
+                        .matches("[a-z][a-z_]*[a-z]");
+            }
+        }
+    }
+
+    @Test
+    void constructor_allFieldsAreIndependentFromInputObjects() {
+        String className = "com.example.Event";
+        String payload = "test-payload";
+        String errorMsg = "test-error";
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                className, payload, errorMsg, 3);
+
+        assertThat(record.getEventClassName()).isEqualTo(className);
+        assertThat(record.getEventPayload()).isEqualTo(payload);
+        assertThat(record.getExceptionMessage()).isEqualTo(errorMsg);
+        assertThat(record.getRetryCount()).isEqualTo(3);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+        assertThat(record.getTimestamp()).isNotNull();
+        assertThat(record.getId()).isNull();
+    }
+
 }
 
