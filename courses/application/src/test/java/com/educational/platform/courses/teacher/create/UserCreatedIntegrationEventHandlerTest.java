@@ -1093,4 +1093,29 @@ class UserCreatedIntegrationEventHandlerTest {
                 .doesNotContain("root cause detail");
     }
 
+    @Test
+    void handleUserCreatedEvent_exception_rethrowsSameInstance() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final OptimisticLockingFailureException originalException = new OptimisticLockingFailureException("original");
+        doThrow(originalException).when(createTeacherCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleUserCreatedEvent_successfulHandling_commandHandlerCalledExactlyOnce() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        verify(createTeacherCommandHandler, times(1)).handle(any());
+        verifyNoInteractions(failedEventRepository);
+    }
+
 }

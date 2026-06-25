@@ -799,6 +799,69 @@ class IntegrationEventHandlerContractTest {
                 .isTrue();
     }
 
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_loggerIsInitializedWithCorrectClass(Class<?> handlerClass) throws Exception {
+        java.lang.reflect.Field logField = Arrays.stream(handlerClass.getDeclaredFields())
+                .filter(f -> f.getType() == Logger.class)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(handlerClass.getSimpleName() + " has no Logger field"));
+        logField.setAccessible(true);
+        Logger logger = (Logger) logField.get(null);
+
+        assertThat(logger.getName())
+                .as("%s Logger must be initialized with its own class to avoid copy-paste errors",
+                        handlerClass.getSimpleName())
+                .isEqualTo(handlerClass.getName());
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffDelayIsPositive(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().delay())
+                .as("%s backoff delay must be positive to prevent tight retry loops",
+                        handlerClass.getSimpleName())
+                .isGreaterThan(0);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffMultiplierIsGreaterThanOne(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().multiplier())
+                .as("%s backoff multiplier must be >1 for exponential backoff",
+                        handlerClass.getSimpleName())
+                .isGreaterThan(1.0);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableMaxAttemptsIsAtLeastTwo(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.maxAttempts())
+                .as("%s maxAttempts must be >= 2 for retry to be meaningful",
+                        handlerClass.getSimpleName())
+                .isGreaterThanOrEqualTo(2);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodNameIsLowerCase(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.getName())
+                .as("%s @Recover method name should be lowercase",
+                        handlerClass.getSimpleName())
+                .isEqualTo(recoverMethod.getName().toLowerCase());
+    }
+
     private Method findEventListenerMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.isAnnotationPresent(EventListener.class))

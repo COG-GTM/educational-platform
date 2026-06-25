@@ -1007,4 +1007,31 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
     }
 
+    @Test
+    void handleSendCourseToApproveEvent_exception_rethrowsSameInstance() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final OptimisticLockingFailureException originalException = new OptimisticLockingFailureException("original");
+        doThrow(originalException).when(createCourseProposalCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_successfulHandling_commandHandlerCalledExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+
+        // when
+        sut.handleSendCourseToApproveEvent(event);
+
+        // then
+        verify(createCourseProposalCommandHandler, times(1)).handle(any());
+        verifyNoInteractions(failedEventRepository);
+    }
+
 }

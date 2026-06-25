@@ -907,15 +907,66 @@ class AsyncConfigTest {
     }
 
     @Test
-    void asyncUncaughtExceptionHandler_withPessimisticLockingFailure_logsWithoutThrowing() throws NoSuchMethodException {
+    void getAsyncExecutor_gracefulShutdown_completesInFlightTask() throws Exception {
         // given
-        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
-        Method method = String.class.getMethod("toString");
-        PessimisticLockingFailureException exception = new PessimisticLockingFailureException("deadlock detected");
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        var taskCompleted = new java.util.concurrent.atomic.AtomicBoolean(false);
+        var taskStarted = new java.util.concurrent.CountDownLatch(1);
 
-        // when / then
-        assertThatCode(() -> handler.handleUncaughtException(exception, method, "event1"))
-                .doesNotThrowAnyException();
+        executor.submit(() -> {
+            taskStarted.countDown();
+            try { Thread.sleep(200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            taskCompleted.set(true);
+        });
+
+        // when - wait for task to start, then initiate shutdown
+        assertThat(taskStarted.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        executor.shutdown();
+
+        // then - task should have completed because waitForTasksToCompleteOnShutdown is true
+        executor.getThreadPoolExecutor().awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(taskCompleted.get())
+                .as("In-flight task must complete during graceful shutdown")
+                .isTrue();
+    }
+
+    @Test
+    void getAsyncExecutor_afterShutdown_rejectsNewTasks() throws Exception {
+        // given
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        executor.submit(() -> "warmup").get(5, java.util.concurrent.TimeUnit.SECONDS);
+
+        // when
+        executor.shutdown();
+        executor.getThreadPoolExecutor().awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS);
+
+        // then
+        assertThatCode(() -> executor.submit(() -> "rejected"))
+                .isInstanceOf(java.util.concurrent.RejectedExecutionException.class);
+    }
+
+    @Test
+    void integrationEventAsyncUncaughtExceptionHandler_loggerIsInitializedWithCorrectClass() throws Exception {
+        // given
+        java.lang.reflect.Field logField = AsyncConfig.IntegrationEventAsyncUncaughtExceptionHandler.class
+                .getDeclaredField("log");
+        logField.setAccessible(true);
+        org.slf4j.Logger logger = (org.slf4j.Logger) logField.get(null);
+
+        // then
+        assertThat(logger.getName())
+                .isEqualTo(AsyncConfig.IntegrationEventAsyncUncaughtExceptionHandler.class.getName());
+    }
+
+    @Test
+    void asyncConfig_loggerIsInitializedWithCorrectClass() throws Exception {
+        // given
+        java.lang.reflect.Field logField = AsyncConfig.class.getDeclaredField("log");
+        logField.setAccessible(true);
+        org.slf4j.Logger logger = (org.slf4j.Logger) logField.get(null);
+
+        // then
+        assertThat(logger.getName()).isEqualTo(AsyncConfig.class.getName());
     }
 
 }

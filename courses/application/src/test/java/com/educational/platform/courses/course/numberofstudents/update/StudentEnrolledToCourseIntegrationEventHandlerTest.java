@@ -1039,4 +1039,31 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
                 .doesNotContain("root cause detail");
     }
 
+    @Test
+    void handleStudentEnrolledToCourseEvent_exception_rethrowsSameInstance() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+        final OptimisticLockingFailureException originalException = new OptimisticLockingFailureException("original");
+        doThrow(originalException).when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_successfulHandling_commandHandlerCalledExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student1");
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        verify(increaseNumberOfStudentsCommandHandler, times(1)).handle(any());
+        verifyNoInteractions(failedEventRepository);
+    }
+
 }

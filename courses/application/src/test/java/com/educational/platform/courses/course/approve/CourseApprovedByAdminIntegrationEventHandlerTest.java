@@ -1002,4 +1002,31 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
                 .doesNotContain("root cause detail");
     }
 
+    @Test
+    void handleCourseApprovedByAdminEvent_exception_rethrowsSameInstance() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final OptimisticLockingFailureException originalException = new OptimisticLockingFailureException("original");
+        doThrow(originalException).when(approveCourseCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isSameAs(originalException);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_successfulHandling_commandHandlerCalledExactlyOnce() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+
+        // when
+        sut.handleCourseApprovedByAdminEvent(event);
+
+        // then
+        verify(approveCourseCommandHandler, times(1)).handle(any());
+        verifyNoInteractions(failedEventRepository);
+    }
+
 }

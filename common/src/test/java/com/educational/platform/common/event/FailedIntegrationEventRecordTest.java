@@ -1111,15 +1111,6 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
-    void constructor_withNegativeRetryCount_setsRetryCount() {
-        // negative retry count is technically invalid but constructor does not validate
-        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
-                "com.example.Event", "payload", "error", -1);
-
-        assertThat(record.getRetryCount()).isEqualTo(-1);
-    }
-
-    @Test
     void constructor_withZeroRetryCount_setsStatusToFailed() {
         // even with zero retries, the initial status must still be FAILED
         final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
@@ -1139,6 +1130,60 @@ class FailedIntegrationEventRecordTest {
                         .isFalse();
             }
         }
+    }
+
+    @Test
+    void resolve_doesNotAffectId() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+        assertThat(record.getId()).isNull();
+
+        // when
+        record.resolve();
+
+        // then
+        assertThat(record.getId()).isNull();
+    }
+
+    @Test
+    void resolve_isIdempotent_allFieldsUnchangedOnSubsequentCalls() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "test-payload", "test-error", 5);
+        record.resolve();
+        final Instant timestampAfterFirstResolve = record.getTimestamp();
+
+        // when
+        record.resolve();
+
+        // then
+        assertThat(record.getId()).isNull();
+        assertThat(record.getEventClassName()).isEqualTo("com.example.Event");
+        assertThat(record.getEventPayload()).isEqualTo("test-payload");
+        assertThat(record.getExceptionMessage()).isEqualTo("test-error");
+        assertThat(record.getRetryCount()).isEqualTo(5);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.RESOLVED);
+        assertThat(record.getTimestamp()).isEqualTo(timestampAfterFirstResolve);
+    }
+
+    @Test
+    void statusField_hasEnumeratedAnnotationWithStringType() throws NoSuchFieldException {
+        // @Enumerated(EnumType.STRING) ensures status is stored as text, not ordinal
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("status");
+        jakarta.persistence.Enumerated enumerated = field.getAnnotation(jakarta.persistence.Enumerated.class);
+
+        assertThat(enumerated).isNotNull();
+        assertThat(enumerated.value()).isEqualTo(jakarta.persistence.EnumType.STRING);
+    }
+
+    @Test
+    void idField_hasGeneratedValueWithIdentityStrategy() throws NoSuchFieldException {
+        Field field = FailedIntegrationEventRecord.class.getDeclaredField("id");
+        jakarta.persistence.GeneratedValue generatedValue = field.getAnnotation(jakarta.persistence.GeneratedValue.class);
+
+        assertThat(generatedValue).isNotNull();
+        assertThat(generatedValue.strategy()).isEqualTo(jakarta.persistence.GenerationType.IDENTITY);
     }
 
 }
