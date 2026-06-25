@@ -181,7 +181,11 @@ class StudentEnrolledRetryEdgeCaseTest {
             throw new DataIntegrityViolationException("constraint on third");
         }).when(commandHandler).handle(any());
 
+<<<<<<< HEAD
         // when / then - ExhaustedRetryException wraps the non-retryable exception
+=======
+        // when / then - DataIntegrityViolationException is not retryable, no matching @Recover
+>>>>>>> 581ef759 (Add retry edge case tests and fix broken test assertions)
         assertThatThrownBy(() -> handler.handleStudentEnrolledToCourseEvent(event))
                 .isInstanceOf(ExhaustedRetryException.class)
                 .hasCauseInstanceOf(DataIntegrityViolationException.class);

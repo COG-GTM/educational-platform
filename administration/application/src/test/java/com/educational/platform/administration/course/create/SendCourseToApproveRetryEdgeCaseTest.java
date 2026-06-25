@@ -1,8 +1,8 @@
-package com.educational.platform.courses.teacher.create;
+package com.educational.platform.administration.course.create;
 
 import com.educational.platform.common.event.FailedIntegrationEventRecord;
 import com.educational.platform.common.event.FailedIntegrationEventRepository;
-import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
+import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +23,7 @@ import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,19 +35,19 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * Additional Spring Retry edge-case integration tests for {@link UserCreatedIntegrationEventHandler}.
- * Covers exception transition scenarios and deep exception hierarchy subclasses
- * that complement the base {@link UserCreatedRetryIntegrationTest}.
+ * Additional Spring Retry edge-case integration tests for {@link SendCourseToApproveIntegrationEventHandler}.
+ * Covers exception transition scenarios (retryable -> non-retryable on subsequent attempts)
+ * and deep exception hierarchy subclasses that complement the base {@link SendCourseToApproveRetryIntegrationTest}.
  */
 @ExtendWith(SpringExtension.class)
-@ContextConfiguration(classes = UserCreatedRetryEdgeCaseTest.RetryTestConfig.class)
-class UserCreatedRetryEdgeCaseTest {
+@ContextConfiguration(classes = SendCourseToApproveRetryEdgeCaseTest.RetryTestConfig.class)
+class SendCourseToApproveRetryEdgeCaseTest {
 
     @Autowired
-    private UserCreatedIntegrationEventHandler handler;
+    private SendCourseToApproveIntegrationEventHandler handler;
 
     @Autowired
-    private CreateTeacherCommandHandler commandHandler;
+    private CreateCourseProposalCommandHandler commandHandler;
 
     @Autowired
     private FailedIntegrationEventRepository failedEventRepository;
@@ -63,7 +64,8 @@ class UserCreatedRetryEdgeCaseTest {
     @Test
     void retryable_retryableExceptionThenNonRetryable_stopsRetryAndPropagates() {
         // given - first attempt throws retryable, second throws non-retryable
-        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
         doAnswer(invocation -> {
             int count = invocationCounter.incrementAndGet();
             if (count == 1) {
@@ -73,9 +75,8 @@ class UserCreatedRetryEdgeCaseTest {
         }).when(commandHandler).handle(any());
 
         // when / then - Spring Retry retries after first (retryable) exception,
-        // but second (non-retryable) exception exhausts retry; @Recover only matches
-        // TransientDataAccessException so ExhaustedRetryException wraps the original
-        assertThatThrownBy(() -> handler.handleUserCreatedEvent(event))
+        // but second (non-retryable) has no matching @Recover, so wraps in ExhaustedRetryException
+        assertThatThrownBy(() -> handler.handleSendCourseToApproveEvent(event))
                 .isInstanceOf(ExhaustedRetryException.class)
                 .hasCauseInstanceOf(IllegalArgumentException.class);
 
@@ -86,7 +87,8 @@ class UserCreatedRetryEdgeCaseTest {
     @Test
     void retryable_retryableExceptionsThenNonRetryableOnLastAttempt_propagatesWithoutRecover() {
         // given - two retryable exceptions, then non-retryable on final attempt
-        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user2", "user2@example.com");
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
         doAnswer(invocation -> {
             int count = invocationCounter.incrementAndGet();
             if (count <= 2) {
@@ -95,9 +97,8 @@ class UserCreatedRetryEdgeCaseTest {
             throw new NullPointerException("unexpected null on final attempt");
         }).when(commandHandler).handle(any());
 
-        // when / then - all 3 attempts used; last throws non-retryable, so @Recover is NOT invoked;
-        // ExhaustedRetryException wraps the non-retryable exception
-        assertThatThrownBy(() -> handler.handleUserCreatedEvent(event))
+        // when / then - all 3 attempts used; last throws non-retryable, no matching @Recover
+        assertThatThrownBy(() -> handler.handleSendCourseToApproveEvent(event))
                 .isInstanceOf(ExhaustedRetryException.class)
                 .hasCauseInstanceOf(NullPointerException.class);
 
@@ -108,14 +109,15 @@ class UserCreatedRetryEdgeCaseTest {
     @Test
     void retryable_cannotAcquireLockException_retriesAndRecovers() {
         // given - CannotAcquireLockException extends PessimisticLockingFailureException
-        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user3", "user3@example.com");
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
         doAnswer(invocation -> {
             invocationCounter.incrementAndGet();
             throw new CannotAcquireLockException("lock wait timeout exceeded");
         }).when(commandHandler).handle(any());
 
         // when
-        handler.handleUserCreatedEvent(event);
+        handler.handleSendCourseToApproveEvent(event);
 
         // then
         assertThat(invocationCounter.get()).isEqualTo(3);
@@ -127,34 +129,37 @@ class UserCreatedRetryEdgeCaseTest {
     @Test
     void retryable_deadlockLoserException_retriesAndRecovers() {
         // given - DeadlockLoserDataAccessException extends PessimisticLockingFailureException
-        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user4", "user4@example.com");
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440004");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
         doAnswer(invocation -> {
             invocationCounter.incrementAndGet();
             throw new DeadlockLoserDataAccessException("deadlock victim", null);
         }).when(commandHandler).handle(any());
 
         // when
-        handler.handleUserCreatedEvent(event);
+        handler.handleSendCourseToApproveEvent(event);
 
         // then
         assertThat(invocationCounter.get()).isEqualTo(3);
         var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
         verify(failedEventRepository).save(captor.capture());
         assertThat(captor.getValue().getExceptionMessage()).isEqualTo("deadlock victim");
-        assertThat(captor.getValue().getEventClassName()).isEqualTo(UserCreatedIntegrationEvent.class.getName());
+        assertThat(captor.getValue().getEventClassName())
+                .isEqualTo(SendCourseToApproveIntegrationEvent.class.getName());
     }
 
     @Test
     void retryable_nonRetryableDataIntegrityViolation_neverRetries() {
         // given - DataIntegrityViolationException is NOT in retryFor list
-        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user5", "user5@example.com");
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440005");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
         doAnswer(invocation -> {
             invocationCounter.incrementAndGet();
-            throw new DataIntegrityViolationException("unique constraint violation on username");
+            throw new DataIntegrityViolationException("unique constraint violation");
         }).when(commandHandler).handle(any());
 
         // when / then - non-retryable wraps in ExhaustedRetryException
-        assertThatThrownBy(() -> handler.handleUserCreatedEvent(event))
+        assertThatThrownBy(() -> handler.handleSendCourseToApproveEvent(event))
                 .isInstanceOf(ExhaustedRetryException.class)
                 .hasCauseInstanceOf(DataIntegrityViolationException.class);
         assertThat(invocationCounter.get()).isEqualTo(1);
@@ -164,14 +169,15 @@ class UserCreatedRetryEdgeCaseTest {
     @Test
     void retryable_deadlockLoserWithNullMessage_recoversUsingClassName() {
         // given - DeadlockLoserDataAccessException with null message
-        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user6", "user6@example.com");
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440006");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
         doAnswer(invocation -> {
             invocationCounter.incrementAndGet();
             throw new DeadlockLoserDataAccessException(null, null);
         }).when(commandHandler).handle(any());
 
         // when
-        handler.handleUserCreatedEvent(event);
+        handler.handleSendCourseToApproveEvent(event);
 
         // then - null message falls back to class name
         var captor = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
@@ -183,7 +189,8 @@ class UserCreatedRetryEdgeCaseTest {
     @Test
     void retryable_retryableOnFirstTwoThenDataIntegrityOnThird_propagatesWithoutRecover() {
         // given - retryable exceptions followed by a different non-retryable DataAccessException
-        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("user7", "user7@example.com");
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440007");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
         doAnswer(invocation -> {
             int count = invocationCounter.incrementAndGet();
             if (count == 1) throw new PessimisticLockingFailureException("lock on first");
@@ -191,12 +198,8 @@ class UserCreatedRetryEdgeCaseTest {
             throw new DataIntegrityViolationException("constraint on third");
         }).when(commandHandler).handle(any());
 
-<<<<<<< HEAD
-        // when / then - ExhaustedRetryException wraps the non-retryable exception
-=======
         // when / then - DataIntegrityViolationException is not retryable, no matching @Recover
->>>>>>> 581ef759 (Add retry edge case tests and fix broken test assertions)
-        assertThatThrownBy(() -> handler.handleUserCreatedEvent(event))
+        assertThatThrownBy(() -> handler.handleSendCourseToApproveEvent(event))
                 .isInstanceOf(ExhaustedRetryException.class)
                 .hasCauseInstanceOf(DataIntegrityViolationException.class);
 
@@ -214,8 +217,8 @@ class UserCreatedRetryEdgeCaseTest {
         }
 
         @Bean
-        CreateTeacherCommandHandler createTeacherCommandHandler() {
-            return mock(CreateTeacherCommandHandler.class);
+        CreateCourseProposalCommandHandler createCourseProposalCommandHandler() {
+            return mock(CreateCourseProposalCommandHandler.class);
         }
 
         @Bean
@@ -224,10 +227,10 @@ class UserCreatedRetryEdgeCaseTest {
         }
 
         @Bean
-        UserCreatedIntegrationEventHandler userCreatedIntegrationEventHandler(
-                CreateTeacherCommandHandler commandHandler,
+        SendCourseToApproveIntegrationEventHandler sendCourseToApproveIntegrationEventHandler(
+                CreateCourseProposalCommandHandler commandHandler,
                 FailedIntegrationEventRepository repository) {
-            return new UserCreatedIntegrationEventHandler(commandHandler, repository);
+            return new SendCourseToApproveIntegrationEventHandler(commandHandler, repository);
         }
     }
 }
