@@ -795,5 +795,79 @@ class AsyncConfigTest {
         assertThat(java.lang.reflect.Modifier.isProtected(modifiers)).isFalse();
     }
 
+    @Test
+    void getAsyncExecutor_usesLinkedBlockingQueue() {
+        // LinkedBlockingQueue preserves task submission order (FIFO) for integration events
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        assertThat(executor.getThreadPoolExecutor().getQueue())
+                .isInstanceOf(java.util.concurrent.LinkedBlockingQueue.class);
+    }
+
+    @Test
+    void getAsyncExecutor_threadsAreNotDaemon() throws Exception {
+        // Non-daemon threads prevent JVM from terminating while tasks are in-flight
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+        var isDaemon = new java.util.concurrent.atomic.AtomicBoolean(true);
+
+        executor.submit(() -> isDaemon.set(Thread.currentThread().isDaemon()))
+                .get(5, java.util.concurrent.TimeUnit.SECONDS);
+
+        assertThat(isDaemon.get())
+                .as("Integration event threads must be non-daemon for graceful shutdown")
+                .isFalse();
+    }
+
+    @Test
+    void getAsyncExecutor_taskDecoratorIsNull() throws Exception {
+        // No task decorator configured - tasks run without wrapping
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        java.lang.reflect.Field field = ThreadPoolTaskExecutor.class.getDeclaredField("taskDecorator");
+        field.setAccessible(true);
+        Object taskDecorator = field.get(executor);
+
+        assertThat(taskDecorator)
+                .as("No task decorator should be configured (MDC propagation not required)")
+                .isNull();
+    }
+
+    @Test
+    void getAsyncExecutor_completedTaskCountIsZeroInitially() {
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        assertThat(executor.getThreadPoolExecutor().getCompletedTaskCount())
+                .as("No tasks should have completed on a fresh executor")
+                .isZero();
+    }
+
+    @Test
+    void getAsyncExecutor_queueIsEmptyInitially() {
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        assertThat(executor.getThreadPoolExecutor().getQueue())
+                .as("Queue should be empty on a fresh executor")
+                .isEmpty();
+    }
+
+    @Test
+    void enableAsync_proxyTargetClassIsDefault() {
+        EnableAsync enableAsync = AsyncConfig.class.getAnnotation(EnableAsync.class);
+
+        assertThat(enableAsync.proxyTargetClass())
+                .as("proxyTargetClass should be default (false) for interface-based proxying")
+                .isFalse();
+    }
+
+    @Test
+    void getAsyncExecutor_poolSizeValues_formValidConfiguration() {
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        // Valid configuration requires: corePoolSize > 0 && maxPoolSize >= corePoolSize && queueCapacity >= 0
+        assertThat(executor.getCorePoolSize()).isGreaterThan(0);
+        assertThat(executor.getMaxPoolSize()).isGreaterThanOrEqualTo(executor.getCorePoolSize());
+        assertThat(executor.getQueueCapacity()).isGreaterThanOrEqualTo(0);
+    }
+
 }
 

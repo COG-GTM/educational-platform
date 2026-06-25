@@ -7,6 +7,7 @@ import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
@@ -594,12 +595,62 @@ class IntegrationEventRetryHandlerTest {
     }
 
     @Test
+    void isRetryable_doesNotInspectCauseChain_onlyChecksTopLevelType() {
+        // given - a non-retryable wrapper around a retryable cause
+        final Throwable retryableCause = new OptimisticLockingFailureException("inner lock");
+        final Throwable nonRetryableWrapper = new IllegalStateException("wrapper", retryableCause);
+
+        // then - only the top-level exception type is evaluated
+        assertThat(IntegrationEventRetryHandler.isRetryable(nonRetryableWrapper)).isFalse();
+    }
+
+    @Test
+    void isRetryable_retryableWrapperAroundNonRetryableCause_returnsTrue() {
+        // given - a retryable wrapper around a non-retryable cause
+        final Throwable nonRetryableCause = new IllegalArgumentException("bad input");
+        final Throwable retryableWrapper = new OptimisticLockingFailureException("lock", nonRetryableCause);
+
+        // then - only the top-level exception type matters
+        assertThat(IntegrationEventRetryHandler.isRetryable(retryableWrapper)).isTrue();
+    }
+
+    @Test
+    void retryableExceptions_arrayReferenceIsFinal() throws NoSuchFieldException {
+        java.lang.reflect.Field field = IntegrationEventRetryHandler.class.getDeclaredField("RETRYABLE_EXCEPTIONS");
+
+        assertThat(java.lang.reflect.Modifier.isFinal(field.getModifiers()))
+                .as("RETRYABLE_EXCEPTIONS array reference must be final")
+                .isTrue();
+    }
+
+    @Test
     void retryableExceptions_allEntriesAreDistinctTypes() {
         Class<?>[] exceptions = IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS;
         long distinctCount = java.util.Arrays.stream(exceptions).distinct().count();
         assertThat(distinctCount)
                 .as("All retryable exception types should be distinct")
                 .isEqualTo(exceptions.length);
+    }
+
+    @Test
+    void retryableExceptions_allEntriesAreExceptionClasses() {
+        for (Class<?> exClass : IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS) {
+            assertThat(Throwable.class.isAssignableFrom(exClass))
+                    .as("%s must be a Throwable subclass", exClass.getSimpleName())
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void class_hasNoPublicConstructors() {
+        var constructors = IntegrationEventRetryHandler.class.getDeclaredConstructors();
+        for (var constructor : constructors) {
+            if (constructor.getParameterCount() == 0) {
+                assertThat(java.lang.reflect.Modifier.isPublic(constructor.getModifiers()))
+                        .as("Default constructor should be public for Spring DI")
+                        .isTrue();
+            }
+        }
     }
 
 }

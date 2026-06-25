@@ -920,5 +920,124 @@ class FailedIntegrationEventRecordTest {
         }
     }
 
+    @Test
+    void getId_beforePersistence_returnsNull() {
+        // JPA assigns ID only after persist/flush; before that, id is null
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+
+        assertThat(record.getId()).isNull();
+    }
+
+    @Test
+    void resolve_doesNotAffectTimestamp() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+        final Instant originalTimestamp = record.getTimestamp();
+
+        // when
+        record.resolve();
+
+        // then
+        assertThat(record.getTimestamp()).isEqualTo(originalTimestamp);
+    }
+
+    @Test
+    void resolve_doesNotAffectRetryCount() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 5);
+
+        // when
+        record.resolve();
+
+        // then
+        assertThat(record.getRetryCount()).isEqualTo(5);
+    }
+
+    @Test
+    void resolve_doesNotAffectEventClassName() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.SpecificEvent", "payload", "error", 3);
+
+        // when
+        record.resolve();
+
+        // then
+        assertThat(record.getEventClassName()).isEqualTo("com.example.SpecificEvent");
+    }
+
+    @Test
+    void resolve_doesNotAffectEventPayload() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "original-payload", "error", 3);
+
+        // when
+        record.resolve();
+
+        // then
+        assertThat(record.getEventPayload()).isEqualTo("original-payload");
+    }
+
+    @Test
+    void resolve_doesNotAffectExceptionMessage() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "original-error-message", 3);
+
+        // when
+        record.resolve();
+
+        // then
+        assertThat(record.getExceptionMessage()).isEqualTo("original-error-message");
+    }
+
+    @Test
+    void constructor_withIntMaxValueRetryCount_setsRetryCount() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", Integer.MAX_VALUE);
+
+        // then
+        assertThat(record.getRetryCount()).isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
+    void class_hasProtectedNoArgConstructor() throws NoSuchMethodException {
+        // JPA requires a no-arg constructor; it should be protected (not public) to prevent misuse
+        Constructor<?> noArgConstructor = FailedIntegrationEventRecord.class.getDeclaredConstructor();
+
+        assertThat(Modifier.isProtected(noArgConstructor.getModifiers()))
+                .as("No-arg constructor should be protected for JPA-only use")
+                .isTrue();
+    }
+
+    @Test
+    void constructor_timestampIsBetweenBeforeAndAfterConstruction() {
+        // given
+        final Instant before = Instant.now();
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+
+        // then
+        final Instant after = Instant.now();
+        assertThat(record.getTimestamp())
+                .isAfterOrEqualTo(before)
+                .isBeforeOrEqualTo(after);
+    }
+
+    @Test
+    void failedEventStatus_valueOf_returnsCorrectConstants() {
+        assertThat(FailedIntegrationEventRecord.FailedEventStatus.valueOf("FAILED"))
+                .isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+        assertThat(FailedIntegrationEventRecord.FailedEventStatus.valueOf("RESOLVED"))
+                .isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.RESOLVED);
+    }
+
 }
 

@@ -18,6 +18,7 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
+import org.slf4j.Logger;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.lang.reflect.Method;
@@ -614,6 +615,104 @@ class IntegrationEventHandlerContractTest {
                 .as("%s @Async should use default executor (empty value)",
                         handlerClass.getSimpleName())
                 .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_handlerMethodDoesNotHaveRecoverAnnotation(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.isAnnotationPresent(Recover.class))
+                .as("%s @EventListener method must not have @Recover",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableMaxAttemptsExpressionIsEmpty(Class<?> handlerClass) {
+        // maxAttemptsExpression must be empty to prevent SpEL-based override of maxAttempts literal
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.maxAttemptsExpression())
+                .as("%s @Retryable.maxAttemptsExpression should be empty (no SpEL override)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_haveStaticFinalLoggerField(Class<?> handlerClass) {
+        // Logger must be static final for thread-safety in @Async handlers
+        boolean hasStaticFinalLogger = Arrays.stream(handlerClass.getDeclaredFields())
+                .filter(f -> f.getType() == Logger.class)
+                .anyMatch(f -> Modifier.isStatic(f.getModifiers()) && Modifier.isFinal(f.getModifiers()));
+
+        assertThat(hasStaticFinalLogger)
+                .as("%s must have a static final Logger for thread-safety in async context",
+                        handlerClass.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffDelayExpressionIsEmpty(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().delayExpression())
+                .as("%s @Backoff.delayExpression should be empty (no externalized config)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffMultiplierExpressionIsEmpty(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.backoff().multiplierExpression())
+                .as("%s @Backoff.multiplierExpression should be empty (no externalized config)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerMethodNameStartsWithHandle(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.getName())
+                .as("%s @EventListener method should follow 'handle...' naming convention",
+                        handlerClass.getSimpleName())
+                .startsWith("handle");
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_eventListenerParameterIsARecord(Class<?> handlerClass) {
+        // Integration events are Java records for immutability and automatic toString
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Class<?> eventType = handlerMethod.getParameterTypes()[0];
+
+        assertThat(eventType.isRecord())
+                .as("%s event parameter %s must be a Java record",
+                        handlerClass.getSimpleName(), eventType.getSimpleName())
+                .isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodDoesNotHaveAsyncAnnotation(Class<?> handlerClass) {
+        // @Recover already runs in the async thread; adding @Async would cause double-dispatch
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.isAnnotationPresent(Async.class))
+                .as("%s @Recover must not have @Async (already runs in async context)",
+                        handlerClass.getSimpleName())
+                .isFalse();
     }
 
     private Method findEventListenerMethod(Class<?> handlerClass) {
