@@ -1145,4 +1145,80 @@ class UserCreatedIntegrationEventHandlerTest {
                 .hasMessage("unexpected DB failure");
     }
 
+    @Test
+    void handleUserCreatedEvent_withNullEmail_passesCorrectUsernameToCommand() {
+        // given - email is not used by the handler, but null email should not break processing
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("validuser", null);
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("username", "validuser");
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void recover_withNullEmail_eventPayloadStillPersisted() {
+        // given - null email should not prevent dead-letter persistence
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", null);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("lock error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord record = argument.getValue();
+        assertThat(record.getEventPayload()).contains("testuser");
+        assertThat(record.getEventPayload()).contains("null");
+        assertThat(record.getExceptionMessage()).isEqualTo("lock error");
+        assertThat(record.getRetryCount()).isEqualTo(3);
+    }
+
+    @Test
+    void recover_eventPayloadContainsEmailForDiagnostics() {
+        // given - email should be captured in payload for dead-letter investigation
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("johndoe", "john@example.com");
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventPayload()).contains("john@example.com");
+    }
+
+    @Test
+    void handleUserCreatedEvent_withNullEmail_exceptionStillRethrown() {
+        // given - null email should not interfere with exception handling
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", null);
+        doThrow(new OptimisticLockingFailureException("lock conflict"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(OptimisticLockingFailureException.class)
+                .hasMessage("lock conflict");
+    }
+
+    @Test
+    void handleUserCreatedEvent_withEmptyEmail_passesCorrectUsernameToCommand() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "");
+
+        // when
+        sut.handleUserCreatedEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("username", "testuser");
+    }
+
 }

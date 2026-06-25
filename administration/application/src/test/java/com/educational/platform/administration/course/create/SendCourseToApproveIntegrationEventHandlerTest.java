@@ -1063,4 +1063,50 @@ class SendCourseToApproveIntegrationEventHandlerTest {
                 .hasMessage("unexpected DB failure");
     }
 
+    @Test
+    void handleSendCourseToApproveEvent_withNullCourseId_commandStillExecuted() {
+        // given - null courseId should not prevent handler execution
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(null);
+
+        // when
+        sut.handleSendCourseToApproveEvent(event);
+
+        // then
+        final ArgumentCaptor<CreateCourseProposalCommand> argument = ArgumentCaptor.forClass(CreateCourseProposalCommand.class);
+        verify(createCourseProposalCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("uuid", null);
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void recover_withNullCourseId_eventPayloadStillPersisted() {
+        // given - null courseId should not prevent dead-letter persistence
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(null);
+        final QueryTimeoutException exception = new QueryTimeoutException("connection timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord record = argument.getValue();
+        assertThat(record.getEventPayload()).contains("null");
+        assertThat(record.getExceptionMessage()).isEqualTo("connection timeout");
+        assertThat(record.getRetryCount()).isEqualTo(3);
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_withNullCourseId_exceptionStillRethrown() {
+        // given - null courseId should not interfere with exception handling
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(null);
+        doThrow(new OptimisticLockingFailureException("optimistic lock"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event))
+                .isInstanceOf(OptimisticLockingFailureException.class)
+                .hasMessage("optimistic lock");
+    }
+
 }

@@ -682,5 +682,59 @@ class IntegrationEventRetryHandlerTest {
         assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isFalse();
     }
 
+    @Test
+    void retryableExceptions_containsNoDuplicateEntries() {
+        // then
+        assertThat(IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS)
+                .doesNotHaveDuplicates();
+    }
+
+    @Test
+    void retryableExceptions_containsNoNullEntries() {
+        // then
+        assertThat(IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS)
+                .doesNotContainNull();
+    }
+
+    @Test
+    void isRetryable_concurrencyFailureException_returnsTrue() {
+        // ConcurrencyFailureException is a direct subclass of TransientDataAccessException
+        // and parent of both OptimisticLocking and PessimisticLocking exceptions
+        // given
+        final Throwable exception = new ConcurrencyFailureException("concurrency conflict");
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
+    }
+
+    @Test
+    void isRetryable_deadlockLoserDataAccessException_returnsTrue() {
+        // DeadlockLoserDataAccessException extends PessimisticLockingFailureException
+        // given
+        final Throwable exception = new DeadlockLoserDataAccessException("deadlock detected", null);
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
+    }
+
+    @Test
+    void retryableExceptions_allAreDataAccessExceptionSubclasses() {
+        // Verifies all configured retryable exceptions are proper DataAccessException subtypes
+        for (Class<?> exceptionType : IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS) {
+            assertThat(DataAccessException.class)
+                    .as("%s should be a DataAccessException subclass", exceptionType.getSimpleName())
+                    .isAssignableFrom(exceptionType);
+        }
+    }
+
+    @Test
+    void isRetryable_anonymousTransientDataAccessSubclass_returnsTrue() {
+        // given - anonymous subclass simulating a custom transient exception
+        final Throwable exception = new TransientDataAccessException("custom transient") {};
+
+        // then
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
+    }
+
 }
 

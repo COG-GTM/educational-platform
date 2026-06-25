@@ -1271,4 +1271,102 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
                 .hasMessage("unexpected DB failure");
     }
 
+    @Test
+    void recover_withNegativeInfinityRating_eventPayloadContainsNegativeInfinity() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.NEGATIVE_INFINITY);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventPayload()).contains("-Infinity");
+    }
+
+    @Test
+    void recover_withMinValueRating_eventPayloadContainsSmallestPositiveValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.MIN_VALUE);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventPayload()).contains(String.valueOf(Double.MIN_VALUE));
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_withMaxValueRating_passesValueThrough() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.MAX_VALUE);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("rating", Double.MAX_VALUE);
+    }
+
+    @Test
+    void recover_withMaxValueRating_eventPayloadContainsMaxValue() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(uuid, Double.MAX_VALUE);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventPayload()).contains(String.valueOf(Double.MAX_VALUE));
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_withNullCourseId_commandStillExecuted() {
+        // given - null courseId should not prevent handler execution
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(null, 4.0);
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event);
+
+        // then
+        final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
+        verify(updateCourseRatingCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("uuid", null)
+                .hasFieldOrPropertyWithValue("rating", 4.0);
+    }
+
+    @Test
+    void recover_withNullCourseId_eventPayloadStillPersisted() {
+        // given - null courseId should not prevent dead-letter persistence
+        final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(null, 4.0);
+        final QueryTimeoutException exception = new QueryTimeoutException("timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord record = argument.getValue();
+        assertThat(record.getEventPayload()).contains("null");
+        assertThat(record.getEventPayload()).contains("4.0");
+        assertThat(record.getExceptionMessage()).isEqualTo("timeout");
+    }
+
 }

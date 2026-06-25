@@ -1058,4 +1058,50 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
                 .hasMessage("unexpected DB failure");
     }
 
+    @Test
+    void handleCourseApprovedByAdminEvent_withNullCourseId_commandStillExecuted() {
+        // given - null courseId should not prevent handler execution
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(null);
+
+        // when
+        sut.handleCourseApprovedByAdminEvent(event);
+
+        // then
+        final ArgumentCaptor<ApproveCourseCommand> argument = ArgumentCaptor.forClass(ApproveCourseCommand.class);
+        verify(approveCourseCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("uuid", null);
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void recover_withNullCourseId_eventPayloadStillPersisted() {
+        // given - null courseId should not prevent dead-letter persistence
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(null);
+        final QueryTimeoutException exception = new QueryTimeoutException("connection timeout");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord record = argument.getValue();
+        assertThat(record.getEventPayload()).contains("null");
+        assertThat(record.getExceptionMessage()).isEqualTo("connection timeout");
+        assertThat(record.getRetryCount()).isEqualTo(3);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_withNullCourseId_exceptionStillRethrown() {
+        // given - null courseId should not interfere with exception handling
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(null);
+        doThrow(new PessimisticLockingFailureException("lock contention"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event))
+                .isInstanceOf(PessimisticLockingFailureException.class)
+                .hasMessage("lock contention");
+    }
+
 }

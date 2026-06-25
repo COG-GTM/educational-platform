@@ -1095,4 +1095,70 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
                 .hasMessage("unexpected DB failure");
     }
 
+    @Test
+    void handleStudentEnrolledToCourseEvent_withNullUsername_passesOnlyCourseIdToCommand() {
+        // given - username is not used by the handler, only courseId is passed to the command
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, null);
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> argument = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("uuid", uuid);
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void recover_withNullUsername_eventPayloadStillPersisted() {
+        // given - null username in the event should not prevent dead-letter persistence
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, null);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("lock error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord record = argument.getValue();
+        assertThat(record.getEventPayload()).contains("123e4567-e89b-12d3-a456-426655440001");
+        assertThat(record.getEventPayload()).contains("null");
+        assertThat(record.getExceptionMessage()).isEqualTo("lock error");
+        assertThat(record.getRetryCount()).isEqualTo(3);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_withNullUsername_exceptionStillRethrown() {
+        // given - null username should not interfere with exception handling
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, null);
+        doThrow(new PessimisticLockingFailureException("deadlock"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event))
+                .isInstanceOf(PessimisticLockingFailureException.class)
+                .hasMessage("deadlock");
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_withEmptyUsername_passesOnlyCourseIdToCommand() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "");
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> argument = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("uuid", uuid);
+        verifyNoInteractions(failedEventRepository);
+    }
+
 }

@@ -1186,5 +1186,84 @@ class FailedIntegrationEventRecordTest {
         assertThat(generatedValue.strategy()).isEqualTo(jakarta.persistence.GenerationType.IDENTITY);
     }
 
+    @Test
+    void constructor_withIntMaxValueRetryCount_setsRetryCount() {
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", Integer.MAX_VALUE);
+
+        // then
+        assertThat(record.getRetryCount()).isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
+    void resolve_preservesTimestampExactly() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+        final Instant originalTimestamp = record.getTimestamp();
+
+        // when
+        record.resolve();
+
+        // then - timestamp must remain unchanged after resolve
+        assertThat(record.getTimestamp()).isEqualTo(originalTimestamp);
+    }
+
+    @Test
+    void resolve_preservesRetryCountExactly() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 5);
+
+        // when
+        record.resolve();
+
+        // then - retry count must remain unchanged after resolve
+        assertThat(record.getRetryCount()).isEqualTo(5);
+    }
+
+    @Test
+    void resolve_preservesEventClassNameExactly() {
+        // given
+        final String className = "com.example.SpecificEvent";
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                className, "payload", "error", 3);
+
+        // when
+        record.resolve();
+
+        // then
+        assertThat(record.getEventClassName()).isEqualTo(className);
+    }
+
+    @Test
+    void resolve_preservesExceptionMessageExactly() {
+        // given
+        final String message = "specific error message for verification";
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", message, 3);
+
+        // when
+        record.resolve();
+
+        // then
+        assertThat(record.getExceptionMessage()).isEqualTo(message);
+    }
+
+    @Test
+    void constructor_withVeryLargePayload_setsFieldWithoutLoss() {
+        // given - simulates a large event toString() that may exceed typical column constraints
+        final String largePayload = "EventRecord[" + "x".repeat(5000) + "]";
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", largePayload, "error", 3);
+
+        // then - entity does not truncate; DB constraint enforcement is separate
+        assertThat(record.getEventPayload()).hasSize(largePayload.length());
+        assertThat(record.getEventPayload()).startsWith("EventRecord[");
+    }
+
 }
 
