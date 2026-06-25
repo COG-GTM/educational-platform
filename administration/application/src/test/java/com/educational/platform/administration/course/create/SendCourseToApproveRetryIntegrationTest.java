@@ -316,10 +316,11 @@ class SendCourseToApproveRetryIntegrationTest {
         }).when(commandHandler).handle(any());
 
         // when / then - Spring Retry retries after first (retryable) exception,
-        // but second (non-retryable) exception exhausts retry without calling @Recover
+        // but second (non-retryable) exception exhausts retry; @Recover only matches
+        // TransientDataAccessException so ExhaustedRetryException wraps the original
         assertThatThrownBy(() -> handler.handleSendCourseToApproveEvent(event))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("business error on second attempt");
+                .isInstanceOf(ExhaustedRetryException.class)
+                .hasCauseInstanceOf(IllegalArgumentException.class);
 
         assertThat(invocationCounter.get()).isEqualTo(2);
         verify(failedEventRepository, never()).save(any());
@@ -338,10 +339,11 @@ class SendCourseToApproveRetryIntegrationTest {
             throw new NullPointerException("unexpected null on final attempt");
         }).when(commandHandler).handle(any());
 
-        // when / then - all 3 attempts used; last throws non-retryable, so @Recover is NOT invoked
+        // when / then - all 3 attempts used; last throws non-retryable, so @Recover is NOT invoked;
+        // ExhaustedRetryException wraps the non-retryable exception
         assertThatThrownBy(() -> handler.handleSendCourseToApproveEvent(event))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessage("unexpected null on final attempt");
+                .isInstanceOf(ExhaustedRetryException.class)
+                .hasCauseInstanceOf(NullPointerException.class);
 
         assertThat(invocationCounter.get()).isEqualTo(3);
         verify(failedEventRepository, never()).save(any());

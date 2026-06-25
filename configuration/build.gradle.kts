@@ -36,6 +36,9 @@ dependencies {
     testImplementation("org.mockito", "mockito-junit-jupiter", libs.versions.mockito.get())
     testImplementation("org.assertj", "assertj-core", libs.versions.assertj.get())
     testImplementation("org.springframework", "spring-tx")
+    testImplementation("org.springframework", "spring-test")
+    testImplementation("jakarta.persistence", "jakarta.persistence-api")
+    testImplementation("org.springframework.data", "spring-data-jpa")
     testImplementation("com.tngtech.archunit", "archunit-junit5", libs.versions.archunit.get())
 }
 

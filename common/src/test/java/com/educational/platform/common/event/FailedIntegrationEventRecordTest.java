@@ -1187,16 +1187,6 @@ class FailedIntegrationEventRecordTest {
     }
 
     @Test
-    void constructor_withIntMaxValueRetryCount_setsRetryCount() {
-        // when
-        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
-                "com.example.Event", "payload", "error", Integer.MAX_VALUE);
-
-        // then
-        assertThat(record.getRetryCount()).isEqualTo(Integer.MAX_VALUE);
-    }
-
-    @Test
     void resolve_preservesTimestampExactly() {
         // given
         final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(

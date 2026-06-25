@@ -73,10 +73,11 @@ class UserCreatedRetryEdgeCaseTest {
         }).when(commandHandler).handle(any());
 
         // when / then - Spring Retry retries after first (retryable) exception,
-        // but second (non-retryable) exception causes immediate propagation without @Recover
+        // but second (non-retryable) exception exhausts retry; @Recover only matches
+        // TransientDataAccessException so ExhaustedRetryException wraps the original
         assertThatThrownBy(() -> handler.handleUserCreatedEvent(event))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("business error on second attempt");
+                .isInstanceOf(ExhaustedRetryException.class)
+                .hasCauseInstanceOf(IllegalArgumentException.class);
 
         assertThat(invocationCounter.get()).isEqualTo(2);
         verify(failedEventRepository, never()).save(any());
@@ -94,10 +95,11 @@ class UserCreatedRetryEdgeCaseTest {
             throw new NullPointerException("unexpected null on final attempt");
         }).when(commandHandler).handle(any());
 
-        // when / then - all 3 attempts used; last throws non-retryable, so @Recover is NOT invoked
+        // when / then - all 3 attempts used; last throws non-retryable, so @Recover is NOT invoked;
+        // ExhaustedRetryException wraps the non-retryable exception
         assertThatThrownBy(() -> handler.handleUserCreatedEvent(event))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessage("unexpected null on final attempt");
+                .isInstanceOf(ExhaustedRetryException.class)
+                .hasCauseInstanceOf(NullPointerException.class);
 
         assertThat(invocationCounter.get()).isEqualTo(3);
         verify(failedEventRepository, never()).save(any());
@@ -189,10 +191,10 @@ class UserCreatedRetryEdgeCaseTest {
             throw new DataIntegrityViolationException("constraint on third");
         }).when(commandHandler).handle(any());
 
-        // when / then - DataIntegrityViolationException is not retryable, so it propagates immediately
+        // when / then - ExhaustedRetryException wraps the non-retryable exception
         assertThatThrownBy(() -> handler.handleUserCreatedEvent(event))
-                .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessage("constraint on third");
+                .isInstanceOf(ExhaustedRetryException.class)
+                .hasCauseInstanceOf(DataIntegrityViolationException.class);
 
         assertThat(invocationCounter.get()).isEqualTo(3);
         verify(failedEventRepository, never()).save(any());

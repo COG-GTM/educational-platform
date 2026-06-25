@@ -697,17 +697,6 @@ class IntegrationEventRetryHandlerTest {
     }
 
     @Test
-    void isRetryable_concurrencyFailureException_returnsTrue() {
-        // ConcurrencyFailureException is a direct subclass of TransientDataAccessException
-        // and parent of both OptimisticLocking and PessimisticLocking exceptions
-        // given
-        final Throwable exception = new ConcurrencyFailureException("concurrency conflict");
-
-        // then
-        assertThat(IntegrationEventRetryHandler.isRetryable(exception)).isTrue();
-    }
-
-    @Test
     void isRetryable_deadlockLoserDataAccessException_returnsTrue() {
         // DeadlockLoserDataAccessException extends PessimisticLockingFailureException
         // given

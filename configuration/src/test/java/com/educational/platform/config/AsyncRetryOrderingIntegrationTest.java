@@ -21,6 +21,8 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.aop.framework.AopProxyUtils;
+import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.core.Ordered;
 import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.test.context.ContextConfiguration;
@@ -265,8 +267,8 @@ class AsyncRetryOrderingIntegrationTest {
     }
 
     @Configuration
-    @EnableAsync(order = Ordered.HIGHEST_PRECEDENCE)
-    @EnableRetry(order = Ordered.HIGHEST_PRECEDENCE + 1)
+    @EnableAsync(order = Ordered.HIGHEST_PRECEDENCE + 100, proxyTargetClass = true)
+    @EnableRetry(order = Ordered.HIGHEST_PRECEDENCE + 1, proxyTargetClass = true)
     static class AsyncRetryTestConfig {
 
         @Bean

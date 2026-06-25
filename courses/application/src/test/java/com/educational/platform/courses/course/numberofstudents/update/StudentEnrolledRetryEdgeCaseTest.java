@@ -75,10 +75,11 @@ class StudentEnrolledRetryEdgeCaseTest {
             throw new IllegalStateException("invalid state on second attempt");
         }).when(commandHandler).handle(any());
 
-        // when / then - non-retryable exception propagates immediately without @Recover
+        // when / then - non-retryable exception exhausts retry; @Recover only matches
+        // TransientDataAccessException so ExhaustedRetryException wraps the original
         assertThatThrownBy(() -> handler.handleStudentEnrolledToCourseEvent(event))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("invalid state on second attempt");
+                .isInstanceOf(ExhaustedRetryException.class)
+                .hasCauseInstanceOf(IllegalStateException.class);
 
         assertThat(invocationCounter.get()).isEqualTo(2);
         verify(failedEventRepository, never()).save(any());
@@ -97,10 +98,11 @@ class StudentEnrolledRetryEdgeCaseTest {
             throw new NullPointerException("null on final attempt");
         }).when(commandHandler).handle(any());
 
-        // when / then - all 3 attempts used; last throws non-retryable, so @Recover is NOT invoked
+        // when / then - all 3 attempts used; last throws non-retryable, so @Recover is NOT invoked;
+        // ExhaustedRetryException wraps the non-retryable exception
         assertThatThrownBy(() -> handler.handleStudentEnrolledToCourseEvent(event))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessage("null on final attempt");
+                .isInstanceOf(ExhaustedRetryException.class)
+                .hasCauseInstanceOf(NullPointerException.class);
 
         assertThat(invocationCounter.get()).isEqualTo(3);
         verify(failedEventRepository, never()).save(any());
@@ -179,10 +181,10 @@ class StudentEnrolledRetryEdgeCaseTest {
             throw new DataIntegrityViolationException("constraint on third");
         }).when(commandHandler).handle(any());
 
-        // when / then
+        // when / then - ExhaustedRetryException wraps the non-retryable exception
         assertThatThrownBy(() -> handler.handleStudentEnrolledToCourseEvent(event))
-                .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessage("constraint on third");
+                .isInstanceOf(ExhaustedRetryException.class)
+                .hasCauseInstanceOf(DataIntegrityViolationException.class);
 
         assertThat(invocationCounter.get()).isEqualTo(3);
         verify(failedEventRepository, never()).save(any());

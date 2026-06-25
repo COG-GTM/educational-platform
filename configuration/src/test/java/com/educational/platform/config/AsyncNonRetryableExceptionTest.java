@@ -17,6 +17,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessException;
+import org.springframework.retry.ExhaustedRetryException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.retry.annotation.Recover;
@@ -164,6 +165,8 @@ class AsyncNonRetryableExceptionTest {
         assertThat(invocationCounter.get()).isEqualTo(2);
         assertThat(uncaughtExceptions).hasSize(1);
         assertThat(uncaughtExceptions.get(0))
+                .isInstanceOf(ExhaustedRetryException.class);
+        assertThat(uncaughtExceptions.get(0).getCause())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("non-retryable second");
         verify(failedEventRepository, never()).save(any());
@@ -239,8 +242,8 @@ class AsyncNonRetryableExceptionTest {
     }
 
     @Configuration
-    @EnableAsync(order = Ordered.HIGHEST_PRECEDENCE)
-    @EnableRetry(order = Ordered.HIGHEST_PRECEDENCE + 1)
+    @EnableAsync(order = Ordered.HIGHEST_PRECEDENCE + 100, proxyTargetClass = true)
+    @EnableRetry(order = Ordered.HIGHEST_PRECEDENCE + 1, proxyTargetClass = true)
     static class TestConfig implements AsyncConfigurer {
 
         // Static holders initialized before AsyncConfigurer methods are invoked
