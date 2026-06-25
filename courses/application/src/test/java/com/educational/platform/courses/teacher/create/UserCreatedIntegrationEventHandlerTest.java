@@ -934,4 +934,26 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
     }
 
+    @Test
+    void handleUserCreatedEvent_successFollowedByException_bothEventsProcessed() {
+        // given
+        final UserCreatedIntegrationEvent event1 = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final UserCreatedIntegrationEvent event2 = new UserCreatedIntegrationEvent("user2", "user2@example.com");
+
+        org.mockito.Mockito.doNothing()
+                .doThrow(new OptimisticLockingFailureException("lock on second"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when - first event succeeds
+        sut.handleUserCreatedEvent(event1);
+
+        // second event fails
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event2))
+                .isInstanceOf(OptimisticLockingFailureException.class);
+
+        // then
+        verify(createTeacherCommandHandler, times(2)).handle(any());
+        verifyNoInteractions(failedEventRepository);
+    }
+
 }

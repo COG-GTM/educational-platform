@@ -741,5 +741,66 @@ class AsyncConfigTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    void getAsyncExecutor_allowCoreThreadTimeOutIsFalse() {
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        assertThat(executor.getThreadPoolExecutor().allowsCoreThreadTimeOut())
+                .as("Core threads should not time out to maintain baseline concurrency")
+                .isFalse();
+    }
+
+    @Test
+    void getAsyncExecutor_poolSizeRatio_maxIsDoubleCore() {
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        assertThat(executor.getMaxPoolSize())
+                .as("Max pool size should be 2x core pool size")
+                .isEqualTo(executor.getCorePoolSize() * 2);
+    }
+
+    @Test
+    void getAsyncExecutor_awaitTerminationSeconds_isThirty() {
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        assertThat(executor.getThreadPoolExecutor().isTerminating()).isFalse();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withNullParams_logsWithoutThrowing() throws NoSuchMethodException {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        RuntimeException exception = new RuntimeException("test error");
+
+        assertThatCode(() -> handler.handleUncaughtException(exception, method, (Object[]) null))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withMultipleParams_logsWithoutThrowing() throws NoSuchMethodException {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        RuntimeException exception = new RuntimeException("multi-param error");
+
+        assertThatCode(() -> handler.handleUncaughtException(exception, method, "param1", 42, true))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void class_implementsAsyncConfigurer() {
+        assertThat(AsyncConfigurer.class.isAssignableFrom(AsyncConfig.class))
+                .as("AsyncConfig must implement AsyncConfigurer")
+                .isTrue();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_innerClass_isPackagePrivate() {
+        int modifiers = AsyncConfig.IntegrationEventAsyncUncaughtExceptionHandler.class.getModifiers();
+
+        assertThat(java.lang.reflect.Modifier.isPublic(modifiers)).isFalse();
+        assertThat(java.lang.reflect.Modifier.isPrivate(modifiers)).isFalse();
+        assertThat(java.lang.reflect.Modifier.isProtected(modifiers)).isFalse();
+    }
+
 }
 

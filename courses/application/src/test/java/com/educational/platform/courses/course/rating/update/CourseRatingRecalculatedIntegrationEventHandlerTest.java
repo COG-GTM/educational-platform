@@ -1017,4 +1017,28 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
     }
 
+    @Test
+    void handleCourseRatingRecalculatedEvent_successFollowedByException_bothEventsProcessed() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseRatingRecalculatedIntegrationEvent event1 = new CourseRatingRecalculatedIntegrationEvent(uuid1, 4.5);
+        final CourseRatingRecalculatedIntegrationEvent event2 = new CourseRatingRecalculatedIntegrationEvent(uuid2, 3.2);
+
+        org.mockito.Mockito.doNothing()
+                .doThrow(new OptimisticLockingFailureException("lock on second"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when - first event succeeds
+        sut.handleCourseRatingRecalculatedEvent(event1);
+
+        // second event fails
+        assertThatThrownBy(() -> sut.handleCourseRatingRecalculatedEvent(event2))
+                .isInstanceOf(OptimisticLockingFailureException.class);
+
+        // then
+        verify(updateCourseRatingCommandHandler, times(2)).handle(any());
+        verifyNoInteractions(failedEventRepository);
+    }
+
 }

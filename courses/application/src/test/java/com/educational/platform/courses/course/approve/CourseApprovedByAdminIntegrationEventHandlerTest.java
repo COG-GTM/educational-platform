@@ -803,6 +803,23 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_eventClassNameMatchesActualEventClass() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventClassName())
+                .isEqualTo("com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent");
+    }
+
+    @Test
     void handleCourseApprovedByAdminEvent_successFollowedByException_bothEventsProcessed() {
         // given
         final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");

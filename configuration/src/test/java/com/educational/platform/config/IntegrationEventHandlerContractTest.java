@@ -605,6 +605,71 @@ class IntegrationEventHandlerContractTest {
                 .isEmpty();
     }
 
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_classIsNotFinal(Class<?> handlerClass) {
+        assertThat(Modifier.isFinal(handlerClass.getModifiers()))
+                .as("%s must not be final (Spring CGLIB proxying requires non-final classes for @Async/@Retryable)",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_asyncAnnotationValueIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Async async = handlerMethod.getAnnotation(Async.class);
+
+        assertThat(async.value())
+                .as("%s @Async should use default executor (empty value)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableBackoffMaxDelayIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+        Backoff backoff = retryable.backoff();
+
+        assertThat(backoff.maxDelay())
+                .as("%s @Backoff maxDelay should be default (0)",
+                        handlerClass.getSimpleName())
+                .isEqualTo(0);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_handlerMethodDoesNotHaveRecoverAnnotation(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+
+        assertThat(handlerMethod.isAnnotationPresent(Recover.class))
+                .as("%s @EventListener method must not have @Recover",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_recoverMethodDoesNotHaveRetryableAnnotation(Class<?> handlerClass) {
+        Method recoverMethod = findRecoverMethod(handlerClass);
+
+        assertThat(recoverMethod.isAnnotationPresent(Retryable.class))
+                .as("%s @Recover method must not have @Retryable",
+                        handlerClass.getSimpleName())
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_haveExactlyOneConstructor(Class<?> handlerClass) {
+        assertThat(handlerClass.getDeclaredConstructors())
+                .as("%s should have exactly one constructor for Spring dependency injection",
+                        handlerClass.getSimpleName())
+                .hasSize(1);
+    }
+
     private Method findEventListenerMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.isAnnotationPresent(EventListener.class))

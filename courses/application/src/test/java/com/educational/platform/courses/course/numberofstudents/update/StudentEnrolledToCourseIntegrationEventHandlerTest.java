@@ -923,4 +923,28 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(argument.getValue().getEventPayload()).contains("testuser");
     }
 
+    @Test
+    void handleStudentEnrolledToCourseEvent_successFollowedByException_bothEventsProcessed() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final StudentEnrolledToCourseIntegrationEvent event1 = new StudentEnrolledToCourseIntegrationEvent(uuid1, "user1");
+        final StudentEnrolledToCourseIntegrationEvent event2 = new StudentEnrolledToCourseIntegrationEvent(uuid2, "user2");
+
+        org.mockito.Mockito.doNothing()
+                .doThrow(new OptimisticLockingFailureException("lock on second"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when - first event succeeds
+        sut.handleStudentEnrolledToCourseEvent(event1);
+
+        // second event fails
+        assertThatThrownBy(() -> sut.handleStudentEnrolledToCourseEvent(event2))
+                .isInstanceOf(OptimisticLockingFailureException.class);
+
+        // then
+        verify(increaseNumberOfStudentsCommandHandler, times(2)).handle(any());
+        verifyNoInteractions(failedEventRepository);
+    }
+
 }

@@ -786,6 +786,47 @@ class SendCourseToApproveIntegrationEventHandlerTest {
     }
 
     @Test
+    void recover_eventClassNameMatchesActualEventClass() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(uuid);
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("error");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue().getEventClassName())
+                .isEqualTo("com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent");
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_successFollowedByException_bothEventsProcessed() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final SendCourseToApproveIntegrationEvent event1 = new SendCourseToApproveIntegrationEvent(uuid1);
+        final SendCourseToApproveIntegrationEvent event2 = new SendCourseToApproveIntegrationEvent(uuid2);
+
+        org.mockito.Mockito.doNothing()
+                .doThrow(new OptimisticLockingFailureException("lock on second"))
+                .when(createCourseProposalCommandHandler).handle(any());
+
+        // when - first event succeeds
+        sut.handleSendCourseToApproveEvent(event1);
+
+        // second event fails
+        assertThatThrownBy(() -> sut.handleSendCourseToApproveEvent(event2))
+                .isInstanceOf(OptimisticLockingFailureException.class);
+
+        // then
+        verify(createCourseProposalCommandHandler, times(2)).handle(any());
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
     void recover_calledTwiceWithDifferentEvents_savesTwoSeparateRecords() {
         // given
         final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
