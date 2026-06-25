@@ -593,6 +593,18 @@ class IntegrationEventHandlerContractTest {
                 .isEqualTo(com.educational.platform.common.event.FailedIntegrationEventRepository.class);
     }
 
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableListenersIsDefault(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.listeners())
+                .as("%s @Retryable listeners should be empty (no custom retry listener)",
+                        handlerClass.getSimpleName())
+                .isEmpty();
+    }
+
     private Method findEventListenerMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.isAnnotationPresent(EventListener.class))

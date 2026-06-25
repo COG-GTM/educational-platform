@@ -16,10 +16,12 @@ import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessException;
+import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
@@ -867,6 +869,69 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(argument.getAllValues()).hasSize(2);
         assertThat(argument.getAllValues().get(0).getExceptionMessage()).isEqualTo("error 1");
         assertThat(argument.getAllValues().get(1).getExceptionMessage()).isEqualTo("error 2");
+    }
+
+    @Test
+    void handleUserCreatedEvent_deadlockLoserDataAccessException_rethrown() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        doThrow(new DeadlockLoserDataAccessException("deadlock victim", null))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(DeadlockLoserDataAccessException.class)
+                .hasMessage("deadlock victim");
+    }
+
+    @Test
+    void recover_withDeadlockLoserDataAccessException_persistsFailedEvent() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final DeadlockLoserDataAccessException exception = new DeadlockLoserDataAccessException("deadlock victim", null);
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord failedEvent = argument.getValue();
+        assertThat(failedEvent.getExceptionMessage()).isEqualTo("deadlock victim");
+        assertThat(failedEvent.getRetryCount()).isEqualTo(3);
+        assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
+    @Test
+    void handleUserCreatedEvent_transientDataAccessResourceException_rethrown() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        doThrow(new TransientDataAccessResourceException("connection pool exhausted"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isInstanceOf(TransientDataAccessResourceException.class)
+                .hasMessage("connection pool exhausted");
+    }
+
+    @Test
+    void recover_withTransientDataAccessResourceException_persistsFailedEvent() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("testuser", "test@example.com");
+        final TransientDataAccessResourceException exception = new TransientDataAccessResourceException("connection pool exhausted");
+
+        // when
+        sut.recover(exception, event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository).save(argument.capture());
+        final FailedIntegrationEventRecord failedEvent = argument.getValue();
+        assertThat(failedEvent.getEventClassName()).isEqualTo(UserCreatedIntegrationEvent.class.getName());
+        assertThat(failedEvent.getExceptionMessage()).isEqualTo("connection pool exhausted");
+        assertThat(failedEvent.getRetryCount()).isEqualTo(3);
+        assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
     }
 
 }
