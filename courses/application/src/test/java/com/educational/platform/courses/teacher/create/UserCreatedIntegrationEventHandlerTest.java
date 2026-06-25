@@ -33,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -831,6 +832,41 @@ class UserCreatedIntegrationEventHandlerTest {
         assertThat(failedEvent.getExceptionMessage()).isEqualTo("deadlock detected in user creation");
         assertThat(failedEvent.getRetryCount()).isEqualTo(3);
         assertThat(failedEvent.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+    }
+
+    @Test
+    void handleUserCreatedEvent_calledTwiceWithDifferentEvents_commandHandlerCalledTwice() {
+        // given
+        final UserCreatedIntegrationEvent event1 = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final UserCreatedIntegrationEvent event2 = new UserCreatedIntegrationEvent("user2", "user2@example.com");
+
+        // when
+        sut.handleUserCreatedEvent(event1);
+        sut.handleUserCreatedEvent(event2);
+
+        // then
+        verify(createTeacherCommandHandler, times(2)).handle(any());
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void recover_calledTwiceWithDifferentEvents_savesTwoSeparateRecords() {
+        // given
+        final UserCreatedIntegrationEvent event1 = new UserCreatedIntegrationEvent("user1", "user1@example.com");
+        final UserCreatedIntegrationEvent event2 = new UserCreatedIntegrationEvent("user2", "user2@example.com");
+        final OptimisticLockingFailureException exception1 = new OptimisticLockingFailureException("error 1");
+        final PessimisticLockingFailureException exception2 = new PessimisticLockingFailureException("error 2");
+
+        // when
+        sut.recover(exception1, event1);
+        sut.recover(exception2, event2);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository, times(2)).save(argument.capture());
+        assertThat(argument.getAllValues()).hasSize(2);
+        assertThat(argument.getAllValues().get(0).getExceptionMessage()).isEqualTo("error 1");
+        assertThat(argument.getAllValues().get(1).getExceptionMessage()).isEqualTo("error 2");
     }
 
 }

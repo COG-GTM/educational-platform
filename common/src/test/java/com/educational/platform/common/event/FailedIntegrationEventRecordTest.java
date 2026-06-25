@@ -871,5 +871,54 @@ class FailedIntegrationEventRecordTest {
                 .isEmpty();
     }
 
+    @Test
+    void class_onlyMutatingMethodIsResolve() {
+        long publicVoidInstanceMethods = Arrays.stream(FailedIntegrationEventRecord.class.getDeclaredMethods())
+                .filter(m -> Modifier.isPublic(m.getModifiers()))
+                .filter(m -> !Modifier.isStatic(m.getModifiers()))
+                .filter(m -> m.getReturnType().equals(void.class))
+                .count();
+
+        assertThat(publicVoidInstanceMethods)
+                .as("Only resolve() should be a public void instance method")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void statusField_columnLengthIsSufficientForEnumValues() throws NoSuchFieldException {
+        java.lang.reflect.Field field = FailedIntegrationEventRecord.class.getDeclaredField("status");
+        jakarta.persistence.Column column = field.getAnnotation(jakarta.persistence.Column.class);
+
+        int longestEnumNameLength = 0;
+        for (FailedIntegrationEventRecord.FailedEventStatus status : FailedIntegrationEventRecord.FailedEventStatus.values()) {
+            longestEnumNameLength = Math.max(longestEnumNameLength, status.name().length());
+        }
+
+        assertThat(column.length())
+                .as("Column length should accommodate longest enum name (%d chars)", longestEnumNameLength)
+                .isGreaterThanOrEqualTo(longestEnumNameLength);
+    }
+
+    @Test
+    void constructor_timestampIsNotAffectedBySubsequentInstantNowCalls() {
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+        final java.time.Instant capturedTimestamp = record.getTimestamp();
+
+        assertThat(record.getTimestamp()).isEqualTo(capturedTimestamp);
+        assertThat(record.getTimestamp()).isSameAs(capturedTimestamp);
+    }
+
+    @Test
+    void getRetryCount_returnsExactValuePassedToConstructor() {
+        for (int retryCount : new int[]{0, 1, 2, 3, 5, 10, 100}) {
+            final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                    "com.example.Event", "payload", "error", retryCount);
+            assertThat(record.getRetryCount())
+                    .as("retryCount should be %d", retryCount)
+                    .isEqualTo(retryCount);
+        }
+    }
+
 }
 

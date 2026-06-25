@@ -556,6 +556,43 @@ class IntegrationEventHandlerContractTest {
                 .isFalse();
     }
 
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_haveExactlyTwoDeclaredPublicMethods(Class<?> handlerClass) {
+        long publicMethodCount = Arrays.stream(handlerClass.getDeclaredMethods())
+                .filter(m -> Modifier.isPublic(m.getModifiers()))
+                .count();
+
+        assertThat(publicMethodCount)
+                .as("%s should have exactly 2 public methods (handler + recover)",
+                        handlerClass.getSimpleName())
+                .isEqualTo(2);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_retryableRetryForHasExactlyThreeExceptionTypes(Class<?> handlerClass) {
+        Method handlerMethod = findEventListenerMethod(handlerClass);
+        Retryable retryable = handlerMethod.getAnnotation(Retryable.class);
+
+        assertThat(retryable.retryFor())
+                .as("%s @Retryable.retryFor should have exactly 3 exception types",
+                        handlerClass.getSimpleName())
+                .hasSize(3);
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_haveFailedIntegrationEventRepositoryAsLastConstructorParam(Class<?> handlerClass) {
+        var constructor = handlerClass.getDeclaredConstructors()[0];
+        Class<?>[] paramTypes = constructor.getParameterTypes();
+
+        assertThat(paramTypes[paramTypes.length - 1])
+                .as("%s last constructor param should be FailedIntegrationEventRepository",
+                        handlerClass.getSimpleName())
+                .isEqualTo(com.educational.platform.common.event.FailedIntegrationEventRepository.class);
+    }
+
     private Method findEventListenerMethod(Class<?> handlerClass) {
         return Arrays.stream(handlerClass.getDeclaredMethods())
                 .filter(m -> m.isAnnotationPresent(EventListener.class))

@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -763,6 +764,45 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         assertThat(argument.getValue().getTimestamp())
                 .isAfterOrEqualTo(before)
                 .isBeforeOrEqualTo(after);
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_calledTwiceWithDifferentEvents_commandHandlerCalledTwice() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final SendCourseToApproveIntegrationEvent event1 = new SendCourseToApproveIntegrationEvent(uuid1);
+        final SendCourseToApproveIntegrationEvent event2 = new SendCourseToApproveIntegrationEvent(uuid2);
+
+        // when
+        sut.handleSendCourseToApproveEvent(event1);
+        sut.handleSendCourseToApproveEvent(event2);
+
+        // then
+        verify(createCourseProposalCommandHandler, times(2)).handle(any());
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void recover_calledTwiceWithDifferentEvents_savesTwoSeparateRecords() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final SendCourseToApproveIntegrationEvent event1 = new SendCourseToApproveIntegrationEvent(uuid1);
+        final SendCourseToApproveIntegrationEvent event2 = new SendCourseToApproveIntegrationEvent(uuid2);
+        final OptimisticLockingFailureException exception1 = new OptimisticLockingFailureException("error 1");
+        final PessimisticLockingFailureException exception2 = new PessimisticLockingFailureException("error 2");
+
+        // when
+        sut.recover(exception1, event1);
+        sut.recover(exception2, event2);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository, times(2)).save(argument.capture());
+        assertThat(argument.getAllValues()).hasSize(2);
+        assertThat(argument.getAllValues().get(0).getExceptionMessage()).isEqualTo("error 1");
+        assertThat(argument.getAllValues().get(1).getExceptionMessage()).isEqualTo("error 2");
     }
 
 }

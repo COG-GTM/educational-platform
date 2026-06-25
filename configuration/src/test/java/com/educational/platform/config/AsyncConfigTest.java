@@ -694,5 +694,52 @@ class AsyncConfigTest {
         assertThat(enableRetry.order()).isEqualTo(Integer.MIN_VALUE + 1);
     }
 
+    @Test
+    void asyncUncaughtExceptionHandler_concurrentInvocations_allCompleteWithoutError() throws Exception {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        int threadCount = 10;
+        var latch = new java.util.concurrent.CountDownLatch(threadCount);
+        var errors = new java.util.concurrent.CopyOnWriteArrayList<Throwable>();
+
+        for (int i = 0; i < threadCount; i++) {
+            final int idx = i;
+            new Thread(() -> {
+                try {
+                    handler.handleUncaughtException(
+                            new RuntimeException("concurrent-error-" + idx), method, "param-" + idx);
+                } catch (Throwable t) {
+                    errors.add(t);
+                } finally {
+                    latch.countDown();
+                }
+            }).start();
+        }
+
+        assertThat(latch.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        assertThat(errors).isEmpty();
+    }
+
+    @Test
+    void getAsyncExecutor_shutdown_completesGracefully() throws Exception {
+        ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) asyncConfig.getAsyncExecutor();
+
+        executor.submit(() -> "done").get(5, java.util.concurrent.TimeUnit.SECONDS);
+
+        executor.shutdown();
+
+        assertThat(executor.getThreadPoolExecutor().isShutdown()).isTrue();
+    }
+
+    @Test
+    void asyncUncaughtExceptionHandler_withTransientDataAccessSubclass_logsWithoutThrowing() throws NoSuchMethodException {
+        AsyncUncaughtExceptionHandler handler = asyncConfig.getAsyncUncaughtExceptionHandler();
+        Method method = String.class.getMethod("toString");
+        QueryTimeoutException exception = new QueryTimeoutException("timeout during async");
+
+        assertThatCode(() -> handler.handleUncaughtException(exception, method, "event1"))
+                .doesNotThrowAnyException();
+    }
+
 }
 

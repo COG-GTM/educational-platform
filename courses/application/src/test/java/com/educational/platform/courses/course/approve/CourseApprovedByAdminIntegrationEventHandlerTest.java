@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -758,6 +759,69 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         assertThat(argument.getValue().getTimestamp())
                 .isAfterOrEqualTo(before)
                 .isBeforeOrEqualTo(after);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_calledTwiceWithDifferentEvents_commandHandlerCalledTwice() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseApprovedByAdminIntegrationEvent event1 = new CourseApprovedByAdminIntegrationEvent(uuid1);
+        final CourseApprovedByAdminIntegrationEvent event2 = new CourseApprovedByAdminIntegrationEvent(uuid2);
+
+        // when
+        sut.handleCourseApprovedByAdminEvent(event1);
+        sut.handleCourseApprovedByAdminEvent(event2);
+
+        // then
+        verify(approveCourseCommandHandler, times(2)).handle(any());
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void recover_calledTwiceWithDifferentEvents_savesTwoSeparateRecords() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseApprovedByAdminIntegrationEvent event1 = new CourseApprovedByAdminIntegrationEvent(uuid1);
+        final CourseApprovedByAdminIntegrationEvent event2 = new CourseApprovedByAdminIntegrationEvent(uuid2);
+        final OptimisticLockingFailureException exception1 = new OptimisticLockingFailureException("error 1");
+        final PessimisticLockingFailureException exception2 = new PessimisticLockingFailureException("error 2");
+
+        // when
+        sut.recover(exception1, event1);
+        sut.recover(exception2, event2);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEventRecord> argument = ArgumentCaptor.forClass(FailedIntegrationEventRecord.class);
+        verify(failedEventRepository, times(2)).save(argument.capture());
+        assertThat(argument.getAllValues()).hasSize(2);
+        assertThat(argument.getAllValues().get(0).getExceptionMessage()).isEqualTo("error 1");
+        assertThat(argument.getAllValues().get(1).getExceptionMessage()).isEqualTo("error 2");
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_successFollowedByException_bothEventsProcessed() {
+        // given
+        final UUID uuid1 = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID uuid2 = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        final CourseApprovedByAdminIntegrationEvent event1 = new CourseApprovedByAdminIntegrationEvent(uuid1);
+        final CourseApprovedByAdminIntegrationEvent event2 = new CourseApprovedByAdminIntegrationEvent(uuid2);
+
+        org.mockito.Mockito.doNothing()
+                .doThrow(new OptimisticLockingFailureException("lock on second"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when - first event succeeds
+        sut.handleCourseApprovedByAdminEvent(event1);
+
+        // second event fails
+        assertThatThrownBy(() -> sut.handleCourseApprovedByAdminEvent(event2))
+                .isInstanceOf(OptimisticLockingFailureException.class);
+
+        // then
+        verify(approveCourseCommandHandler, times(2)).handle(any());
+        verifyNoInteractions(failedEventRepository);
     }
 
 }

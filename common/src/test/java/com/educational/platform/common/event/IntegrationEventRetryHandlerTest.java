@@ -5,6 +5,7 @@ import com.educational.platform.common.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.ConcurrencyFailureException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -553,6 +554,37 @@ class IntegrationEventRetryHandlerTest {
         // then
         assertThat(IntegrationEventRetryHandler.isRetryable(retryable)).isTrue();
         assertThat(IntegrationEventRetryHandler.isRetryable(nonRetryable)).isFalse();
+    }
+
+    @Test
+    void isRetryable_calledTwiceWithSameException_returnsSameResult() {
+        final OptimisticLockingFailureException exception = new OptimisticLockingFailureException("lock");
+        assertThat(IntegrationEventRetryHandler.isRetryable(exception))
+                .isEqualTo(IntegrationEventRetryHandler.isRetryable(exception));
+    }
+
+    @Test
+    void retryableExceptions_orderIsConsistent() {
+        Class<?>[] exceptions = IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS;
+        assertThat(exceptions[0]).isEqualTo(TransientDataAccessException.class);
+        assertThat(exceptions[1]).isEqualTo(OptimisticLockingFailureException.class);
+        assertThat(exceptions[2]).isEqualTo(PessimisticLockingFailureException.class);
+    }
+
+    @Test
+    void isRetryable_allRetryableExceptionsShareCommonBaseClass() {
+        for (Class<?> exClass : IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS) {
+            assertThat(DataAccessException.class.isAssignableFrom(exClass))
+                    .as("%s should extend DataAccessException", exClass.getSimpleName())
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void retryableExceptions_firstEntryIsTheRecoverParameterType() {
+        assertThat(IntegrationEventRetryHandler.RETRYABLE_EXCEPTIONS[0])
+                .as("First retryable exception should be the recover method's parameter supertype")
+                .isEqualTo(TransientDataAccessException.class);
     }
 
 }
