@@ -16,6 +16,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.time.Instant;
+import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -790,6 +791,78 @@ class FailedIntegrationEventRecordTest {
         assertThat(constructor).isNotNull();
         assertThat(constructor.getParameterCount()).isEqualTo(4);
         assertThat(Modifier.isPublic(constructor.getModifiers())).isTrue();
+    }
+
+    @Test
+    void constructor_withMaxLengthExceptionMessage_setsFieldCorrectly() {
+        // given - exactly 2000 chars, matching the @Column(length = 2000) boundary
+        final String maxMessage = "e".repeat(2000);
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", maxMessage, 3);
+
+        // then
+        assertThat(record.getExceptionMessage()).hasSize(2000);
+    }
+
+    @Test
+    void constructor_withExceptionMessageAtExactColumnLength_setsFieldCorrectly() {
+        // given - exactly 2000 chars, matching the @Column(length = 2000) boundary
+        final String boundaryMessage = "error:" + "x".repeat(1994);
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", boundaryMessage, 3);
+
+        // then
+        assertThat(record.getExceptionMessage()).hasSize(2000);
+        assertThat(record.getExceptionMessage()).isEqualTo(boundaryMessage);
+    }
+
+    @Test
+    void constructor_withPayloadAtExactColumnLength_setsFieldCorrectly() {
+        // given - exactly 2000 chars, matching the @Column(length = 2000) boundary
+        final String boundaryPayload = "Event[" + "d".repeat(1993) + "]";
+
+        // when
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", boundaryPayload, "error", 3);
+
+        // then
+        assertThat(record.getEventPayload()).hasSize(2000);
+        assertThat(record.getEventPayload()).isEqualTo(boundaryPayload);
+    }
+
+    @Test
+    void resolve_calledMultipleTimes_remainsResolved() {
+        // given
+        final FailedIntegrationEventRecord record = new FailedIntegrationEventRecord(
+                "com.example.Event", "payload", "error", 3);
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.FAILED);
+
+        // when
+        record.resolve();
+        record.resolve();
+        record.resolve();
+
+        // then
+        assertThat(record.getStatus()).isEqualTo(FailedIntegrationEventRecord.FailedEventStatus.RESOLVED);
+    }
+
+    @Test
+    void entity_hasNoPublicSetters() {
+        // FailedIntegrationEventRecord is effectively immutable after construction
+        // (only resolve() mutates status). No public setX() methods should exist.
+        java.util.List<String> publicSetters = Arrays.stream(FailedIntegrationEventRecord.class.getMethods())
+                .filter(m -> m.getName().startsWith("set"))
+                .filter(m -> Modifier.isPublic(m.getModifiers()))
+                .map(java.lang.reflect.Method::getName)
+                .toList();
+
+        assertThat(publicSetters)
+                .as("Entity should have no public setters to maintain encapsulation")
+                .isEmpty();
     }
 
 }

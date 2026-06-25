@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
@@ -528,6 +529,19 @@ class IntegrationEventHandlerContractTest {
         assertThat(retryable.exclude())
                 .as("%s @Retryable exclude should be empty", handlerClass.getSimpleName())
                 .isEmpty();
+    }
+
+    @ParameterizedTest
+    @MethodSource("handlerClasses")
+    void allHandlers_noRecoverMethodAcceptingDataAccessException(Class<?> handlerClass) {
+        boolean hasDataAccessRecover = Arrays.stream(handlerClass.getDeclaredMethods())
+                .filter(m -> m.isAnnotationPresent(Recover.class))
+                .anyMatch(m -> m.getParameterTypes()[0] == DataAccessException.class);
+
+        assertThat(hasDataAccessRecover)
+                .as("%s should not have @Recover accepting DataAccessException (would silently catch non-transient exceptions like DataIntegrityViolationException)",
+                        handlerClass.getSimpleName())
+                .isFalse();
     }
 
     private Method findEventListenerMethod(Class<?> handlerClass) {
