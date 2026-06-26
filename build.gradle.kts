@@ -28,5 +28,9 @@ subprojects {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
         }
+        dependencies {
+            dependency("ch.qos.logback:logback-core:${rootProject.libs.versions.logback.get()}")
+            dependency("ch.qos.logback:logback-classic:${rootProject.libs.versions.logback.get()}")
+        }
     }
 }
