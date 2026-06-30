@@ -20,6 +20,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Exercises the declarative {@code @Retryable}/{@code @Recover} behaviour of
@@ -74,7 +75,7 @@ class UserCreatedIntegrationEventHandlerRetryTest {
     }
 
     @Test
-    void businessException_notRetried() {
+    void businessException_notRetriedButStillDeadLettered() {
         // given
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("username", "user@example.com");
         doThrow(new ResourceNotFoundException("nope"))
@@ -85,6 +86,20 @@ class UserCreatedIntegrationEventHandlerRetryTest {
 
         // then
         verify(createTeacherCommandHandler, times(1)).handle(any(CreateTeacherCommand.class));
+        verify(failedEventRepository, times(1)).save(any());
+    }
+
+    @Test
+    void successfulHandling_invokedOnceAndNotDeadLettered() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("username", "user@example.com");
+
+        // when
+        handler.handleUserCreatedEvent(event);
+
+        // then
+        verify(createTeacherCommandHandler, times(1)).handle(any(CreateTeacherCommand.class));
+        verifyNoInteractions(failedEventRepository);
     }
 
     @Configuration
