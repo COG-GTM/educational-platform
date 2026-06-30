@@ -104,6 +104,54 @@ class AsyncConfigTest {
         }
     }
 
+    @Test
+    void integrationEventExecutorBeanIsConfiguredAndConsistentWithAsyncExecutor() {
+        final AsyncConfig config = new AsyncConfig();
+
+        final ThreadPoolTaskExecutor bean = config.integrationEventExecutor();
+
+        assertNotNull(bean, "integration-event executor bean must be configured");
+        assertEquals(2, bean.getCorePoolSize());
+        assertEquals(10, bean.getMaxPoolSize());
+        assertEquals(100, bean.getQueueCapacity());
+        assertEquals("integration-event-", bean.getThreadNamePrefix());
+
+        final Executor asyncExecutor = config.getAsyncExecutor();
+        final ThreadPoolTaskExecutor asyncPool = assertInstanceOf(ThreadPoolTaskExecutor.class, asyncExecutor);
+        assertEquals(bean.getCorePoolSize(), asyncPool.getCorePoolSize());
+        assertEquals(bean.getMaxPoolSize(), asyncPool.getMaxPoolSize());
+        assertEquals(bean.getQueueCapacity(), asyncPool.getQueueCapacity());
+        assertEquals(bean.getThreadNamePrefix(), asyncPool.getThreadNamePrefix());
+    }
+
+    @Test
+    void shouldWaitForInFlightTaskToCompleteOnShutdown() throws Exception {
+        final ThreadPoolTaskExecutor executor = new AsyncConfig().integrationEventExecutor();
+        executor.initialize();
+
+        final java.util.concurrent.CountDownLatch started = new java.util.concurrent.CountDownLatch(1);
+        final java.util.concurrent.atomic.AtomicBoolean completed = new java.util.concurrent.atomic.AtomicBoolean(false);
+        executor.execute(() -> {
+            started.countDown();
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            completed.set(true);
+        });
+
+        assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS), "submitted task should start running");
+
+        // destroy() blocks until in-flight tasks finish because
+        // waitForTasksToCompleteOnShutdown=true / awaitTerminationSeconds=30.
+        executor.destroy();
+
+        assertTrue(completed.get(),
+                "graceful shutdown should wait for in-flight integration-event handlers to finish");
+    }
+
     static class SampleAsyncBean {
         public void handleEvent(String payload) {
         }
