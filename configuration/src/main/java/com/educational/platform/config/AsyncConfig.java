@@ -7,6 +7,7 @@ import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.scheduling.annotation.AsyncConfigurer;
@@ -26,8 +27,16 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @EnableRetry
 public class AsyncConfig implements AsyncConfigurer {
 
-    @Override
-    public Executor getAsyncExecutor() {
+    /**
+     * Dedicated thread pool for {@code @Async} integration-event handlers.
+     *
+     * <p>Exposed as a Spring-managed bean so the container drives its full lifecycle:
+     * {@code initialize()} on startup and {@code destroy()} on shutdown, the latter
+     * honouring {@code waitForTasksToCompleteOnShutdown}/{@code awaitTerminationSeconds}
+     * so in-flight handlers (including retry backoff waits) can complete.
+     */
+    @Bean(name = "integrationEventExecutor")
+    public ThreadPoolTaskExecutor integrationEventExecutor() {
         final ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(2);
         executor.setMaxPoolSize(10);
@@ -35,8 +44,12 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setThreadNamePrefix("integration-event-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);
-        executor.initialize();
         return executor;
+    }
+
+    @Override
+    public Executor getAsyncExecutor() {
+        return integrationEventExecutor();
     }
 
     @Override

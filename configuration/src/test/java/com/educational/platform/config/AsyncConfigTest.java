@@ -88,16 +88,20 @@ class AsyncConfigTest {
     }
 
     @Test
-    void shouldReturnInitializedExecutorThatRunsTasks() throws Exception {
+    void shouldRunTasksOnTheDedicatedIntegrationEventPool() throws Exception {
         final ThreadPoolTaskExecutor poolExecutor =
                 (ThreadPoolTaskExecutor) new AsyncConfig().getAsyncExecutor();
+        poolExecutor.initialize();
+        try {
+            final java.util.concurrent.CompletableFuture<String> future = new java.util.concurrent.CompletableFuture<>();
+            poolExecutor.execute(() -> future.complete(Thread.currentThread().getName()));
 
-        final java.util.concurrent.CompletableFuture<String> future = new java.util.concurrent.CompletableFuture<>();
-        poolExecutor.execute(() -> future.complete(Thread.currentThread().getName()));
-
-        final String threadName = future.get(5, java.util.concurrent.TimeUnit.SECONDS);
-        assertTrue(threadName.startsWith("integration-event-"),
-                "async tasks should run on the dedicated integration-event pool");
+            final String threadName = future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+            assertTrue(threadName.startsWith("integration-event-"),
+                    "async tasks should run on the dedicated integration-event pool");
+        } finally {
+            poolExecutor.destroy();
+        }
     }
 
     static class SampleAsyncBean {
