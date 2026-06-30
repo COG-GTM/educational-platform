@@ -1,5 +1,6 @@
 package com.educational.platform.courses.course.numberofstudents.update;
 
+import com.educational.platform.common.event.FailedIntegrationEventRepository;
 import com.educational.platform.course.enrollments.integration.event.StudentEnrolledToCourseIntegrationEvent;
 import com.educational.platform.courses.course.numberofsudents.update.IncreaseNumberOfStudentsCommandHandler;
 import com.educational.platform.courses.course.numberofsudents.update.StudentEnrolledToCourseIntegrationEventHandler;
@@ -8,7 +9,6 @@ import com.educational.platform.courses.course.numberofsudents.update.IncreaseNu
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -23,8 +23,16 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
     @Mock
     private IncreaseNumberOfStudentsCommandHandler increaseNumberOfStudentsCommandHandler;
 
-    @InjectMocks
+    @Mock
+    private FailedIntegrationEventRepository failedEventRepository;
+
     private StudentEnrolledToCourseIntegrationEventHandler sut;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        sut = new StudentEnrolledToCourseIntegrationEventHandler(
+                increaseNumberOfStudentsCommandHandler, failedEventRepository);
+    }
 
 
     @Test
