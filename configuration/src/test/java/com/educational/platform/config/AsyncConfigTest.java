@@ -12,9 +12,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import java.util.concurrent.Executor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,6 +60,44 @@ class AsyncConfigTest {
 
         assertNotNull(event.getThrowableProxy(), "exception should be attached to the log event");
         assertEquals(IllegalStateException.class.getName(), event.getThrowableProxy().getClassName());
+    }
+
+    @Test
+    void shouldHandleNullParamsWithoutThrowing() throws NoSuchMethodException {
+        final AsyncUncaughtExceptionHandler handler = new AsyncConfig().getAsyncUncaughtExceptionHandler();
+        final Method method = SampleAsyncBean.class.getMethod("handleEvent", String.class);
+
+        handler.handleUncaughtException(new IllegalStateException("boom"), method, (Object[]) null);
+
+        final List<ILoggingEvent> events = listAppender.list;
+        assertFalse(events.isEmpty(), "expected an error log event even with null params");
+        assertEquals(Level.ERROR, events.get(0).getLevel());
+        assertTrue(events.get(0).getFormattedMessage().contains("handleEvent"));
+    }
+
+    @Test
+    void shouldProvideDedicatedThreadPoolExecutorForIntegrationEvents() {
+        final Executor executor = new AsyncConfig().getAsyncExecutor();
+
+        assertNotNull(executor, "async executor must be configured");
+        final ThreadPoolTaskExecutor poolExecutor = assertInstanceOf(ThreadPoolTaskExecutor.class, executor);
+        assertEquals(2, poolExecutor.getCorePoolSize());
+        assertEquals(10, poolExecutor.getMaxPoolSize());
+        assertEquals(100, poolExecutor.getQueueCapacity());
+        assertEquals("integration-event-", poolExecutor.getThreadNamePrefix());
+    }
+
+    @Test
+    void shouldReturnInitializedExecutorThatRunsTasks() throws Exception {
+        final ThreadPoolTaskExecutor poolExecutor =
+                (ThreadPoolTaskExecutor) new AsyncConfig().getAsyncExecutor();
+
+        final java.util.concurrent.CompletableFuture<String> future = new java.util.concurrent.CompletableFuture<>();
+        poolExecutor.execute(() -> future.complete(Thread.currentThread().getName()));
+
+        final String threadName = future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+        assertTrue(threadName.startsWith("integration-event-"),
+                "async tasks should run on the dedicated integration-event pool");
     }
 
     static class SampleAsyncBean {
