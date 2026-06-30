@@ -13,7 +13,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 public class CourseApprovedByAdminIntegrationEventHandlerTest {
@@ -46,6 +48,20 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         final ApproveCourseCommand approveCourseCommand = argument.getValue();
         assertThat(approveCourseCommand)
                 .hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_successfulHandling_doesNotDeadLetter() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+
+        // when
+        sut.handleCourseApprovedByAdminEvent(event);
+
+        // then no failure is routed to the dead-letter store on the success path
+        verify(approveCourseCommandHandler).handle(any(ApproveCourseCommand.class));
+        verifyNoInteractions(failedEventRepository);
     }
 
 }
