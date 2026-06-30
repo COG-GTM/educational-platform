@@ -28,5 +28,11 @@ subprojects {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
         }
+        dependencies {
+            dependency("org.springframework:spring-web:7.0.8")
+            dependency("org.springframework:spring-webmvc:7.0.8")
+            dependency("org.springframework:spring-core:7.0.8")
+            dependency("org.springframework:spring-expression:7.0.8")
+        }
     }
 }
