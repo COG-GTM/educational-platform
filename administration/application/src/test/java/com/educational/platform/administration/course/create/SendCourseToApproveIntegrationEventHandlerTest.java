@@ -1,11 +1,12 @@
 package com.educational.platform.administration.course.create;
 
+import com.educational.platform.common.event.FailedIntegrationEventRepository;
 import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -20,8 +21,15 @@ class SendCourseToApproveIntegrationEventHandlerTest {
     @Mock
     private CreateCourseProposalCommandHandler createCourseProposalCommandHandler;
 
-    @InjectMocks
+    @Mock
+    private FailedIntegrationEventRepository failedEventRepository;
+
     private SendCourseToApproveIntegrationEventHandler sut;
+
+    @BeforeEach
+    void setUp() {
+        sut = new SendCourseToApproveIntegrationEventHandler(createCourseProposalCommandHandler, failedEventRepository);
+    }
 
     @Test
     void handleCourseApprovedByAdminEvent_approveCourseCommandExecuted() {
