@@ -1,5 +1,6 @@
 package com.educational.platform.courses.teacher.create;
 
+import com.educational.platform.common.event.FailedEventStatus;
 import com.educational.platform.common.event.FailedIntegrationEvent;
 import com.educational.platform.common.event.FailedIntegrationEventRepository;
 import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
@@ -12,6 +13,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.OptimisticLockingFailureException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -59,5 +63,56 @@ public class UserCreatedIntegrationEventHandlerTest {
                 .hasFieldOrPropertyWithValue("eventClassName", UserCreatedIntegrationEvent.class.getName())
                 .hasFieldOrPropertyWithValue("exceptionMessage", "boom")
                 .hasFieldOrPropertyWithValue("retryCount", 3);
+    }
+
+    @Test
+    void handleUserCreatedEvent_whenCommandHandlerThrows_propagatesException() {
+        // given
+        final UserCreatedIntegrationEventHandler sut =
+                new UserCreatedIntegrationEventHandler(createTeacherCommandHandler, failedEventRepository);
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("username", "user@example.com");
+        final OptimisticLockingFailureException cause = new OptimisticLockingFailureException("boom");
+        doThrow(cause).when(createTeacherCommandHandler).handle(any(CreateTeacherCommand.class));
+
+        // when / then
+        assertThatThrownBy(() -> sut.handleUserCreatedEvent(event))
+                .isSameAs(cause);
+        verifyNoInteractions(failedEventRepository);
+    }
+
+    @Test
+    void recover_persistsEventPayloadAndFailedStatus() {
+        // given
+        final UserCreatedIntegrationEventHandler sut =
+                new UserCreatedIntegrationEventHandler(createTeacherCommandHandler, failedEventRepository);
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("username", "user@example.com");
+
+        // when
+        sut.recover(new OptimisticLockingFailureException("boom"), event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEvent> argument = ArgumentCaptor.forClass(FailedIntegrationEvent.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("eventPayload", String.valueOf(event))
+                .hasFieldOrPropertyWithValue("status", FailedEventStatus.FAILED);
+    }
+
+    @Test
+    void recover_withNullExceptionMessage_persistsNullMessage() {
+        // given
+        final UserCreatedIntegrationEventHandler sut =
+                new UserCreatedIntegrationEventHandler(createTeacherCommandHandler, failedEventRepository);
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("username", "user@example.com");
+
+        // when
+        sut.recover(new OptimisticLockingFailureException(null), event);
+
+        // then
+        final ArgumentCaptor<FailedIntegrationEvent> argument = ArgumentCaptor.forClass(FailedIntegrationEvent.class);
+        verify(failedEventRepository).save(argument.capture());
+        assertThat(argument.getValue())
+                .hasFieldOrPropertyWithValue("exceptionMessage", null)
+                .hasFieldOrPropertyWithValue("eventClassName", UserCreatedIntegrationEvent.class.getName());
     }
 }

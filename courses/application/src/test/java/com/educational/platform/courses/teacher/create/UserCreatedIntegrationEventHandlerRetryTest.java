@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
@@ -47,6 +48,21 @@ class UserCreatedIntegrationEventHandlerRetryTest {
         // given
         final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("username", "user@example.com");
         doThrow(new OptimisticLockingFailureException("boom"))
+                .when(createTeacherCommandHandler).handle(any(CreateTeacherCommand.class));
+
+        // when
+        handler.handleUserCreatedEvent(event);
+
+        // then
+        verify(createTeacherCommandHandler, times(3)).handle(any(CreateTeacherCommand.class));
+        verify(failedEventRepository, times(1)).save(any());
+    }
+
+    @Test
+    void dataAccessException_retriedAndRecovered() {
+        // given
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("username", "user@example.com");
+        doThrow(new RecoverableDataAccessException("db down"))
                 .when(createTeacherCommandHandler).handle(any(CreateTeacherCommand.class));
 
         // when
