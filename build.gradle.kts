@@ -28,5 +28,10 @@ subprojects {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
         }
+        dependencies {
+            dependency("org.springframework.boot:spring-boot:4.0.6")
+            dependency("org.springframework.boot:spring-boot-autoconfigure:4.0.6")
+            dependency("org.springframework.boot:spring-boot-security:4.0.6")
+        }
     }
 }
