@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
@@ -20,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AsyncConfigTest {
@@ -150,6 +152,23 @@ class AsyncConfigTest {
 
         assertTrue(completed.get(),
                 "graceful shutdown should wait for in-flight integration-event handlers to finish");
+    }
+
+    @Test
+    void shouldRegisterExecutorAsManagedSingletonBeanReturnedByGetAsyncExecutor() {
+        try (AnnotationConfigApplicationContext context =
+                     new AnnotationConfigApplicationContext(AsyncConfig.class)) {
+            final ThreadPoolTaskExecutor bean =
+                    context.getBean("integrationEventExecutor", ThreadPoolTaskExecutor.class);
+            final AsyncConfig config = context.getBean(AsyncConfig.class);
+
+            assertSame(bean, config.getAsyncExecutor(),
+                    "getAsyncExecutor() must return the Spring-managed singleton bean so its lifecycle is driven by the container");
+            assertSame(bean, context.getBean("integrationEventExecutor", ThreadPoolTaskExecutor.class),
+                    "executor must be a singleton bean");
+            assertNotNull(bean.getThreadPoolExecutor().getThreadFactory(),
+                    "managed executor should be initialized by the container");
+        }
     }
 
     static class SampleAsyncBean {
