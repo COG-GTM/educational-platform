@@ -28,5 +28,8 @@ subprojects {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
         }
+        dependencies {
+            dependency("org.springframework.data:spring-data-commons:4.0.6")
+        }
     }
 }
