@@ -28,5 +28,10 @@ subprojects {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
         }
+        dependencies {
+            dependency("org.apache.tomcat.embed:tomcat-embed-core:11.0.22")
+            dependency("org.apache.tomcat.embed:tomcat-embed-websocket:11.0.22")
+            dependency("org.apache.tomcat.embed:tomcat-embed-el:11.0.22")
+        }
     }
 }
