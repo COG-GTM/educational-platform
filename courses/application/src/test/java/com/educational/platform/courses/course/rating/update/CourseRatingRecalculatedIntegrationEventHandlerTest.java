@@ -1,11 +1,12 @@
 package com.educational.platform.courses.course.rating.update;
 
+import com.educational.platform.common.event.FailedIntegrationEventRepository;
 import com.educational.platform.course.reviews.integration.event.CourseRatingRecalculatedIntegrationEvent;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -20,8 +21,16 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
     @Mock
     private UpdateCourseRatingCommandHandler updateCourseRatingCommandHandler;
 
-    @InjectMocks
+    @Mock
+    private FailedIntegrationEventRepository failedEventRepository;
+
     private CourseRatingRecalculatedIntegrationEventHandler sut;
+
+    @BeforeEach
+    void setUp() {
+        sut = new CourseRatingRecalculatedIntegrationEventHandler(
+                updateCourseRatingCommandHandler, failedEventRepository);
+    }
 
 
     @Test
