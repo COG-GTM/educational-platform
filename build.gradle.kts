@@ -28,5 +28,12 @@ subprojects {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
         }
+        dependencies {
+            dependency("com.fasterxml.jackson.core:jackson-databind:2.21.4")
+            dependency("com.fasterxml.jackson.core:jackson-core:2.21.4")
+            dependency("com.fasterxml.jackson.core:jackson-annotations:2.21")
+            dependency("tools.jackson.core:jackson-databind:3.1.4")
+            dependency("tools.jackson.core:jackson-core:3.1.4")
+        }
     }
 }
