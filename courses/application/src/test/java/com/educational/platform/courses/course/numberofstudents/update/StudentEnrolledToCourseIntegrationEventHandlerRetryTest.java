@@ -84,6 +84,19 @@ class StudentEnrolledToCourseIntegrationEventHandlerRetryTest {
     }
 
     @Test
+    void persistsFailedIntegrationEventEntity_evenForNonRetryableBusinessException() {
+        // given
+        doThrow(new ResourceNotFoundException("not found"))
+                .when(increaseNumberOfStudentsCommandHandler).handle(any());
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event());
+
+        // then
+        verify(failedIntegrationEventRepository).save(any(FailedIntegrationEventEntity.class));
+    }
+
+    @Test
     void persistsFailedIntegrationEventEntity_afterRetriesExhausted() {
         // given
         doThrow(new OptimisticLockingFailureException("transient"))

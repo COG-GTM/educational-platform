@@ -82,6 +82,19 @@ class CourseRatingRecalculatedIntegrationEventHandlerRetryTest {
     }
 
     @Test
+    void persistsFailedIntegrationEventEntity_evenForNonRetryableBusinessException() {
+        // given
+        doThrow(new ResourceNotFoundException("not found"))
+                .when(updateCourseRatingCommandHandler).handle(any());
+
+        // when
+        sut.handleCourseRatingRecalculatedEvent(event());
+
+        // then
+        verify(failedIntegrationEventRepository).save(any(FailedIntegrationEventEntity.class));
+    }
+
+    @Test
     void persistsFailedIntegrationEventEntity_afterRetriesExhausted() {
         // given
         doThrow(new OptimisticLockingFailureException("transient"))

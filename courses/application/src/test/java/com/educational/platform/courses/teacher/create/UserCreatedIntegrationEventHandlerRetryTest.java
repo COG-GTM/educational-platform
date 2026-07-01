@@ -78,6 +78,19 @@ class UserCreatedIntegrationEventHandlerRetryTest {
     }
 
     @Test
+    void persistsFailedIntegrationEventEntity_evenForNonRetryableBusinessException() {
+        // given
+        doThrow(new ResourceNotFoundException("not found"))
+                .when(createTeacherCommandHandler).handle(any());
+
+        // when
+        sut.handleUserCreatedEvent(event());
+
+        // then
+        verify(failedIntegrationEventRepository).save(any(FailedIntegrationEventEntity.class));
+    }
+
+    @Test
     void persistsFailedIntegrationEventEntity_afterRetriesExhausted() {
         // given
         doThrow(new OptimisticLockingFailureException("transient"))

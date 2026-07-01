@@ -78,6 +78,19 @@ class CourseApprovedByAdminIntegrationEventHandlerRetryTest {
     }
 
     @Test
+    void persistsFailedIntegrationEventEntity_evenForNonRetryableBusinessException() {
+        // given
+        doThrow(new ResourceNotFoundException("not found"))
+                .when(approveCourseCommandHandler).handle(any());
+
+        // when
+        sut.handleCourseApprovedByAdminEvent(new CourseApprovedByAdminIntegrationEvent(COURSE_ID));
+
+        // then
+        verify(failedIntegrationEventRepository).save(any(FailedIntegrationEventEntity.class));
+    }
+
+    @Test
     void persistsFailedIntegrationEventEntity_afterRetriesExhausted() {
         // given
         doThrow(new OptimisticLockingFailureException("transient"))
