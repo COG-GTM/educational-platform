@@ -2,6 +2,7 @@ package com.educational.platform.common.event;
 
 import com.educational.platform.common.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,9 +39,41 @@ class IntegrationEventRetryHandlerTest {
     }
 
     @Test
+    void retriesDataAccessResourceFailureException_upToMaxAttempts() {
+        final AtomicInteger attempts = new AtomicInteger();
+
+        assertThatThrownBy(() -> retryHandler.execute(context -> {
+            attempts.incrementAndGet();
+            throw new DataAccessResourceFailureException("connection lost");
+        })).isInstanceOf(DataAccessResourceFailureException.class);
+
+        assertThat(attempts.get()).isEqualTo(IntegrationEventRetryHandler.MAX_ATTEMPTS);
+    }
+
+    @Test
+    void recoversBeforeMaxAttempts_whenCallbackEventuallySucceeds() throws Exception {
+        final AtomicInteger attempts = new AtomicInteger();
+
+        final String result = retryHandler.execute(context -> {
+            if (attempts.incrementAndGet() < IntegrationEventRetryHandler.MAX_ATTEMPTS) {
+                throw new OptimisticLockingFailureException("transient");
+            }
+            return "ok";
+        });
+
+        assertThat(result).isEqualTo("ok");
+        assertThat(attempts.get()).isEqualTo(IntegrationEventRetryHandler.MAX_ATTEMPTS);
+    }
+
+    @Test
     void returnsResult_whenCallbackSucceeds() throws Exception {
         final String result = retryHandler.execute(context -> "ok");
 
         assertThat(result).isEqualTo("ok");
+    }
+
+    @Test
+    void retryTemplate_isNotNull() {
+        assertThat(retryHandler.retryTemplate()).isNotNull();
     }
 }
