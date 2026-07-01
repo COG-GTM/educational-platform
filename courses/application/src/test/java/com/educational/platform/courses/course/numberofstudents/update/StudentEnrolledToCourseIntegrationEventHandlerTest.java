@@ -4,12 +4,15 @@ import com.educational.platform.course.enrollments.integration.event.StudentEnro
 import com.educational.platform.courses.course.numberofsudents.update.IncreaseNumberOfStudentsCommandHandler;
 import com.educational.platform.courses.course.numberofsudents.update.StudentEnrolledToCourseIntegrationEventHandler;
 import com.educational.platform.courses.course.numberofsudents.update.IncreaseNumberOfStudentsCommand;
+import com.educational.platform.common.event.FailedIntegrationEventRepository;
+import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.UUID;
@@ -22,6 +25,12 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
 
     @Mock
     private IncreaseNumberOfStudentsCommandHandler increaseNumberOfStudentsCommandHandler;
+
+    @Mock
+    private FailedIntegrationEventRepository failedIntegrationEventRepository;
+
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private StudentEnrolledToCourseIntegrationEventHandler sut;

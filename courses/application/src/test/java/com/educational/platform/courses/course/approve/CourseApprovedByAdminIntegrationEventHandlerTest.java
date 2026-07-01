@@ -1,12 +1,15 @@
 package com.educational.platform.courses.course.approve;
 
 import com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent;
+import com.educational.platform.common.event.FailedIntegrationEventRepository;
+import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.UUID;
@@ -19,6 +22,12 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
 
     @Mock
     private ApproveCourseCommandHandler approveCourseCommandHandler;
+
+    @Mock
+    private FailedIntegrationEventRepository failedIntegrationEventRepository;
+
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private CourseApprovedByAdminIntegrationEventHandler sut;

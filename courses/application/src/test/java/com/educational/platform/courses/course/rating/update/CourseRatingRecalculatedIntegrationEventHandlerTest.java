@@ -1,12 +1,15 @@
 package com.educational.platform.courses.course.rating.update;
 
 import com.educational.platform.course.reviews.integration.event.CourseRatingRecalculatedIntegrationEvent;
+import com.educational.platform.common.event.FailedIntegrationEventRepository;
+import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.UUID;
@@ -19,6 +22,12 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
 
     @Mock
     private UpdateCourseRatingCommandHandler updateCourseRatingCommandHandler;
+
+    @Mock
+    private FailedIntegrationEventRepository failedIntegrationEventRepository;
+
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private CourseRatingRecalculatedIntegrationEventHandler sut;

@@ -1,0 +1,48 @@
+databaseChangeLog:
+  - changeSet:
+      id: 2026_07_01-1
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          tableExists:
+            tableName: failed_integration_events
+      changes:
+        - createTable:
+            tableName: failed_integration_events
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  startWith: 1
+                  incrementBy: 1
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: failed_integration_events_pk
+              - column:
+                  constraints:
+                    nullable: false
+                  name: event_class_name
+                  type: VARCHAR(255)
+              - column:
+                  name: event_payload
+                  type: TEXT
+              - column:
+                  name: exception_message
+                  type: TEXT
+              - column:
+                  constraints:
+                    nullable: false
+                  name: created_at
+                  type: TIMESTAMP
+              - column:
+                  constraints:
+                    nullable: false
+                  name: retry_count
+                  type: int
+              - column:
+                  constraints:
+                    nullable: false
+                  name: status
+                  type: VARCHAR(20)
