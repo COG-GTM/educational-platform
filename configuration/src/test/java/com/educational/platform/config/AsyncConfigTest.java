@@ -5,11 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import com.educational.platform.config.AsyncConfig.LoggingAsyncUncaughtExceptionHandler;
 
@@ -52,6 +54,18 @@ class AsyncConfigTest {
         assertThat(event.getLevel()).isEqualTo(Level.ERROR);
         assertThat(event.getFormattedMessage()).contains("doWork");
         assertThat(event.getThrowableProxy()).isNotNull();
+    }
+
+    @Test
+    void configuresIntegrationEventExecutor() {
+        final Executor executor = new AsyncConfig().getAsyncExecutor();
+
+        assertThat(executor).isInstanceOf(ThreadPoolTaskExecutor.class);
+        final ThreadPoolTaskExecutor poolExecutor = (ThreadPoolTaskExecutor) executor;
+        assertThat(poolExecutor.getCorePoolSize()).isEqualTo(2);
+        assertThat(poolExecutor.getMaxPoolSize()).isEqualTo(10);
+        assertThat(poolExecutor.getQueueCapacity()).isEqualTo(100);
+        assertThat(poolExecutor.getThreadNamePrefix()).isEqualTo("integration-event-");
     }
 
     @SuppressWarnings("unused")
