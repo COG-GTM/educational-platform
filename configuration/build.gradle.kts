@@ -31,6 +31,7 @@ dependencies {
     testImplementation("org.junit.platform", "junit-platform-launcher")
     testImplementation("org.mockito", "mockito-junit-jupiter", libs.versions.mockito.get())
     testImplementation("com.tngtech.archunit", "archunit-junit5", libs.versions.archunit.get())
+    testImplementation("org.springframework.boot", "spring-boot-starter-test")
 }
 
 tasks.test {
