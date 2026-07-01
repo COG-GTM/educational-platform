@@ -132,6 +132,22 @@ class AsyncConfigTest {
     }
 
     @Test
+    void logsErrorWhenParamsArrayIsNullRendersNullText() throws NoSuchMethodException {
+        final Method method = SampleAsyncTarget.class.getDeclaredMethod("noArgs");
+
+        assertThatCode(() -> handler.handleUncaughtException(new RuntimeException("null-array"), method, (Object[]) null))
+                .doesNotThrowAnyException();
+
+        assertThat(appender.list).hasSize(1);
+        final ILoggingEvent event = appender.list.get(0);
+        assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+        assertThat(event.getFormattedMessage())
+                .contains("noArgs")
+                .contains("null");
+        assertThat(event.getThrowableProxy()).isNotNull();
+    }
+
+    @Test
     void logsErrorWhenExceptionMessageIsNull() throws NoSuchMethodException {
         final Method method = SampleAsyncTarget.class.getDeclaredMethod("doWork", String.class);
 
