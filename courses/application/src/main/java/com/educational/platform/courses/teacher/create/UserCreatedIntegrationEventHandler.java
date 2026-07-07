@@ -2,16 +2,23 @@ package com.educational.platform.courses.teacher.create;
 
 import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
 
-import org.springframework.context.event.EventListener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * Event listener for {@link UserCreatedIntegrationEvent}.
  */
-// todo should be transactional?
 @Component
 public class UserCreatedIntegrationEventHandler {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(UserCreatedIntegrationEventHandler.class);
 
     private final CreateTeacherCommandHandler createTeacherCommandHandler;
 
@@ -19,10 +26,17 @@ public class UserCreatedIntegrationEventHandler {
         this.createTeacherCommandHandler = createTeacherCommandHandler;
     }
 
-    @Async
-    @EventListener
+    @Async("integrationEventExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 200, multiplier = 2))
     public void handleUserCreatedEvent(UserCreatedIntegrationEvent event) {
         createTeacherCommandHandler.handle(new CreateTeacherCommand(event.username()));
+    }
+
+    @Recover
+    public void recover(Exception e, UserCreatedIntegrationEvent event) {
+        LOGGER.error("Retries exhausted for UserCreatedIntegrationEvent [username={}], event is lost",
+                event.username(), e);
     }
 
 }
