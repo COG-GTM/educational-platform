@@ -3,13 +3,13 @@ package com.educational.platform;
 import java.util.concurrent.ThreadPoolExecutor;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class IntegrationEventsAsyncConfigurationTest {
 
@@ -32,9 +32,11 @@ public class IntegrationEventsAsyncConfigurationTest {
     }
 
     @Test
-    void getAsyncExecutor_returnsIntegrationEventExecutor() {
-        assertSame(sut.integrationEventExecutor().getClass(), sut.getAsyncExecutor().getClass());
-        assertTrue(sut.getAsyncExecutor() instanceof ThreadPoolTaskExecutor);
+    void getAsyncExecutor_returnsIntegrationEventExecutorBean() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(IntegrationEventsAsyncConfiguration.class)) {
+            final IntegrationEventsAsyncConfiguration configuration = context.getBean(IntegrationEventsAsyncConfiguration.class);
+            assertSame(context.getBean(IntegrationEventsAsyncConfiguration.INTEGRATION_EVENT_EXECUTOR), configuration.getAsyncExecutor());
+        }
     }
 
     @Test

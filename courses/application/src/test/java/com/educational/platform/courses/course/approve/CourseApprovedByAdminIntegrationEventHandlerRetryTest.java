@@ -22,18 +22,13 @@ import static org.mockito.Mockito.verify;
 
 public class CourseApprovedByAdminIntegrationEventHandlerRetryTest {
 
-    private static final ApproveCourseCommandHandler approveCourseCommandHandler = mock(ApproveCourseCommandHandler.class);
+    private ApproveCourseCommandHandler approveCourseCommandHandler;
 
     private AnnotationConfigApplicationContext context;
 
     @Configuration
     @EnableResilientMethods
     static class RetryTestConfiguration {
-
-        @Bean
-        ApproveCourseCommandHandler approveCourseCommandHandler() {
-            return approveCourseCommandHandler;
-        }
 
         @Bean
         CourseApprovedByAdminIntegrationEventHandler courseApprovedByAdminIntegrationEventHandler(ApproveCourseCommandHandler handler) {
@@ -44,8 +39,11 @@ public class CourseApprovedByAdminIntegrationEventHandlerRetryTest {
 
     @BeforeEach
     void setUp() {
-        org.mockito.Mockito.reset(approveCourseCommandHandler);
-        context = new AnnotationConfigApplicationContext(RetryTestConfiguration.class);
+        approveCourseCommandHandler = mock(ApproveCourseCommandHandler.class);
+        context = new AnnotationConfigApplicationContext();
+        context.registerBean(ApproveCourseCommandHandler.class, () -> approveCourseCommandHandler);
+        context.register(RetryTestConfiguration.class);
+        context.refresh();
     }
 
     @AfterEach
