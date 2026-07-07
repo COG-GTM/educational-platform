@@ -17,9 +17,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 public class AsyncConfigTest {
 
@@ -95,6 +101,29 @@ public class AsyncConfigTest {
         assertNotNull(handler);
         assertDoesNotThrow(() -> handler.handleUncaughtException(
                 new RuntimeException("test"), method, new Object[0]));
+    }
+
+    @Test
+    void uncaughtExceptionHandler_logsErrorWithMethodAndException() throws NoSuchMethodException {
+        Logger logger = (Logger) LoggerFactory.getLogger(AsyncConfig.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            AsyncUncaughtExceptionHandler handler = config.getAsyncUncaughtExceptionHandler();
+            Method method = AsyncConfig.class.getMethod("getAsyncExecutor");
+
+            handler.handleUncaughtException(new RuntimeException("boom"), method, new Object[0]);
+
+            assertEquals(1, appender.list.size());
+            ILoggingEvent event = appender.list.get(0);
+            assertEquals(Level.ERROR, event.getLevel());
+            assertTrue(event.getFormattedMessage().contains("getAsyncExecutor"));
+            assertNotNull(event.getThrowableProxy());
+            assertEquals("boom", event.getThrowableProxy().getMessage());
+        } finally {
+            logger.detachAppender(appender);
+        }
     }
 
     @Test
