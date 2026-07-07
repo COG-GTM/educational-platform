@@ -358,7 +358,7 @@ ArchUnit are used for implementing architecture tests. These tests are placed in
 **LayerTest** - tests for validating the dependencies between layers of application.
 
 ### 3.11. Communication between bounded contexts
-Communication between bounded contexts is performed via Spring's `ApplicationEventPublisher` for publishing integration events and `@Async`/`@EventListener` annotations for handling them asynchronously.
+Communication between bounded contexts is performed via Spring's `ApplicationEventPublisher` for publishing integration events and asynchronous event listeners for handling them. Listeners are annotated with `@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)` so events published within a transaction are only processed after a successful commit, and with `@Async("integrationEventExecutor")` so they run on a dedicated bounded `ThreadPoolTaskExecutor` with `CallerRunsPolicy` back-pressure (configured in `IntegrationEventsAsyncConfiguration`). Listener methods are retried on transient failures via `@Retryable` with exponential backoff, and events that ultimately fail are logged by an `AsyncUncaughtExceptionHandler`. See [ADR-0014](docs/architecture-decisions/0014-async-executor-and-after-commit-event-publishing.md).
 
 ### 3.12. Bounded context map
 ![](docs/bounded_context_map.png)
