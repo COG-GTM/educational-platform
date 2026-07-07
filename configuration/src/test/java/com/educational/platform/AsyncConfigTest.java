@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,7 @@ public class AsyncConfigTest {
     @Test
     void integrationEventExecutor_isBoundedAndNamed() {
         ThreadPoolTaskExecutor executor = config.integrationEventExecutor();
+        executor.initialize();
 
         assertEquals(AsyncConfig.CORE_POOL_SIZE, executor.getCorePoolSize());
         assertEquals(AsyncConfig.MAX_POOL_SIZE, executor.getMaxPoolSize());
@@ -31,7 +33,10 @@ public class AsyncConfigTest {
 
     @Test
     void asyncExecutor_isProvided() {
-        assertNotNull(config.getAsyncExecutor());
+        Executor executor = config.getAsyncExecutor();
+
+        assertNotNull(executor);
+        assertInstanceOf(ThreadPoolTaskExecutor.class, executor);
     }
 
     @Test
