@@ -8,7 +8,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,6 +44,24 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         assertThat(updateCourseRatingCommand)
                 .hasFieldOrPropertyWithValue("uuid", uuid)
                 .hasFieldOrPropertyWithValue("rating", 3.7);
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_executedOnIntegrationEventExecutorAfterCommit() throws NoSuchMethodException {
+        // given
+        final Method method = CourseRatingRecalculatedIntegrationEventHandler.class
+                .getMethod("handleCourseRatingRecalculatedEvent", CourseRatingRecalculatedIntegrationEvent.class);
+
+        // when
+        final Async async = method.getAnnotation(Async.class);
+        final TransactionalEventListener listener = method.getAnnotation(TransactionalEventListener.class);
+
+        // then
+        assertThat(async).isNotNull();
+        assertThat(async.value()).isEqualTo("integrationEventExecutor");
+        assertThat(listener).isNotNull();
+        assertThat(listener.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
+        assertThat(listener.fallbackExecution()).isFalse();
     }
 
 }
