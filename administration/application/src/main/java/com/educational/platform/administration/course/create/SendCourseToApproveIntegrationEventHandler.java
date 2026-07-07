@@ -2,6 +2,11 @@ package com.educational.platform.administration.course.create;
 
 import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -13,6 +18,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Component
 public class SendCourseToApproveIntegrationEventHandler {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(SendCourseToApproveIntegrationEventHandler.class);
+
     private final CreateCourseProposalCommandHandler createCourseProposalCommandHandler;
 
     public SendCourseToApproveIntegrationEventHandler(CreateCourseProposalCommandHandler createCourseProposalCommandHandler) {
@@ -21,8 +28,15 @@ public class SendCourseToApproveIntegrationEventHandler {
 
     @Async("integrationEventExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 200, multiplier = 2))
     public void handleSendCourseToApproveEvent(SendCourseToApproveIntegrationEvent event) {
         createCourseProposalCommandHandler.handle(new CreateCourseProposalCommand(event.courseId()));
+    }
+
+    @Recover
+    public void recover(Exception e, SendCourseToApproveIntegrationEvent event) {
+        LOGGER.error("Retries exhausted for SendCourseToApproveIntegrationEvent [courseId={}], event is lost",
+                event.courseId(), e);
     }
 
 }
