@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.scheduling.annotation.EnableAsync;
 
@@ -27,8 +28,8 @@ import static org.mockito.Mockito.mock;
  */
 public class IntegrationEventHandlerAsyncRetryTest {
 
-    @EnableAsync
-    @EnableRetry
+    @EnableAsync(order = Ordered.LOWEST_PRECEDENCE - 1)
+    @EnableRetry(order = Ordered.LOWEST_PRECEDENCE)
     @Configuration
     static class AsyncRetryConfig {
     }
