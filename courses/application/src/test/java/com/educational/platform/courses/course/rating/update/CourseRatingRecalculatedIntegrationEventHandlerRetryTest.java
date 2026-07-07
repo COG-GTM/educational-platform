@@ -16,8 +16,10 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -47,6 +49,51 @@ public class CourseRatingRecalculatedIntegrationEventHandlerRetryTest {
 
             verify(commandHandler, times(3)).handle(any());
             verify(target).recover(any(RuntimeException.class), any(CourseRatingRecalculatedIntegrationEvent.class));
+        }
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_commandHandlerFailsTwiceThenSucceeds_notRecovered() {
+        final UpdateCourseRatingCommandHandler commandHandler = mock(UpdateCourseRatingCommandHandler.class);
+        doThrow(new RuntimeException("boom"))
+                .doThrow(new RuntimeException("boom"))
+                .doNothing()
+                .when(commandHandler).handle(any());
+        final CourseRatingRecalculatedIntegrationEventHandler target = spy(new CourseRatingRecalculatedIntegrationEventHandler(commandHandler));
+
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.register(RetryConfig.class);
+            context.registerBean(CourseRatingRecalculatedIntegrationEventHandler.class, () -> target);
+            context.refresh();
+
+            final CourseRatingRecalculatedIntegrationEventHandler sut = context.getBean(CourseRatingRecalculatedIntegrationEventHandler.class);
+            final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(UUID.randomUUID(), 4.5);
+
+            sut.handleCourseRatingRecalculatedEvent(event);
+
+            verify(commandHandler, times(3)).handle(any());
+            verify(target, never()).recover(any(), any());
+        }
+    }
+
+    @Test
+    void handleCourseRatingRecalculatedEvent_commandHandlerSucceedsFirstAttempt_calledOnceAndNotRecovered() {
+        final UpdateCourseRatingCommandHandler commandHandler = mock(UpdateCourseRatingCommandHandler.class);
+        doNothing().when(commandHandler).handle(any());
+        final CourseRatingRecalculatedIntegrationEventHandler target = spy(new CourseRatingRecalculatedIntegrationEventHandler(commandHandler));
+
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.register(RetryConfig.class);
+            context.registerBean(CourseRatingRecalculatedIntegrationEventHandler.class, () -> target);
+            context.refresh();
+
+            final CourseRatingRecalculatedIntegrationEventHandler sut = context.getBean(CourseRatingRecalculatedIntegrationEventHandler.class);
+            final CourseRatingRecalculatedIntegrationEvent event = new CourseRatingRecalculatedIntegrationEvent(UUID.randomUUID(), 4.5);
+
+            sut.handleCourseRatingRecalculatedEvent(event);
+
+            verify(commandHandler, times(1)).handle(any());
+            verify(target, never()).recover(any(), any());
         }
     }
 

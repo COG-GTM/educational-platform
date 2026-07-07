@@ -16,8 +16,10 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -47,6 +49,51 @@ public class CourseApprovedByAdminIntegrationEventHandlerRetryTest {
 
             verify(commandHandler, times(3)).handle(any());
             verify(target).recover(any(RuntimeException.class), any(CourseApprovedByAdminIntegrationEvent.class));
+        }
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_commandHandlerFailsTwiceThenSucceeds_notRecovered() {
+        final ApproveCourseCommandHandler commandHandler = mock(ApproveCourseCommandHandler.class);
+        doThrow(new RuntimeException("boom"))
+                .doThrow(new RuntimeException("boom"))
+                .doNothing()
+                .when(commandHandler).handle(any());
+        final CourseApprovedByAdminIntegrationEventHandler target = spy(new CourseApprovedByAdminIntegrationEventHandler(commandHandler));
+
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.register(RetryConfig.class);
+            context.registerBean(CourseApprovedByAdminIntegrationEventHandler.class, () -> target);
+            context.refresh();
+
+            final CourseApprovedByAdminIntegrationEventHandler sut = context.getBean(CourseApprovedByAdminIntegrationEventHandler.class);
+            final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(UUID.randomUUID());
+
+            sut.handleCourseApprovedByAdminEvent(event);
+
+            verify(commandHandler, times(3)).handle(any());
+            verify(target, never()).recover(any(), any());
+        }
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_commandHandlerSucceedsFirstAttempt_calledOnceAndNotRecovered() {
+        final ApproveCourseCommandHandler commandHandler = mock(ApproveCourseCommandHandler.class);
+        doNothing().when(commandHandler).handle(any());
+        final CourseApprovedByAdminIntegrationEventHandler target = spy(new CourseApprovedByAdminIntegrationEventHandler(commandHandler));
+
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.register(RetryConfig.class);
+            context.registerBean(CourseApprovedByAdminIntegrationEventHandler.class, () -> target);
+            context.refresh();
+
+            final CourseApprovedByAdminIntegrationEventHandler sut = context.getBean(CourseApprovedByAdminIntegrationEventHandler.class);
+            final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(UUID.randomUUID());
+
+            sut.handleCourseApprovedByAdminEvent(event);
+
+            verify(commandHandler, times(1)).handle(any());
+            verify(target, never()).recover(any(), any());
         }
     }
 

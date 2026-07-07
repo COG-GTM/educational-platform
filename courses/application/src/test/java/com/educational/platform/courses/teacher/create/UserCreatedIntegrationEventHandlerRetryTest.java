@@ -14,8 +14,10 @@ import org.springframework.retry.annotation.EnableRetry;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -45,6 +47,51 @@ public class UserCreatedIntegrationEventHandlerRetryTest {
 
             verify(commandHandler, times(3)).handle(any());
             verify(target).recover(any(RuntimeException.class), any(UserCreatedIntegrationEvent.class));
+        }
+    }
+
+    @Test
+    void handleUserCreatedEvent_commandHandlerFailsTwiceThenSucceeds_notRecovered() {
+        final CreateTeacherCommandHandler commandHandler = mock(CreateTeacherCommandHandler.class);
+        doThrow(new RuntimeException("boom"))
+                .doThrow(new RuntimeException("boom"))
+                .doNothing()
+                .when(commandHandler).handle(any());
+        final UserCreatedIntegrationEventHandler target = spy(new UserCreatedIntegrationEventHandler(commandHandler));
+
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.register(RetryConfig.class);
+            context.registerBean(UserCreatedIntegrationEventHandler.class, () -> target);
+            context.refresh();
+
+            final UserCreatedIntegrationEventHandler sut = context.getBean(UserCreatedIntegrationEventHandler.class);
+            final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("username", "user@example.com");
+
+            sut.handleUserCreatedEvent(event);
+
+            verify(commandHandler, times(3)).handle(any());
+            verify(target, never()).recover(any(), any());
+        }
+    }
+
+    @Test
+    void handleUserCreatedEvent_commandHandlerSucceedsFirstAttempt_calledOnceAndNotRecovered() {
+        final CreateTeacherCommandHandler commandHandler = mock(CreateTeacherCommandHandler.class);
+        doNothing().when(commandHandler).handle(any());
+        final UserCreatedIntegrationEventHandler target = spy(new UserCreatedIntegrationEventHandler(commandHandler));
+
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.register(RetryConfig.class);
+            context.registerBean(UserCreatedIntegrationEventHandler.class, () -> target);
+            context.refresh();
+
+            final UserCreatedIntegrationEventHandler sut = context.getBean(UserCreatedIntegrationEventHandler.class);
+            final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("username", "user@example.com");
+
+            sut.handleUserCreatedEvent(event);
+
+            verify(commandHandler, times(1)).handle(any());
+            verify(target, never()).recover(any(), any());
         }
     }
 

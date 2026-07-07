@@ -18,8 +18,10 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -49,6 +51,51 @@ public class StudentEnrolledToCourseIntegrationEventHandlerRetryTest {
 
             verify(commandHandler, times(3)).handle(any());
             verify(target).recover(any(RuntimeException.class), any(StudentEnrolledToCourseIntegrationEvent.class));
+        }
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_commandHandlerFailsTwiceThenSucceeds_notRecovered() {
+        final IncreaseNumberOfStudentsCommandHandler commandHandler = mock(IncreaseNumberOfStudentsCommandHandler.class);
+        doThrow(new RuntimeException("boom"))
+                .doThrow(new RuntimeException("boom"))
+                .doNothing()
+                .when(commandHandler).handle(any());
+        final StudentEnrolledToCourseIntegrationEventHandler target = spy(new StudentEnrolledToCourseIntegrationEventHandler(commandHandler));
+
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.register(RetryConfig.class);
+            context.registerBean(StudentEnrolledToCourseIntegrationEventHandler.class, () -> target);
+            context.refresh();
+
+            final StudentEnrolledToCourseIntegrationEventHandler sut = context.getBean(StudentEnrolledToCourseIntegrationEventHandler.class);
+            final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(UUID.randomUUID(), "username");
+
+            sut.handleStudentEnrolledToCourseEvent(event);
+
+            verify(commandHandler, times(3)).handle(any());
+            verify(target, never()).recover(any(), any());
+        }
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_commandHandlerSucceedsFirstAttempt_calledOnceAndNotRecovered() {
+        final IncreaseNumberOfStudentsCommandHandler commandHandler = mock(IncreaseNumberOfStudentsCommandHandler.class);
+        doNothing().when(commandHandler).handle(any());
+        final StudentEnrolledToCourseIntegrationEventHandler target = spy(new StudentEnrolledToCourseIntegrationEventHandler(commandHandler));
+
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.register(RetryConfig.class);
+            context.registerBean(StudentEnrolledToCourseIntegrationEventHandler.class, () -> target);
+            context.refresh();
+
+            final StudentEnrolledToCourseIntegrationEventHandler sut = context.getBean(StudentEnrolledToCourseIntegrationEventHandler.class);
+            final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(UUID.randomUUID(), "username");
+
+            sut.handleStudentEnrolledToCourseEvent(event);
+
+            verify(commandHandler, times(1)).handle(any());
+            verify(target, never()).recover(any(), any());
         }
     }
 
