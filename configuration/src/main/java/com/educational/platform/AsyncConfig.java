@@ -21,8 +21,9 @@ public class AsyncConfig implements AsyncConfigurer {
     public static final int QUEUE_CAPACITY = 100;
     public static final String THREAD_NAME_PREFIX = "integration-event-";
 
-    @Bean(name = "integrationEventExecutor")
-    public ThreadPoolTaskExecutor integrationEventExecutor() {
+    private final ThreadPoolTaskExecutor integrationEventExecutor = createIntegrationEventExecutor();
+
+    private static ThreadPoolTaskExecutor createIntegrationEventExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(CORE_POOL_SIZE);
         executor.setMaxPoolSize(MAX_POOL_SIZE);
@@ -32,9 +33,14 @@ public class AsyncConfig implements AsyncConfigurer {
         return executor;
     }
 
+    @Bean(name = "integrationEventExecutor")
+    public ThreadPoolTaskExecutor integrationEventExecutor() {
+        return integrationEventExecutor;
+    }
+
     @Override
     public Executor getAsyncExecutor() {
-        return integrationEventExecutor();
+        return integrationEventExecutor;
     }
 
     @Override

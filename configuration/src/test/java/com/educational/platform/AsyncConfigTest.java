@@ -3,6 +3,7 @@ package com.educational.platform;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.Executor;
@@ -36,7 +37,7 @@ public class AsyncConfigTest {
         Executor executor = config.getAsyncExecutor();
 
         assertNotNull(executor);
-        assertInstanceOf(ThreadPoolTaskExecutor.class, executor);
+        assertSame(config.integrationEventExecutor(), executor);
     }
 
     @Test
