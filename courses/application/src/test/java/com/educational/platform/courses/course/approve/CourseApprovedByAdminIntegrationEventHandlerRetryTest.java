@@ -1,14 +1,20 @@
 package com.educational.platform.courses.course.approve;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.annotation.EnableRetry;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -41,6 +47,38 @@ public class CourseApprovedByAdminIntegrationEventHandlerRetryTest {
 
             verify(commandHandler, times(3)).handle(any());
             verify(target).recover(any(RuntimeException.class), any(CourseApprovedByAdminIntegrationEvent.class));
+        }
+    }
+
+    @Test
+    void recover_logsEventContextAndSwallowsException() {
+        // given
+        final ApproveCourseCommandHandler commandHandler = mock(ApproveCourseCommandHandler.class);
+        final CourseApprovedByAdminIntegrationEventHandler sut = new CourseApprovedByAdminIntegrationEventHandler(commandHandler);
+        final UUID courseId = UUID.randomUUID();
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(courseId);
+        final RuntimeException failure = new RuntimeException("boom");
+
+        final Logger logger = (Logger) LoggerFactory.getLogger(CourseApprovedByAdminIntegrationEventHandler.class);
+        final ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            // when
+            assertThatCode(() -> sut.recover(failure, event)).doesNotThrowAnyException();
+
+            // then
+            assertThat(appender.list)
+                    .anySatisfy(loggingEvent -> {
+                        assertThat(loggingEvent.getFormattedMessage())
+                                .contains("Retries exhausted for CourseApprovedByAdminIntegrationEvent")
+                                .contains(courseId.toString())
+                                .contains("event is lost");
+                        assertThat(loggingEvent.getThrowableProxy().getMessage()).isEqualTo("boom");
+                    });
+        } finally {
+            logger.detachAppender(appender);
         }
     }
 

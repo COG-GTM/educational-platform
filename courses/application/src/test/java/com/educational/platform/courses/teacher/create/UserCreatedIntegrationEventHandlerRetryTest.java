@@ -1,12 +1,18 @@
 package com.educational.platform.courses.teacher.create;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.annotation.EnableRetry;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -39,6 +45,37 @@ public class UserCreatedIntegrationEventHandlerRetryTest {
 
             verify(commandHandler, times(3)).handle(any());
             verify(target).recover(any(RuntimeException.class), any(UserCreatedIntegrationEvent.class));
+        }
+    }
+
+    @Test
+    void recover_logsEventContextAndSwallowsException() {
+        // given
+        final CreateTeacherCommandHandler commandHandler = mock(CreateTeacherCommandHandler.class);
+        final UserCreatedIntegrationEventHandler sut = new UserCreatedIntegrationEventHandler(commandHandler);
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("username", "user@example.com");
+        final RuntimeException failure = new RuntimeException("boom");
+
+        final Logger logger = (Logger) LoggerFactory.getLogger(UserCreatedIntegrationEventHandler.class);
+        final ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            // when
+            assertThatCode(() -> sut.recover(failure, event)).doesNotThrowAnyException();
+
+            // then
+            assertThat(appender.list)
+                    .anySatisfy(loggingEvent -> {
+                        assertThat(loggingEvent.getFormattedMessage())
+                                .contains("Retries exhausted for UserCreatedIntegrationEvent")
+                                .contains("username")
+                                .contains("event is lost");
+                        assertThat(loggingEvent.getThrowableProxy().getMessage()).isEqualTo("boom");
+                    });
+        } finally {
+            logger.detachAppender(appender);
         }
     }
 
