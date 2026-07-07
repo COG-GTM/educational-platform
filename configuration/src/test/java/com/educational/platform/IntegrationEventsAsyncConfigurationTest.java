@@ -1,6 +1,8 @@
 package com.educational.platform;
 
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -40,12 +42,49 @@ public class IntegrationEventsAsyncConfigurationTest {
     }
 
     @Test
+    void integrationEventExecutor_saturated_appliesBackPressureByRunningTaskOnCallerThread() throws InterruptedException {
+        final ThreadPoolTaskExecutor executor = sut.integrationEventExecutor();
+        executor.initialize();
+        final CountDownLatch release = new CountDownLatch(1);
+        try {
+            final int saturatingTasks = executor.getMaxPoolSize() + executor.getQueueCapacity();
+            final CountDownLatch started = new CountDownLatch(executor.getCorePoolSize());
+            for (int i = 0; i < saturatingTasks; i++) {
+                executor.execute(() -> {
+                    started.countDown();
+                    try {
+                        release.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+            }
+            assertTrue(started.await(5, TimeUnit.SECONDS));
+
+            final Thread[] executingThread = new Thread[1];
+            executor.execute(() -> executingThread[0] = Thread.currentThread());
+
+            assertSame(Thread.currentThread(), executingThread[0]);
+        } finally {
+            release.countDown();
+            executor.shutdown();
+        }
+    }
+
+    @Test
     void getAsyncUncaughtExceptionHandler_logsWithoutThrowing() throws NoSuchMethodException {
         assertNotNull(sut.getAsyncUncaughtExceptionHandler());
         sut.getAsyncUncaughtExceptionHandler().handleUncaughtException(
                 new RuntimeException("expected failure"),
                 IntegrationEventsAsyncConfiguration.class.getMethod("integrationEventExecutor"),
                 "event");
+    }
+
+    @Test
+    void getAsyncUncaughtExceptionHandler_noArguments_logsWithoutThrowing() throws NoSuchMethodException {
+        sut.getAsyncUncaughtExceptionHandler().handleUncaughtException(
+                new RuntimeException("expected failure"),
+                IntegrationEventsAsyncConfiguration.class.getMethod("integrationEventExecutor"));
     }
 
 }
