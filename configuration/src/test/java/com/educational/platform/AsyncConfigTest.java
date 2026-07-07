@@ -180,7 +180,9 @@ public class AsyncConfigTest {
 
     private static void await(CountDownLatch latch) {
         try {
-            latch.await(10, TimeUnit.SECONDS);
+            if (!latch.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Timed out waiting for latch");
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
