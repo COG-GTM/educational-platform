@@ -22,18 +22,13 @@ import static org.mockito.Mockito.verify;
 
 public class SendCourseToApproveIntegrationEventHandlerRetryTest {
 
-    private static final CreateCourseProposalCommandHandler createCourseProposalCommandHandler = mock(CreateCourseProposalCommandHandler.class);
+    private CreateCourseProposalCommandHandler createCourseProposalCommandHandler;
 
     private AnnotationConfigApplicationContext context;
 
     @Configuration
     @EnableResilientMethods
     static class RetryTestConfiguration {
-
-        @Bean
-        CreateCourseProposalCommandHandler createCourseProposalCommandHandler() {
-            return createCourseProposalCommandHandler;
-        }
 
         @Bean
         SendCourseToApproveIntegrationEventHandler sendCourseToApproveIntegrationEventHandler(CreateCourseProposalCommandHandler handler) {
@@ -44,8 +39,11 @@ public class SendCourseToApproveIntegrationEventHandlerRetryTest {
 
     @BeforeEach
     void setUp() {
-        org.mockito.Mockito.reset(createCourseProposalCommandHandler);
-        context = new AnnotationConfigApplicationContext(RetryTestConfiguration.class);
+        createCourseProposalCommandHandler = mock(CreateCourseProposalCommandHandler.class);
+        context = new AnnotationConfigApplicationContext();
+        context.registerBean(CreateCourseProposalCommandHandler.class, () -> createCourseProposalCommandHandler);
+        context.register(RetryTestConfiguration.class);
+        context.refresh();
     }
 
     @AfterEach
