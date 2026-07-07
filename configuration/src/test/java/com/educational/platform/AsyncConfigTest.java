@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import ch.qos.logback.classic.Level;
@@ -79,6 +80,46 @@ public class AsyncConfigTest {
     }
 
     @Test
+    void asyncConfig_isSpringConfiguration() {
+        assertNotNull(AsyncConfig.class.getAnnotation(Configuration.class));
+    }
+
+    @Test
+    void saturatedExecutor_appliesBackPressureViaCallerRuns() throws InterruptedException {
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch coreBusy = new CountDownLatch(AsyncConfig.CORE_POOL_SIZE);
+        try {
+            for (int i = 0; i < AsyncConfig.CORE_POOL_SIZE; i++) {
+                executor.execute(() -> {
+                    coreBusy.countDown();
+                    await(release);
+                });
+            }
+            assertTrue(coreBusy.await(5, TimeUnit.SECONDS));
+
+            for (int i = 0; i < AsyncConfig.QUEUE_CAPACITY; i++) {
+                executor.execute(() -> await(release));
+            }
+
+            CountDownLatch extraBusy = new CountDownLatch(AsyncConfig.MAX_POOL_SIZE - AsyncConfig.CORE_POOL_SIZE);
+            for (int i = 0; i < AsyncConfig.MAX_POOL_SIZE - AsyncConfig.CORE_POOL_SIZE; i++) {
+                executor.execute(() -> {
+                    extraBusy.countDown();
+                    await(release);
+                });
+            }
+            assertTrue(extraBusy.await(5, TimeUnit.SECONDS));
+
+            AtomicReference<String> threadName = new AtomicReference<>();
+            executor.execute(() -> threadName.set(Thread.currentThread().getName()));
+
+            assertEquals(Thread.currentThread().getName(), threadName.get());
+        } finally {
+            release.countDown();
+        }
+    }
+
+    @Test
     void integrationEventExecutor_beanNameMatchesContract() throws NoSuchMethodException {
         Method beanMethod = AsyncConfig.class.getMethod("integrationEventExecutor");
         Bean bean = beanMethod.getAnnotation(Bean.class);
@@ -135,6 +176,14 @@ public class AsyncConfigTest {
                 new RuntimeException((String) null), method, (Object[]) null));
         assertDoesNotThrow(() -> handler.handleUncaughtException(
                 new Error("severe"), method, new Object[] {"param", null}));
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            latch.await(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
 }
