@@ -12,6 +12,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.lang.reflect.Method;
@@ -108,5 +111,42 @@ class AsyncConfigurationTest {
         assertEquals(4, taskExecutor.getCorePoolSize());
         assertEquals(8, taskExecutor.getMaxPoolSize());
         assertEquals("integration-event-", taskExecutor.getThreadNamePrefix());
+    }
+
+    @Test
+    void asyncConfiguration_isSpringConfigurationWithRetryEnabledAndNamedExecutorBean() throws NoSuchMethodException {
+        assertTrue(AsyncConfiguration.class.isAnnotationPresent(Configuration.class));
+        assertTrue(AsyncConfiguration.class.isAnnotationPresent(EnableRetry.class));
+
+        final Method beanMethod = AsyncConfiguration.class.getDeclaredMethod("integrationEventExecutor");
+        assertTrue(beanMethod.isAnnotationPresent(Bean.class));
+        assertThat(beanMethod.getAnnotation(Bean.class).value()).containsExactly("integrationEventExecutor");
+    }
+
+    @Test
+    void saturatedExecutor_appliesBackPressureViaCallerRuns() {
+        // given: fill core + max threads and the queue so the next task is rejected
+        final CountDownLatch releaseWorkers = new CountDownLatch(1);
+        try {
+            for (int i = 0; i < 8 + 100; i++) {
+                executor.execute(() -> {
+                    try {
+                        releaseWorkers.await(10, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+            }
+
+            // when: one more task exceeds capacity
+            final AtomicReference<String> callerRunThread = new AtomicReference<>();
+            final Thread current = Thread.currentThread();
+            executor.execute(() -> callerRunThread.set(Thread.currentThread().getName()));
+
+            // then: CallerRunsPolicy executed it synchronously on the submitting thread
+            assertEquals(current.getName(), callerRunThread.get());
+        } finally {
+            releaseWorkers.countDown();
+        }
     }
 }
