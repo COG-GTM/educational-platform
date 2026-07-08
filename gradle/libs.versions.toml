@@ -9,6 +9,7 @@ jaxbApi = "2.3.1"
 passay = "1.6.4"
 springDependencyManagementPlugin = "1.1.7"
 springDoc = "3.0.2"
+springRetry = "2.0.13"
 
 [plugins]
 springdependencies = { id = "io.spring.dependency-management", version.ref = "springDependencyManagementPlugin" }

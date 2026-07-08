@@ -11,10 +11,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -23,6 +27,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -74,6 +80,35 @@ public class SendCourseToApproveCommandHandlerTest {
         verify(eventPublisher).publishEvent(argument.capture());
         assertThat(argument.getValue())
                 .hasFieldOrPropertyWithValue("courseId", uuid);
+    }
+
+    @Test
+    void handle_existingCourse_integrationEventPublishedBeforeTransactionCommits() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final SendCourseToApproveCommand command = new SendCourseToApproveCommand(uuid);
+
+        var teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        when(teacher.getId()).thenReturn(15);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        final TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+
+        // when
+        transactionTemplate.executeWithoutResult(status -> sut.handle(command));
+
+        // then
+        final InOrder inOrder = inOrder(eventPublisher, transactionManager);
+        inOrder.verify(eventPublisher).publishEvent(any(SendCourseToApproveIntegrationEvent.class));
+        inOrder.verify(transactionManager).commit(any());
     }
 
     @Test

@@ -1,17 +1,19 @@
 package com.educational.platform.courses.course.numberofstudents.update;
 
 import com.educational.platform.course.enrollments.integration.event.StudentEnrolledToCourseIntegrationEvent;
-import com.educational.platform.courses.course.numberofsudents.update.IncreaseNumberOfStudentsCommandHandler;
 import com.educational.platform.courses.course.numberofsudents.update.StudentEnrolledToCourseIntegrationEventHandler;
-import com.educational.platform.courses.course.numberofsudents.update.IncreaseNumberOfStudentsCommand;
+import com.educational.platform.courses.course.numberofsudents.update.StudentEnrolledToCourseRetryableInvoker;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,7 +23,7 @@ import static org.mockito.Mockito.verify;
 public class StudentEnrolledToCourseIntegrationEventHandlerTest {
 
     @Mock
-    private IncreaseNumberOfStudentsCommandHandler increaseNumberOfStudentsCommandHandler;
+    private StudentEnrolledToCourseRetryableInvoker studentEnrolledToCourseRetryableInvoker;
 
     @InjectMocks
     private StudentEnrolledToCourseIntegrationEventHandler sut;
@@ -37,11 +39,24 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         sut.handleStudentEnrolledToCourseEvent(event);
 
         // then
-        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> argument = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
-        verify(increaseNumberOfStudentsCommandHandler).handle(argument.capture());
-        final IncreaseNumberOfStudentsCommand updateNumberOfStudentsCommand = argument.getValue();
-        assertThat(updateNumberOfStudentsCommand)
-                .hasFieldOrPropertyWithValue("uuid", uuid);
+        verify(studentEnrolledToCourseRetryableInvoker).invoke(event);
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_isAsyncOnIntegrationEventExecutorAndListensAfterCommit() throws Exception {
+        // given
+        final Method method = StudentEnrolledToCourseIntegrationEventHandler.class
+                .getMethod("handleStudentEnrolledToCourseEvent", StudentEnrolledToCourseIntegrationEvent.class);
+
+        // then
+        final Async async = method.getAnnotation(Async.class);
+        assertThat(async).isNotNull();
+        assertThat(async.value()).isEqualTo("integrationEventExecutor");
+
+        final TransactionalEventListener listener = method.getAnnotation(TransactionalEventListener.class);
+        assertThat(listener).isNotNull();
+        assertThat(listener.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
+        assertThat(listener.fallbackExecution()).isFalse();
     }
 
 }

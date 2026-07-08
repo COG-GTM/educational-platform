@@ -4,11 +4,14 @@ import com.educational.platform.courses.integration.event.SendCourseToApproveInt
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,7 +21,7 @@ import static org.mockito.Mockito.verify;
 class SendCourseToApproveIntegrationEventHandlerTest {
 
     @Mock
-    private CreateCourseProposalCommandHandler createCourseProposalCommandHandler;
+    private SendCourseToApproveRetryableInvoker sendCourseToApproveRetryableInvoker;
 
     @InjectMocks
     private SendCourseToApproveIntegrationEventHandler sut;
@@ -33,11 +36,24 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         sut.handleSendCourseToApproveEvent(event);
 
         // then
-        final ArgumentCaptor<CreateCourseProposalCommand> argument = ArgumentCaptor.forClass(CreateCourseProposalCommand.class);
-        verify(createCourseProposalCommandHandler).handle(argument.capture());
-        final CreateCourseProposalCommand createCourseProposalCommand = argument.getValue();
-        assertThat(createCourseProposalCommand)
-                .hasFieldOrPropertyWithValue("uuid", uuid);
+        verify(sendCourseToApproveRetryableInvoker).invoke(event);
+    }
+
+    @Test
+    void handleSendCourseToApproveEvent_isAsyncOnIntegrationEventExecutorAndListensAfterCommit() throws Exception {
+        // given
+        final Method method = SendCourseToApproveIntegrationEventHandler.class
+                .getMethod("handleSendCourseToApproveEvent", SendCourseToApproveIntegrationEvent.class);
+
+        // then
+        final Async async = method.getAnnotation(Async.class);
+        assertThat(async).isNotNull();
+        assertThat(async.value()).isEqualTo("integrationEventExecutor");
+
+        final TransactionalEventListener listener = method.getAnnotation(TransactionalEventListener.class);
+        assertThat(listener).isNotNull();
+        assertThat(listener.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
+        assertThat(listener.fallbackExecution()).isFalse();
     }
 
 }
