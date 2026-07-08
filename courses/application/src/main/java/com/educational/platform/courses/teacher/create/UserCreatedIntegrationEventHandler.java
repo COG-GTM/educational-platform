@@ -13,16 +13,16 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Component
 public class UserCreatedIntegrationEventHandler {
 
-    private final CreateTeacherCommandHandler createTeacherCommandHandler;
+    private final UserCreatedRetryableInvoker userCreatedRetryableInvoker;
 
-    public UserCreatedIntegrationEventHandler(CreateTeacherCommandHandler createTeacherCommandHandler) {
-        this.createTeacherCommandHandler = createTeacherCommandHandler;
+    public UserCreatedIntegrationEventHandler(UserCreatedRetryableInvoker userCreatedRetryableInvoker) {
+        this.userCreatedRetryableInvoker = userCreatedRetryableInvoker;
     }
 
     @Async("integrationEventExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleUserCreatedEvent(UserCreatedIntegrationEvent event) {
-        createTeacherCommandHandler.handle(new CreateTeacherCommand(event.username()));
+        userCreatedRetryableInvoker.invoke(event);
     }
 
 }

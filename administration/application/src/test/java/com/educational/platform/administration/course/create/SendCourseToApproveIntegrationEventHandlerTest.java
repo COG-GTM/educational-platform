@@ -4,7 +4,6 @@ import com.educational.platform.courses.integration.event.SendCourseToApproveInt
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -22,7 +21,7 @@ import static org.mockito.Mockito.verify;
 class SendCourseToApproveIntegrationEventHandlerTest {
 
     @Mock
-    private CreateCourseProposalCommandHandler createCourseProposalCommandHandler;
+    private SendCourseToApproveRetryableInvoker sendCourseToApproveRetryableInvoker;
 
     @InjectMocks
     private SendCourseToApproveIntegrationEventHandler sut;
@@ -37,11 +36,7 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         sut.handleSendCourseToApproveEvent(event);
 
         // then
-        final ArgumentCaptor<CreateCourseProposalCommand> argument = ArgumentCaptor.forClass(CreateCourseProposalCommand.class);
-        verify(createCourseProposalCommandHandler).handle(argument.capture());
-        final CreateCourseProposalCommand createCourseProposalCommand = argument.getValue();
-        assertThat(createCourseProposalCommand)
-                .hasFieldOrPropertyWithValue("uuid", uuid);
+        verify(sendCourseToApproveRetryableInvoker).invoke(event);
     }
 
     @Test

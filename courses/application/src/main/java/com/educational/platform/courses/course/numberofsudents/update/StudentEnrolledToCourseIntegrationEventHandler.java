@@ -13,16 +13,16 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Component
 public class StudentEnrolledToCourseIntegrationEventHandler {
 
-    private final IncreaseNumberOfStudentsCommandHandler increaseNumberOfStudentsCommandHandler;
+    private final StudentEnrolledToCourseRetryableInvoker studentEnrolledToCourseRetryableInvoker;
 
-    public StudentEnrolledToCourseIntegrationEventHandler(IncreaseNumberOfStudentsCommandHandler increaseNumberOfStudentsCommandHandler) {
-        this.increaseNumberOfStudentsCommandHandler = increaseNumberOfStudentsCommandHandler;
+    public StudentEnrolledToCourseIntegrationEventHandler(StudentEnrolledToCourseRetryableInvoker studentEnrolledToCourseRetryableInvoker) {
+        this.studentEnrolledToCourseRetryableInvoker = studentEnrolledToCourseRetryableInvoker;
     }
 
     @Async("integrationEventExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleStudentEnrolledToCourseEvent(StudentEnrolledToCourseIntegrationEvent event) {
-        increaseNumberOfStudentsCommandHandler.handle(new IncreaseNumberOfStudentsCommand(event.courseId()));
+        studentEnrolledToCourseRetryableInvoker.invoke(event);
     }
 
 }

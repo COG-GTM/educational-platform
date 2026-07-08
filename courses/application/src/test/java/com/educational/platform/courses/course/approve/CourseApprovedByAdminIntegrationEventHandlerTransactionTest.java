@@ -40,11 +40,11 @@ class CourseApprovedByAdminIntegrationEventHandlerTransactionTest {
     private PlatformTransactionManager transactionManager;
 
     @Autowired
-    private ApproveCourseCommandHandler approveCourseCommandHandler;
+    private CourseApprovedByAdminRetryableInvoker courseApprovedByAdminRetryableInvoker;
 
     @BeforeEach
     void resetMocks() {
-        reset(approveCourseCommandHandler);
+        reset(courseApprovedByAdminRetryableInvoker);
     }
 
     @Test
@@ -57,11 +57,11 @@ class CourseApprovedByAdminIntegrationEventHandlerTransactionTest {
         transactionTemplate.executeWithoutResult(status -> {
             eventPublisher.publishEvent(new CourseApprovedByAdminIntegrationEvent(uuid));
             // then: not yet delivered inside the transaction
-            verifyNoInteractions(approveCourseCommandHandler);
+            verifyNoInteractions(courseApprovedByAdminRetryableInvoker);
         });
 
         // then: delivered after commit
-        verify(approveCourseCommandHandler).handle(any(ApproveCourseCommand.class));
+        verify(courseApprovedByAdminRetryableInvoker).invoke(any(CourseApprovedByAdminIntegrationEvent.class));
     }
 
     @Test
@@ -77,7 +77,7 @@ class CourseApprovedByAdminIntegrationEventHandlerTransactionTest {
         });
 
         // then
-        verifyNoInteractions(approveCourseCommandHandler);
+        verifyNoInteractions(courseApprovedByAdminRetryableInvoker);
     }
 
     @Test
@@ -89,7 +89,7 @@ class CourseApprovedByAdminIntegrationEventHandlerTransactionTest {
         eventPublisher.publishEvent(new CourseApprovedByAdminIntegrationEvent(uuid));
 
         // then: fallbackExecution defaults to false, so the event is dropped
-        verifyNoInteractions(approveCourseCommandHandler);
+        verifyNoInteractions(courseApprovedByAdminRetryableInvoker);
     }
 
     @Configuration
@@ -106,14 +106,14 @@ class CourseApprovedByAdminIntegrationEventHandlerTransactionTest {
         }
 
         @Bean
-        ApproveCourseCommandHandler approveCourseCommandHandler() {
-            return mock(ApproveCourseCommandHandler.class);
+        CourseApprovedByAdminRetryableInvoker courseApprovedByAdminRetryableInvoker() {
+            return mock(CourseApprovedByAdminRetryableInvoker.class);
         }
 
         @Bean
         CourseApprovedByAdminIntegrationEventHandler courseApprovedByAdminIntegrationEventHandler(
-                ApproveCourseCommandHandler approveCourseCommandHandler) {
-            return new CourseApprovedByAdminIntegrationEventHandler(approveCourseCommandHandler);
+                CourseApprovedByAdminRetryableInvoker courseApprovedByAdminRetryableInvoker) {
+            return new CourseApprovedByAdminIntegrationEventHandler(courseApprovedByAdminRetryableInvoker);
         }
     }
 

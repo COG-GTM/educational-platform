@@ -13,16 +13,16 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Component
 public class CourseRatingRecalculatedIntegrationEventHandler {
 
-    private final UpdateCourseRatingCommandHandler updateCourseRatingCommandHandler;
+    private final CourseRatingRecalculatedRetryableInvoker courseRatingRecalculatedRetryableInvoker;
 
-    public CourseRatingRecalculatedIntegrationEventHandler(UpdateCourseRatingCommandHandler updateCourseRatingCommandHandler) {
-        this.updateCourseRatingCommandHandler = updateCourseRatingCommandHandler;
+    public CourseRatingRecalculatedIntegrationEventHandler(CourseRatingRecalculatedRetryableInvoker courseRatingRecalculatedRetryableInvoker) {
+        this.courseRatingRecalculatedRetryableInvoker = courseRatingRecalculatedRetryableInvoker;
     }
 
     @Async("integrationEventExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleCourseRatingRecalculatedEvent(CourseRatingRecalculatedIntegrationEvent event) {
-        updateCourseRatingCommandHandler.handle(new UpdateCourseRatingCommand(event.courseId(), event.rating()));
+        courseRatingRecalculatedRetryableInvoker.invoke(event);
     }
 
 }

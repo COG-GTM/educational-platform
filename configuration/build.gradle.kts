@@ -1,4 +1,7 @@
 dependencies {
+    implementation("org.springframework.retry", "spring-retry", libs.versions.springRetry.get())
+    implementation("org.springframework", "spring-aspects")
+
     implementation(project(":users:users-application"))
     implementation(project(":users:users-web"))
     implementation(project(":users:users-integration-events"))

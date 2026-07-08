@@ -1,13 +1,11 @@
 package com.educational.platform.courses.course.numberofstudents.update;
 
 import com.educational.platform.course.enrollments.integration.event.StudentEnrolledToCourseIntegrationEvent;
-import com.educational.platform.courses.course.numberofsudents.update.IncreaseNumberOfStudentsCommandHandler;
 import com.educational.platform.courses.course.numberofsudents.update.StudentEnrolledToCourseIntegrationEventHandler;
-import com.educational.platform.courses.course.numberofsudents.update.IncreaseNumberOfStudentsCommand;
+import com.educational.platform.courses.course.numberofsudents.update.StudentEnrolledToCourseRetryableInvoker;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,7 +23,7 @@ import static org.mockito.Mockito.verify;
 public class StudentEnrolledToCourseIntegrationEventHandlerTest {
 
     @Mock
-    private IncreaseNumberOfStudentsCommandHandler increaseNumberOfStudentsCommandHandler;
+    private StudentEnrolledToCourseRetryableInvoker studentEnrolledToCourseRetryableInvoker;
 
     @InjectMocks
     private StudentEnrolledToCourseIntegrationEventHandler sut;
@@ -41,11 +39,7 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         sut.handleStudentEnrolledToCourseEvent(event);
 
         // then
-        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> argument = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
-        verify(increaseNumberOfStudentsCommandHandler).handle(argument.capture());
-        final IncreaseNumberOfStudentsCommand updateNumberOfStudentsCommand = argument.getValue();
-        assertThat(updateNumberOfStudentsCommand)
-                .hasFieldOrPropertyWithValue("uuid", uuid);
+        verify(studentEnrolledToCourseRetryableInvoker).invoke(event);
     }
 
     @Test

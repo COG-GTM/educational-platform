@@ -4,7 +4,6 @@ import com.educational.platform.administration.integration.event.CourseApprovedB
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -22,7 +21,7 @@ import static org.mockito.Mockito.verify;
 public class CourseApprovedByAdminIntegrationEventHandlerTest {
 
     @Mock
-    private ApproveCourseCommandHandler approveCourseCommandHandler;
+    private CourseApprovedByAdminRetryableInvoker courseApprovedByAdminRetryableInvoker;
 
     @InjectMocks
     private CourseApprovedByAdminIntegrationEventHandler sut;
@@ -37,11 +36,7 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         sut.handleCourseApprovedByAdminEvent(event);
 
         // then
-        final ArgumentCaptor<ApproveCourseCommand> argument = ArgumentCaptor.forClass(ApproveCourseCommand.class);
-        verify(approveCourseCommandHandler).handle(argument.capture());
-        final ApproveCourseCommand approveCourseCommand = argument.getValue();
-        assertThat(approveCourseCommand)
-                .hasFieldOrPropertyWithValue("uuid", uuid);
+        verify(courseApprovedByAdminRetryableInvoker).invoke(event);
     }
 
     @Test

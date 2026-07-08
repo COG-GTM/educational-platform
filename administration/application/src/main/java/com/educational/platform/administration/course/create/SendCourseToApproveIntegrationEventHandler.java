@@ -13,16 +13,16 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Component
 public class SendCourseToApproveIntegrationEventHandler {
 
-    private final CreateCourseProposalCommandHandler createCourseProposalCommandHandler;
+    private final SendCourseToApproveRetryableInvoker sendCourseToApproveRetryableInvoker;
 
-    public SendCourseToApproveIntegrationEventHandler(CreateCourseProposalCommandHandler createCourseProposalCommandHandler) {
-        this.createCourseProposalCommandHandler = createCourseProposalCommandHandler;
+    public SendCourseToApproveIntegrationEventHandler(SendCourseToApproveRetryableInvoker sendCourseToApproveRetryableInvoker) {
+        this.sendCourseToApproveRetryableInvoker = sendCourseToApproveRetryableInvoker;
     }
 
     @Async("integrationEventExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleSendCourseToApproveEvent(SendCourseToApproveIntegrationEvent event) {
-        createCourseProposalCommandHandler.handle(new CreateCourseProposalCommand(event.courseId()));
+        sendCourseToApproveRetryableInvoker.invoke(event);
     }
 
 }

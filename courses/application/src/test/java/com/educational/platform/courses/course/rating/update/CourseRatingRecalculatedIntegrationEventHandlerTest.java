@@ -4,7 +4,6 @@ import com.educational.platform.course.reviews.integration.event.CourseRatingRec
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -22,7 +21,7 @@ import static org.mockito.Mockito.verify;
 public class CourseRatingRecalculatedIntegrationEventHandlerTest {
 
     @Mock
-    private UpdateCourseRatingCommandHandler updateCourseRatingCommandHandler;
+    private CourseRatingRecalculatedRetryableInvoker courseRatingRecalculatedRetryableInvoker;
 
     @InjectMocks
     private CourseRatingRecalculatedIntegrationEventHandler sut;
@@ -38,12 +37,7 @@ public class CourseRatingRecalculatedIntegrationEventHandlerTest {
         sut.handleCourseRatingRecalculatedEvent(event);
 
         // then
-        final ArgumentCaptor<UpdateCourseRatingCommand> argument = ArgumentCaptor.forClass(UpdateCourseRatingCommand.class);
-        verify(updateCourseRatingCommandHandler).handle(argument.capture());
-        final UpdateCourseRatingCommand updateCourseRatingCommand = argument.getValue();
-        assertThat(updateCourseRatingCommand)
-                .hasFieldOrPropertyWithValue("uuid", uuid)
-                .hasFieldOrPropertyWithValue("rating", 3.7);
+        verify(courseRatingRecalculatedRetryableInvoker).invoke(event);
     }
 
     @Test

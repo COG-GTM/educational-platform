@@ -1,4 +1,6 @@
 dependencies {
+    implementation("org.springframework.retry", "spring-retry", libs.versions.springRetry.get())
+
     implementation(project(":common"))
     implementation(project(":security:security-config"))
     implementation(project(":courses:courses-integration-events"))
