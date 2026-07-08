@@ -6,7 +6,6 @@ import com.educational.platform.course.enrollments.CourseEnrollmentRepository;
 import com.educational.platform.course.enrollments.CurrentUserAsStudent;
 import com.educational.platform.course.enrollments.integration.event.StudentEnrolledToCourseIntegrationEvent;
 import com.educational.platform.course.enrollments.student.Student;
-import com.educational.platform.course.enrollments.student.create.CreateStudentCommand;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,7 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class RegisterStudentToCourseCommandHandlerTest {
+class RegisterStudentToCourseCommandHandlerTest {
 
     @Mock
     private PlatformTransactionManager transactionManager;
@@ -45,6 +44,12 @@ public class RegisterStudentToCourseCommandHandlerTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private CourseEnrollment courseEnrollment;
+
+    @Mock
+    private Student student;
+
     private RegisterStudentToCourseCommandHandler sut;
 
     @BeforeEach
@@ -57,44 +62,44 @@ public class RegisterStudentToCourseCommandHandlerTest {
     void handle_validCommand_enrollmentSavedAndEventPublished() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final UUID enrollmentUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
         final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
-
-        final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
-        when(courseEnrollmentFactory.createFrom(command)).thenReturn(enrollment);
-        when(currentUserAsStudent.userAsStudent()).thenReturn(new Student(new CreateStudentCommand("username")));
+        when(courseEnrollmentFactory.createFrom(command)).thenReturn(courseEnrollment);
+        when(courseEnrollment.getUuid()).thenReturn(enrollmentUuid);
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+        when(student.toReference()).thenReturn("username");
 
         // when
         final UUID result = sut.handle(command);
 
         // then
-        assertThat(result).isEqualTo(enrollment.getUuid());
-        verify(courseEnrollmentRepository).save(enrollment);
+        assertThat(result).isEqualTo(enrollmentUuid);
+        verify(courseEnrollmentRepository).save(courseEnrollment);
 
-        final ArgumentCaptor<StudentEnrolledToCourseIntegrationEvent> eventArgument = ArgumentCaptor.forClass(StudentEnrolledToCourseIntegrationEvent.class);
+        final ArgumentCaptor<StudentEnrolledToCourseIntegrationEvent> eventArgument =
+                ArgumentCaptor.forClass(StudentEnrolledToCourseIntegrationEvent.class);
         verify(eventPublisher).publishEvent(eventArgument.capture());
-        final StudentEnrolledToCourseIntegrationEvent event = eventArgument.getValue();
-        assertThat(event)
+        assertThat(eventArgument.getValue())
                 .hasFieldOrPropertyWithValue("courseId", courseId)
                 .hasFieldOrPropertyWithValue("username", "username");
     }
 
     @Test
-    void handle_validCommand_eventPublishedBeforeTransactionCommit() {
+    void handle_validCommand_eventPublishedInsideTransaction() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
-
-        final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
-        when(courseEnrollmentFactory.createFrom(command)).thenReturn(enrollment);
-        when(currentUserAsStudent.userAsStudent()).thenReturn(new Student(new CreateStudentCommand("username")));
+        when(courseEnrollmentFactory.createFrom(command)).thenReturn(courseEnrollment);
+        when(courseEnrollment.getUuid()).thenReturn(UUID.randomUUID());
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+        when(student.toReference()).thenReturn("username");
 
         // when
         sut.handle(command);
 
-        // then
+        // then - event is published before the transaction commits, so AFTER_COMMIT listeners can fire
         final InOrder inOrder = inOrder(eventPublisher, transactionManager);
         inOrder.verify(eventPublisher).publishEvent(any(StudentEnrolledToCourseIntegrationEvent.class));
         inOrder.verify(transactionManager).commit(any());
     }
-
 }
