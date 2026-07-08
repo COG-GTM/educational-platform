@@ -8,7 +8,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,6 +42,23 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         final ApproveCourseCommand approveCourseCommand = argument.getValue();
         assertThat(approveCourseCommand)
                 .hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_isAsyncOnIntegrationEventExecutorAndListensAfterCommit() throws Exception {
+        // given
+        final Method method = CourseApprovedByAdminIntegrationEventHandler.class
+                .getMethod("handleCourseApprovedByAdminEvent", CourseApprovedByAdminIntegrationEvent.class);
+
+        // then
+        final Async async = method.getAnnotation(Async.class);
+        assertThat(async).isNotNull();
+        assertThat(async.value()).isEqualTo("integrationEventExecutor");
+
+        final TransactionalEventListener listener = method.getAnnotation(TransactionalEventListener.class);
+        assertThat(listener).isNotNull();
+        assertThat(listener.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
+        assertThat(listener.fallbackExecution()).isFalse();
     }
 
 }
