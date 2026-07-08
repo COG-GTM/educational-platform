@@ -35,7 +35,7 @@ public class StudentEnrolledToCourseIntegrationEventHandler {
     }
 
     @Recover
-    void recover(Exception exception, StudentEnrolledToCourseIntegrationEvent event) {
+    public void recover(Exception exception, StudentEnrolledToCourseIntegrationEvent event) {
         log.error("Failed to process {} after retries, event will be dropped: {}",
                 event.getClass().getSimpleName(), event, exception);
     }

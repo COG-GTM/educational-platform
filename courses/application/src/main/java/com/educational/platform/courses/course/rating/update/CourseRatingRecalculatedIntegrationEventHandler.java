@@ -35,7 +35,7 @@ public class CourseRatingRecalculatedIntegrationEventHandler {
     }
 
     @Recover
-    void recover(Exception exception, CourseRatingRecalculatedIntegrationEvent event) {
+    public void recover(Exception exception, CourseRatingRecalculatedIntegrationEvent event) {
         log.error("Failed to process {} after retries, event will be dropped: {}",
                 event.getClass().getSimpleName(), event, exception);
     }

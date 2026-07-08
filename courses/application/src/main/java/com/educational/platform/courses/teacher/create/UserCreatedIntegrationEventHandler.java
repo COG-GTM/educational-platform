@@ -35,7 +35,7 @@ public class UserCreatedIntegrationEventHandler {
     }
 
     @Recover
-    void recover(Exception exception, UserCreatedIntegrationEvent event) {
+    public void recover(Exception exception, UserCreatedIntegrationEvent event) {
         log.error("Failed to process {} after retries, event will be dropped: {}",
                 event.getClass().getSimpleName(), event, exception);
     }

@@ -35,7 +35,7 @@ public class CourseApprovedByAdminIntegrationEventHandler {
     }
 
     @Recover
-    void recover(Exception exception, CourseApprovedByAdminIntegrationEvent event) {
+    public void recover(Exception exception, CourseApprovedByAdminIntegrationEvent event) {
         log.error("Failed to process {} after retries, event will be dropped: {}",
                 event.getClass().getSimpleName(), event, exception);
     }

@@ -35,7 +35,7 @@ public class SendCourseToApproveIntegrationEventHandler {
     }
 
     @Recover
-    void recover(Exception exception, SendCourseToApproveIntegrationEvent event) {
+    public void recover(Exception exception, SendCourseToApproveIntegrationEvent event) {
         log.error("Failed to process {} after retries, event will be dropped: {}",
                 event.getClass().getSimpleName(), event, exception);
     }
