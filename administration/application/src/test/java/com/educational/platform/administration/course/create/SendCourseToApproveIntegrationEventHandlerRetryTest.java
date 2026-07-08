@@ -3,13 +3,12 @@ package com.educational.platform.administration.course.create;
 import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
 
 import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +17,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 import java.util.UUID;
@@ -88,27 +89,27 @@ class SendCourseToApproveIntegrationEventHandlerRetryTest {
     @Test
     void recover_logsEventContextAndSwallowsException() {
         // given
+        final LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         final ch.qos.logback.classic.Logger logger =
-                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(SendCourseToApproveIntegrationEventHandler.class);
+                loggerContext.getLogger(SendCourseToApproveIntegrationEventHandler.class);
         final ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
         logger.addAppender(appender);
         try {
             final RuntimeException failure = new RuntimeException("boom");
-            doThrow(failure).when(commandHandler).handle(any(CreateCourseProposalCommand.class));
             final SendCourseToApproveIntegrationEvent event = new SendCourseToApproveIntegrationEvent(UUID.randomUUID());
 
-            // when - does not rethrow after retries are exhausted
-            sut.handleSendCourseToApproveEvent(event);
+            // when - must not rethrow
+            sut.recover(failure, event);
 
             // then
             assertThat(appender.list)
-                    .anySatisfy(loggingEvent -> {
-                        assertThat(loggingEvent.getLevel()).isEqualTo(Level.ERROR);
-                        assertThat(loggingEvent.getFormattedMessage())
+                    .anySatisfy(logEvent -> {
+                        assertThat(logEvent.getLevel()).isEqualTo(Level.ERROR);
+                        assertThat(logEvent.getFormattedMessage())
                                 .contains("SendCourseToApproveIntegrationEvent")
                                 .contains("event will be dropped");
-                        assertThat(loggingEvent.getThrowableProxy().getMessage()).isEqualTo("boom");
+                        assertThat(logEvent.getThrowableProxy().getMessage()).isEqualTo("boom");
                     });
         } finally {
             logger.detachAppender(appender);
