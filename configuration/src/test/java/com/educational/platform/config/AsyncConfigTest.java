@@ -4,8 +4,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -47,5 +49,28 @@ class AsyncConfigTest {
         // must not throw when logging an unhandled exception
         handler.handleUncaughtException(new IllegalStateException("boom"),
                 AsyncConfigTest.class.getDeclaredMethods()[0]);
+    }
+
+    @Test
+    void getAsyncUncaughtExceptionHandler_toleratesNullMessageAndParams() {
+        final AsyncUncaughtExceptionHandler handler = sut.getAsyncUncaughtExceptionHandler();
+
+        handler.handleUncaughtException(new IllegalStateException((String) null),
+                AsyncConfigTest.class.getDeclaredMethods()[0], (Object) null);
+    }
+
+    @Test
+    void integrationEventExecutor_runsTasksOnPrefixedThread() throws Exception {
+        final ThreadPoolTaskExecutor executor = sut.integrationEventExecutor();
+        executor.initialize();
+        try {
+            final CompletableFuture<String> threadName = new CompletableFuture<>();
+
+            executor.execute(() -> threadName.complete(Thread.currentThread().getName()));
+
+            assertTrue(threadName.get(5, TimeUnit.SECONDS).startsWith("integration-event-"));
+        } finally {
+            executor.shutdown();
+        }
     }
 }
