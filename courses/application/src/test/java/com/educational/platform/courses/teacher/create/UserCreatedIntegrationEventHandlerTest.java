@@ -1,6 +1,6 @@
-package com.educational.platform.courses.course.approve;
+package com.educational.platform.courses.teacher.create;
 
-import com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent;
+import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,42 +14,40 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.lang.reflect.Method;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
-public class CourseApprovedByAdminIntegrationEventHandlerTest {
+class UserCreatedIntegrationEventHandlerTest {
 
     @Mock
-    private ApproveCourseCommandHandler approveCourseCommandHandler;
+    private CreateTeacherCommandHandler createTeacherCommandHandler;
 
     @InjectMocks
-    private CourseApprovedByAdminIntegrationEventHandler sut;
+    private UserCreatedIntegrationEventHandler sut;
 
     @Test
-    void handleCourseApprovedByAdminEvent_approveCourseCommandExecuted() {
+    void handleUserCreatedEvent_createTeacherCommandExecuted() {
         // given
-        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("username", "email@gmail.com");
 
         // when
-        sut.handleCourseApprovedByAdminEvent(event);
+        sut.handleUserCreatedEvent(event);
 
         // then
-        final ArgumentCaptor<ApproveCourseCommand> argument = ArgumentCaptor.forClass(ApproveCourseCommand.class);
-        verify(approveCourseCommandHandler).handle(argument.capture());
-        final ApproveCourseCommand approveCourseCommand = argument.getValue();
-        assertThat(approveCourseCommand)
-                .hasFieldOrPropertyWithValue("uuid", uuid);
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler).handle(argument.capture());
+        final CreateTeacherCommand createTeacherCommand = argument.getValue();
+        assertThat(createTeacherCommand)
+                .hasFieldOrPropertyWithValue("username", "username");
     }
 
     @Test
-    void handleCourseApprovedByAdminEvent_isAnnotatedForAfterCommitAsyncRetryAndRecover() throws NoSuchMethodException {
-        final Method method = CourseApprovedByAdminIntegrationEventHandler.class.getDeclaredMethod(
-                "handleCourseApprovedByAdminEvent",
-                CourseApprovedByAdminIntegrationEvent.class);
+    void handleUserCreatedEvent_isAnnotatedForAfterCommitAsyncRetryAndRecover() throws NoSuchMethodException {
+        final Method method = UserCreatedIntegrationEventHandler.class.getDeclaredMethod(
+                "handleUserCreatedEvent",
+                UserCreatedIntegrationEvent.class);
 
         assertThat(method.isAnnotationPresent(TransactionalEventListener.class)).isTrue();
         final TransactionalEventListener transactionalEventListener = method.getAnnotation(TransactionalEventListener.class);
@@ -65,9 +63,8 @@ public class CourseApprovedByAdminIntegrationEventHandlerTest {
         assertThat(retryable.backoff().delay()).isEqualTo(500L);
         assertThat(retryable.backoff().multiplier()).isEqualTo(2.0d);
 
-        final boolean recoverMethodExists = java.util.Arrays.stream(CourseApprovedByAdminIntegrationEventHandler.class.getDeclaredMethods())
+        final boolean recoverMethodExists = java.util.Arrays.stream(UserCreatedIntegrationEventHandler.class.getDeclaredMethods())
                 .anyMatch(candidate -> candidate.isAnnotationPresent(org.springframework.retry.annotation.Recover.class));
         assertThat(recoverMethodExists).isTrue();
     }
-
 }
