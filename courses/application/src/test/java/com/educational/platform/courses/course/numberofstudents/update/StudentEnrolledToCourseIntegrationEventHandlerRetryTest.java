@@ -5,6 +5,7 @@ import com.educational.platform.courses.course.numberofsudents.update.IncreaseNu
 import com.educational.platform.courses.course.numberofsudents.update.IncreaseNumberOfStudentsCommandHandler;
 import com.educational.platform.courses.course.numberofsudents.update.StudentEnrolledToCourseIntegrationEventHandler;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,11 @@ class StudentEnrolledToCourseIntegrationEventHandlerRetryTest {
     @Autowired
     private IncreaseNumberOfStudentsCommandHandler commandHandler;
 
+    @BeforeEach
+    void resetMock() {
+        Mockito.reset(commandHandler);
+    }
+
     @Test
     void handle_commandHandlerKeepsFailing_retriesThreeTimesThenRecovers() {
         // given
@@ -61,6 +67,22 @@ class StudentEnrolledToCourseIntegrationEventHandlerRetryTest {
 
         // then
         verify(commandHandler, times(3)).handle(any(IncreaseNumberOfStudentsCommand.class));
+    }
+
+    @Test
+    void handle_transientFailure_succeedsOnSecondAttempt() {
+        // given
+        doThrow(new RuntimeException("transient"))
+                .doNothing()
+                .when(commandHandler).handle(any(IncreaseNumberOfStudentsCommand.class));
+        final StudentEnrolledToCourseIntegrationEvent event =
+                new StudentEnrolledToCourseIntegrationEvent(UUID.randomUUID(), "username");
+
+        // when
+        sut.handleStudentEnrolledToCourseEvent(event);
+
+        // then
+        verify(commandHandler, times(2)).handle(any(IncreaseNumberOfStudentsCommand.class));
     }
 
     @Test
