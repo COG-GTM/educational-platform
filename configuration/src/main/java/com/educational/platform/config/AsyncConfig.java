@@ -42,7 +42,6 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setQueueCapacity(QUEUE_CAPACITY);
         executor.setThreadNamePrefix(THREAD_NAME_PREFIX);
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        executor.initialize();
         return executor;
     }
 
