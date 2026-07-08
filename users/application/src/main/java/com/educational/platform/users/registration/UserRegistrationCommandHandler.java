@@ -12,6 +12,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import jakarta.annotation.Nonnull;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import jakarta.validation.ConstraintViolation;
@@ -25,6 +26,7 @@ import java.util.Set;
  * Represents User Registration command handler which creates user in system by provided info in command.
  */
 @Component
+@Transactional
 public class UserRegistrationCommandHandler {
 
     private final TransactionTemplate transactionTemplate;

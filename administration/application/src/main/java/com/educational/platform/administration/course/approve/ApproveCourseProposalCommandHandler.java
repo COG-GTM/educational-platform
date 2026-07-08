@@ -9,6 +9,7 @@ import com.educational.platform.common.exception.ResourceNotFoundException;
 import jakarta.inject.Named;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Objects;
@@ -18,6 +19,7 @@ import java.util.Optional;
  * Command handler for {@link ApproveCourseProposalCommand} approves a course proposal.
  */
 @Named
+@Transactional
 public class ApproveCourseProposalCommandHandler {
 
     private final TransactionTemplate transactionTemplate;
