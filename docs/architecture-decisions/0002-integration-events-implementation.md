@@ -11,3 +11,6 @@ For implementing event-driven application, the platform should be available for 
 We will start from standard Spring Events classes: ApplicationListener, ApplicationEvent without dependency to external middleware component. We can add custom features to Spring functionality when it's needed.
 todo: For now, all events will be stored in integration-events module. But this solution should be reviewed. Integration events should be published after successful transaction.
 - https://devblogs.microsoft.com/cesardelatorre/domain-events-vs-integration-events-in-domain-driven-design-and-microservices-architectures/
+
+## Note
+The "events should be published after successful transaction" todo above is resolved by [ADR-0014](0014-async-executor-and-after-commit-publishing.md), which introduces after-commit publishing via `@TransactionalEventListener(AFTER_COMMIT)`, a dedicated bounded async executor, and retry-based resilience.

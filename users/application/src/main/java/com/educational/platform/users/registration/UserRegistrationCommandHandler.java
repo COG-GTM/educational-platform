@@ -65,11 +65,14 @@ public class UserRegistrationCommandHandler {
 
             final User newUser = new User(command, passwordEncoder);
             repository.save(newUser);
+
+            final UserDTO createdUser = newUser.toDTO();
+            eventPublisher.publishEvent(new UserCreatedIntegrationEvent(createdUser.username(), createdUser.email()));
+
             return newUser;
         });
 
         final UserDTO dto = Objects.requireNonNull(user).toDTO();
-        eventPublisher.publishEvent(new UserCreatedIntegrationEvent(dto.username(), dto.email()));
 
         return jwtTokenProvider.createToken(dto.username(), Collections.singletonList(Role.from(dto.role())));
     }

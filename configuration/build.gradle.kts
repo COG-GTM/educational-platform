@@ -24,6 +24,7 @@ dependencies {
     implementation(project(":common"))
 
     implementation("org.springframework.boot", "spring-boot-starter-web")
+    implementation("org.springframework.retry", "spring-retry", libs.versions.springRetry.get())
     implementation("org.liquibase", "liquibase-core")
 
     testImplementation("org.junit.jupiter", "junit-jupiter-api")
