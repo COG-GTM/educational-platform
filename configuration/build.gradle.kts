@@ -24,6 +24,7 @@ dependencies {
     implementation(project(":common"))
 
     implementation("org.springframework.boot", "spring-boot-starter-web")
+    implementation("org.springframework.retry", "spring-retry", libs.versions.springRetry.get())
     implementation("org.liquibase", "liquibase-core")
 
     testImplementation("org.junit.jupiter", "junit-jupiter-api")
@@ -31,6 +32,7 @@ dependencies {
     testImplementation("org.junit.platform", "junit-platform-launcher")
     testImplementation("org.mockito", "mockito-junit-jupiter", libs.versions.mockito.get())
     testImplementation("com.tngtech.archunit", "archunit-junit5", libs.versions.archunit.get())
+    testRuntimeOnly("org.junit.jupiter", "junit-jupiter-engine")
 }
 
 tasks.test {
