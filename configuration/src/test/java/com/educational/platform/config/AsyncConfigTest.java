@@ -19,6 +19,8 @@ class AsyncConfigTest {
     @Test
     void integrationEventExecutor_isBoundedWithCallerRunsPolicy() {
         final ThreadPoolTaskExecutor executor = sut.integrationEventExecutor();
+        // Spring initializes the executor through the bean lifecycle; do it manually here.
+        executor.initialize();
 
         assertEquals(4, executor.getCorePoolSize());
         assertEquals(16, executor.getMaxPoolSize());
@@ -26,6 +28,7 @@ class AsyncConfigTest {
         assertEquals("integration-event-", executor.getThreadNamePrefix());
         assertTrue(executor.getThreadPoolExecutor().getRejectedExecutionHandler()
                 instanceof ThreadPoolExecutor.CallerRunsPolicy);
+        executor.shutdown();
     }
 
     @Test

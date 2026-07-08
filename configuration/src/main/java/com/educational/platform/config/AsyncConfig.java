@@ -48,7 +48,6 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setQueueCapacity(500);
         executor.setThreadNamePrefix("integration-event-");
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        executor.initialize();
         return executor;
     }
 

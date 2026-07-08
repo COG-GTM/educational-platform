@@ -379,8 +379,8 @@ Listeners are made resilient with Spring Retry (`@Retryable` with exponential ba
 - Gradle;
 
 ## 4. How to run
-### Install Java 21
-- Download and install Java 21
+### Install Java 25
+- Download and install Java 25
 
 ### Run application
 `./gradlew bootRun`
