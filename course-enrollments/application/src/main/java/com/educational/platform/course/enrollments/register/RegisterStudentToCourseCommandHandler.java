@@ -48,14 +48,12 @@ public class RegisterStudentToCourseCommandHandler {
         final CourseEnrollment courseEnrollment = transactionTemplate.execute(transactionStatus -> {
             final CourseEnrollment enrollment = courseEnrollmentFactory.createFrom(command);
             courseEnrollmentRepository.save(enrollment);
+            eventPublisher.publishEvent(new StudentEnrolledToCourseIntegrationEvent(command.courseId(), currentUserAsStudent.userAsStudent().toReference()));
 
             return enrollment;
         });
 
         final UUID uuid = Objects.requireNonNull(courseEnrollment).getUuid();
-        eventPublisher.publishEvent(new StudentEnrolledToCourseIntegrationEvent(command.courseId(),
-                currentUserAsStudent.userAsStudent().toReference()));
-
         return uuid;
     }
 

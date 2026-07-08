@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,6 +27,7 @@ import jakarta.validation.Validator;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -88,6 +90,26 @@ public class UserRegistrationCommandHandlerTest {
         assertThat(event)
                 .hasFieldOrPropertyWithValue("username", "username")
                 .hasFieldOrPropertyWithValue("email", "email@gmail.com");
+    }
+
+    @Test
+    void handle_validCommand_eventPublishedBeforeCommit() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        final InOrder inOrder = inOrder(eventPublisher, transactionManager);
+        inOrder.verify(eventPublisher).publishEvent(any(UserCreatedIntegrationEvent.class));
+        inOrder.verify(transactionManager).commit(any());
     }
 
     @Test

@@ -8,7 +8,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,6 +43,31 @@ class SendCourseToApproveIntegrationEventHandlerTest {
         final CreateCourseProposalCommand createCourseProposalCommand = argument.getValue();
         assertThat(createCourseProposalCommand)
                 .hasFieldOrPropertyWithValue("uuid", uuid);
+    }
+
+    @Test
+    void handleCourseApprovedByAdminEvent_isAnnotatedForAfterCommitAsyncRetryAndRecover() throws NoSuchMethodException {
+        final Method method = SendCourseToApproveIntegrationEventHandler.class.getDeclaredMethod(
+                "handleSendCourseToApproveEvent",
+                SendCourseToApproveIntegrationEvent.class);
+
+        assertThat(method.isAnnotationPresent(TransactionalEventListener.class)).isTrue();
+        final TransactionalEventListener transactionalEventListener = method.getAnnotation(TransactionalEventListener.class);
+        assertThat(transactionalEventListener.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
+
+        assertThat(method.isAnnotationPresent(Async.class)).isTrue();
+        final Async async = method.getAnnotation(Async.class);
+        assertThat(async.value()).isEqualTo("integrationEventExecutor");
+
+        assertThat(method.isAnnotationPresent(Retryable.class)).isTrue();
+        final Retryable retryable = method.getAnnotation(Retryable.class);
+        assertThat(retryable.maxAttempts()).isEqualTo(3);
+        assertThat(retryable.backoff().delay()).isEqualTo(500L);
+        assertThat(retryable.backoff().multiplier()).isEqualTo(2.0d);
+
+        final boolean recoverMethodExists = java.util.Arrays.stream(SendCourseToApproveIntegrationEventHandler.class.getDeclaredMethods())
+                .anyMatch(candidate -> candidate.isAnnotationPresent(org.springframework.retry.annotation.Recover.class));
+        assertThat(recoverMethodExists).isTrue();
     }
 
 }

@@ -11,7 +11,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -39,7 +38,7 @@ public class ApproveCourseProposalCommandHandler {
      */
     @PreAuthorize("hasRole('ADMIN')")
     public void handle(ApproveCourseProposalCommand command) {
-        final CourseProposal proposal = transactionTemplate.execute(transactionStatus -> {
+        transactionTemplate.execute(transactionStatus -> {
             final Optional<CourseProposal> dbResult = repository.findByUuid(command.uuid());
             if (dbResult.isEmpty()) {
                 throw new ResourceNotFoundException(String.format("Course Proposal with uuid: %s not found", command.uuid()));
@@ -48,11 +47,10 @@ public class ApproveCourseProposalCommandHandler {
 
             courseProposal.approve();
             repository.save(courseProposal);
+            final CourseProposalDTO dto = courseProposal.toDTO();
+            eventPublisher.publishEvent(new CourseApprovedByAdminIntegrationEvent(dto.uuid()));
 
             return courseProposal;
         });
-
-        final CourseProposalDTO dto = Objects.requireNonNull(proposal).toDTO();
-        eventPublisher.publishEvent(new CourseApprovedByAdminIntegrationEvent(dto.uuid()));
     }
 }
