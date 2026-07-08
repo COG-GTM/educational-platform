@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -51,6 +52,19 @@ class StudentEnrolledToCourseRetryableInvokerTest {
     @AfterEach
     void tearDown() {
         logger.detachAppender(listAppender);
+    }
+
+    @Test
+    void invoke_success_commandBuiltFromEventCourseIdAndSingleAttempt() {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "student@example.com");
+
+        sut.invoke(event);
+
+        final ArgumentCaptor<IncreaseNumberOfStudentsCommand> argument = ArgumentCaptor.forClass(IncreaseNumberOfStudentsCommand.class);
+        verify(increaseNumberOfStudentsCommandHandler, times(1)).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("uuid", uuid);
+        assertThat(listAppender.list).isEmpty();
     }
 
     @Test

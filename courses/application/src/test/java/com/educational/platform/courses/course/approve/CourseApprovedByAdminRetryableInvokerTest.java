@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
@@ -51,6 +52,19 @@ class CourseApprovedByAdminRetryableInvokerTest {
     @AfterEach
     void tearDown() {
         logger.detachAppender(listAppender);
+    }
+
+    @Test
+    void invoke_success_commandBuiltFromEventCourseIdAndSingleAttempt() {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CourseApprovedByAdminIntegrationEvent event = new CourseApprovedByAdminIntegrationEvent(uuid);
+
+        sut.invoke(event);
+
+        final ArgumentCaptor<ApproveCourseCommand> argument = ArgumentCaptor.forClass(ApproveCourseCommand.class);
+        verify(approveCourseCommandHandler, times(1)).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("uuid", uuid);
+        assertThat(listAppender.list).isEmpty();
     }
 
     @Test

@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
@@ -50,6 +51,18 @@ class UserCreatedRetryableInvokerTest {
     @AfterEach
     void tearDown() {
         logger.detachAppender(listAppender);
+    }
+
+    @Test
+    void invoke_success_commandBuiltFromEventUsernameAndSingleAttempt() {
+        final UserCreatedIntegrationEvent event = new UserCreatedIntegrationEvent("teacher@example.com", "teacher@example.com");
+
+        sut.invoke(event);
+
+        final ArgumentCaptor<CreateTeacherCommand> argument = ArgumentCaptor.forClass(CreateTeacherCommand.class);
+        verify(createTeacherCommandHandler, times(1)).handle(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("username", event.username());
+        assertThat(listAppender.list).isEmpty();
     }
 
     @Test
