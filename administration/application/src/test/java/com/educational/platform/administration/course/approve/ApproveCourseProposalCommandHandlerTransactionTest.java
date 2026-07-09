@@ -4,10 +4,12 @@ import com.educational.platform.administration.course.CourseProposal;
 import com.educational.platform.administration.course.CourseProposalRepository;
 import com.educational.platform.administration.course.create.CreateCourseProposalCommand;
 import com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent;
+import com.educational.platform.common.outbox.IntegrationEventOutbox;
+import com.educational.platform.common.outbox.IntegrationEventOutboxEntry;
+import com.educational.platform.common.outbox.IntegrationEventOutboxRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.event.EventListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
@@ -26,6 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,10 +43,10 @@ class ApproveCourseProposalCommandHandlerTransactionTest {
     private CourseProposalRepository repository;
 
     @Autowired
-    private PublishProbe publishProbe;
+    private OutboxSaveProbe outboxSaveProbe;
 
     @Test
-    void handle_publishesEventInsideActiveTransaction() {
+    void handle_storesEventInOutboxInsideActiveTransaction() throws Exception {
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
 
@@ -55,8 +58,11 @@ class ApproveCourseProposalCommandHandlerTransactionTest {
         sut.handle(command);
 
         verify(repository).save(correspondingCourseProposal);
-        assertThat(publishProbe.transactionActiveDuringPublish.get()).isTrue();
-        assertThat(publishProbe.event.get()).isEqualTo(new CourseApprovedByAdminIntegrationEvent(uuid));
+        assertThat(outboxSaveProbe.transactionActiveDuringSave.get()).isTrue();
+        final IntegrationEventOutboxEntry entry = outboxSaveProbe.entry.get();
+        assertThat(entry.getEventType()).isEqualTo(CourseApprovedByAdminIntegrationEvent.class.getName());
+        assertThat(new ObjectMapper().readValue(entry.getPayload(), CourseApprovedByAdminIntegrationEvent.class))
+                .isEqualTo(new CourseApprovedByAdminIntegrationEvent(uuid));
     }
 
     @Configuration
@@ -74,29 +80,39 @@ class ApproveCourseProposalCommandHandlerTransactionTest {
         }
 
         @Bean
-        PublishProbe publishProbe() {
-            return new PublishProbe();
+        OutboxSaveProbe outboxSaveProbe() {
+            return new OutboxSaveProbe();
+        }
+
+        @Bean
+        IntegrationEventOutboxRepository outboxRepository(OutboxSaveProbe outboxSaveProbe) {
+            final IntegrationEventOutboxRepository outboxRepository = mock(IntegrationEventOutboxRepository.class);
+            when(outboxRepository.save(any(IntegrationEventOutboxEntry.class))).thenAnswer(invocation -> {
+                outboxSaveProbe.transactionActiveDuringSave.set(TransactionSynchronizationManager.isActualTransactionActive());
+                outboxSaveProbe.entry.set(invocation.getArgument(0));
+                return invocation.getArgument(0);
+            });
+            return outboxRepository;
+        }
+
+        @Bean
+        IntegrationEventOutbox integrationEventOutbox(IntegrationEventOutboxRepository outboxRepository) {
+            return new IntegrationEventOutbox(outboxRepository);
         }
 
         @Bean
         ApproveCourseProposalCommandHandler approveCourseProposalCommandHandler(
                 PlatformTransactionManager transactionManager,
                 CourseProposalRepository repository,
-                ApplicationEventPublisher eventPublisher) {
-            return new ApproveCourseProposalCommandHandler(new TransactionTemplate(transactionManager), repository, eventPublisher);
+                IntegrationEventOutbox integrationEventOutbox) {
+            return new ApproveCourseProposalCommandHandler(new TransactionTemplate(transactionManager), repository, integrationEventOutbox);
         }
     }
 
-    static class PublishProbe {
+    static class OutboxSaveProbe {
 
-        private final AtomicBoolean transactionActiveDuringPublish = new AtomicBoolean();
-        private final AtomicReference<CourseApprovedByAdminIntegrationEvent> event = new AtomicReference<>();
-
-        @EventListener
-        void handle(CourseApprovedByAdminIntegrationEvent event) {
-            transactionActiveDuringPublish.set(TransactionSynchronizationManager.isActualTransactionActive());
-            this.event.set(event);
-        }
+        private final AtomicBoolean transactionActiveDuringSave = new AtomicBoolean();
+        private final AtomicReference<IntegrationEventOutboxEntry> entry = new AtomicReference<>();
     }
 
     static class NoOpTransactionManager extends AbstractPlatformTransactionManager {
@@ -104,6 +120,11 @@ class ApproveCourseProposalCommandHandlerTransactionTest {
         @Override
         protected Object doGetTransaction() {
             return new Object();
+        }
+
+        @Override
+        protected boolean isExistingTransaction(Object transaction) {
+            return TransactionSynchronizationManager.isActualTransactionActive();
         }
 
         @Override

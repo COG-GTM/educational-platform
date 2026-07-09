@@ -1,12 +1,12 @@
 package com.educational.platform.courses.course.approve;
 
 import com.educational.platform.common.exception.ResourceNotFoundException;
+import com.educational.platform.common.outbox.IntegrationEventOutbox;
 import com.educational.platform.courses.course.Course;
 import com.educational.platform.courses.course.CourseAlreadyApprovedException;
 import com.educational.platform.courses.course.CourseRepository;
 import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Component;
@@ -22,11 +22,11 @@ import java.util.Optional;
 public class SendCourseToApproveCommandHandler {
 
     private final CourseRepository repository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final IntegrationEventOutbox integrationEventOutbox;
 
-    public SendCourseToApproveCommandHandler(CourseRepository repository, ApplicationEventPublisher eventPublisher) {
+    public SendCourseToApproveCommandHandler(CourseRepository repository, IntegrationEventOutbox integrationEventOutbox) {
         this.repository = repository;
-        this.eventPublisher = eventPublisher;
+        this.integrationEventOutbox = integrationEventOutbox;
     }
 
     /**
@@ -46,6 +46,6 @@ public class SendCourseToApproveCommandHandler {
         final Course course = dbResult.get();
         course.sendToApprove();
 
-        eventPublisher.publishEvent(new SendCourseToApproveIntegrationEvent(command.uuid()));
+        integrationEventOutbox.publish(new SendCourseToApproveIntegrationEvent(command.uuid()));
     }
 }

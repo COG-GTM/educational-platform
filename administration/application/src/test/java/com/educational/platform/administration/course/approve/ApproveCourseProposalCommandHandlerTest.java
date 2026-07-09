@@ -13,7 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
+import com.educational.platform.common.outbox.IntegrationEventOutbox;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -39,14 +39,14 @@ class ApproveCourseProposalCommandHandlerTest {
     private TransactionTemplate transactionTemplate;
 
     @Mock
-    private ApplicationEventPublisher eventPublisher;
+    private IntegrationEventOutbox integrationEventOutbox;
 
     private ApproveCourseProposalCommandHandler sut;
 
     @BeforeEach
     void setUp() {
         transactionTemplate = new TransactionTemplate(transactionManager);
-        sut = new ApproveCourseProposalCommandHandler(transactionTemplate, repository, eventPublisher);
+        sut = new ApproveCourseProposalCommandHandler(transactionTemplate, repository, integrationEventOutbox);
     }
 
     @Test
@@ -71,7 +71,7 @@ class ApproveCourseProposalCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("status", CourseProposalStatus.APPROVED);
 
         final ArgumentCaptor<CourseApprovedByAdminIntegrationEvent> eventArgument = ArgumentCaptor.forClass(CourseApprovedByAdminIntegrationEvent.class);
-        verify(eventPublisher).publishEvent(eventArgument.capture());
+        verify(integrationEventOutbox).publish(eventArgument.capture());
         final CourseApprovedByAdminIntegrationEvent event = eventArgument.getValue();
         assertThat(event)
                 .hasFieldOrPropertyWithValue("courseId", uuid);

@@ -1,14 +1,16 @@
 package com.educational.platform.users.registration;
 
+import com.educational.platform.common.outbox.IntegrationEventOutbox;
+import com.educational.platform.common.outbox.IntegrationEventOutboxEntry;
+import com.educational.platform.common.outbox.IntegrationEventOutboxRepository;
 import com.educational.platform.users.Role;
 import com.educational.platform.users.RoleDTO;
 import com.educational.platform.users.UserRepository;
 import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
 import com.educational.platform.users.security.JwtTokenProvider;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.event.EventListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -29,6 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -46,10 +49,10 @@ class UserRegistrationCommandHandlerTransactionTest {
     private JwtTokenProvider jwtTokenProvider;
 
     @Autowired
-    private PublishProbe publishProbe;
+    private OutboxSaveProbe outboxSaveProbe;
 
     @Test
-    void handle_publishesEventInsideActiveTransaction() {
+    void handle_storesEventInOutboxInsideActiveTransaction() throws Exception {
         final UserRegistrationCommand command = UserRegistrationCommand.builder()
                 .email("email@gmail.com")
                 .username("username")
@@ -63,8 +66,11 @@ class UserRegistrationCommandHandlerTransactionTest {
         final String token = sut.handle(command);
 
         assertThat(token).isEqualTo("token");
-        assertThat(publishProbe.transactionActiveDuringPublish.get()).isTrue();
-        assertThat(publishProbe.event.get()).isEqualTo(new UserCreatedIntegrationEvent("username", "email@gmail.com"));
+        assertThat(outboxSaveProbe.transactionActiveDuringSave.get()).isTrue();
+        final IntegrationEventOutboxEntry entry = outboxSaveProbe.entry.get();
+        assertThat(entry.getEventType()).isEqualTo(UserCreatedIntegrationEvent.class.getName());
+        assertThat(new ObjectMapper().readValue(entry.getPayload(), UserCreatedIntegrationEvent.class))
+                .isEqualTo(new UserCreatedIntegrationEvent("username", "email@gmail.com"));
         verify(repository).existsByUsername("username");
     }
 
@@ -98,8 +104,24 @@ class UserRegistrationCommandHandlerTransactionTest {
         }
 
         @Bean
-        PublishProbe publishProbe() {
-            return new PublishProbe();
+        OutboxSaveProbe outboxSaveProbe() {
+            return new OutboxSaveProbe();
+        }
+
+        @Bean
+        IntegrationEventOutboxRepository outboxRepository(OutboxSaveProbe outboxSaveProbe) {
+            final IntegrationEventOutboxRepository outboxRepository = mock(IntegrationEventOutboxRepository.class);
+            when(outboxRepository.save(any(IntegrationEventOutboxEntry.class))).thenAnswer(invocation -> {
+                outboxSaveProbe.transactionActiveDuringSave.set(TransactionSynchronizationManager.isActualTransactionActive());
+                outboxSaveProbe.entry.set(invocation.getArgument(0));
+                return invocation.getArgument(0);
+            });
+            return outboxRepository;
+        }
+
+        @Bean
+        IntegrationEventOutbox integrationEventOutbox(IntegrationEventOutboxRepository outboxRepository) {
+            return new IntegrationEventOutbox(outboxRepository);
         }
 
         @Bean
@@ -108,22 +130,16 @@ class UserRegistrationCommandHandlerTransactionTest {
                 PasswordEncoder passwordEncoder,
                 JwtTokenProvider jwtTokenProvider,
                 UserRepository repository,
-                ApplicationEventPublisher eventPublisher,
+                IntegrationEventOutbox integrationEventOutbox,
                 Validator validator) {
-            return new UserRegistrationCommandHandler(new TransactionTemplate(transactionManager), passwordEncoder, jwtTokenProvider, repository, eventPublisher, validator);
+            return new UserRegistrationCommandHandler(new TransactionTemplate(transactionManager), passwordEncoder, jwtTokenProvider, repository, integrationEventOutbox, validator);
         }
     }
 
-    static class PublishProbe {
+    static class OutboxSaveProbe {
 
-        private final AtomicBoolean transactionActiveDuringPublish = new AtomicBoolean();
-        private final AtomicReference<UserCreatedIntegrationEvent> event = new AtomicReference<>();
-
-        @EventListener
-        void handle(UserCreatedIntegrationEvent event) {
-            transactionActiveDuringPublish.set(TransactionSynchronizationManager.isActualTransactionActive());
-            this.event.set(event);
-        }
+        private final AtomicBoolean transactionActiveDuringSave = new AtomicBoolean();
+        private final AtomicReference<IntegrationEventOutboxEntry> entry = new AtomicReference<>();
     }
 
     static class NoOpTransactionManager extends AbstractPlatformTransactionManager {
@@ -131,6 +147,11 @@ class UserRegistrationCommandHandlerTransactionTest {
         @Override
         protected Object doGetTransaction() {
             return new Object();
+        }
+
+        @Override
+        protected boolean isExistingTransaction(Object transaction) {
+            return TransactionSynchronizationManager.isActualTransactionActive();
         }
 
         @Override

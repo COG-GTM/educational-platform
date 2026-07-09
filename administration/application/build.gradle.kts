@@ -10,6 +10,7 @@ dependencies {
     implementation("org.springframework.boot", "spring-boot-starter-data-jpa")
     implementation("jakarta.inject", "jakarta.inject-api")
 
+    testImplementation("com.fasterxml.jackson.core", "jackson-databind")
     testImplementation("org.springframework.boot", "spring-boot-starter-test")
     testImplementation("org.springframework.boot", "spring-boot-jdbc-test")
     testImplementation("org.springframework.boot", "spring-boot-data-jpa-test")

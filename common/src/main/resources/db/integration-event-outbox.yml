@@ -1,0 +1,50 @@
+databaseChangeLog:
+  - changeSet:
+      id: 2026_07_09-1
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          tableExists:
+            tableName: integration_event_outbox
+      changes:
+        - createTable:
+            tableName: integration_event_outbox
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: integration_event_outbox_pk
+              - column:
+                  constraints:
+                    nullable: false
+                  name: event_type
+                  type: VARCHAR(500)
+              - column:
+                  constraints:
+                    nullable: false
+                  name: payload
+                  type: CLOB
+              - column:
+                  constraints:
+                    nullable: false
+                  name: status
+                  type: VARCHAR(20)
+              - column:
+                  constraints:
+                    nullable: false
+                  name: created_at
+                  type: TIMESTAMP
+              - column:
+                  name: processed_at
+                  type: TIMESTAMP
+        - createIndex:
+            tableName: integration_event_outbox
+            indexName: integration_event_outbox_status_created_at_idx
+            columns:
+              - column:
+                  name: status
+              - column:
+                  name: created_at

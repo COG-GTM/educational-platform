@@ -9,3 +9,5 @@ databaseChangeLog:
       file: "classpath*:/db/courses.yml"
   - include:
       file: "classpath*:/db/users.yml"
+  - include:
+      file: "classpath*:/db/integration-event-outbox.yml"

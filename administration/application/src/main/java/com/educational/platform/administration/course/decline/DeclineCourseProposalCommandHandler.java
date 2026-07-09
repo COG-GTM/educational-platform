@@ -6,8 +6,8 @@ import com.educational.platform.administration.course.CourseProposalDTO;
 import com.educational.platform.administration.course.CourseProposalRepository;
 import com.educational.platform.administration.integration.event.CourseDeclinedByAdminIntegrationEvent;
 import com.educational.platform.common.exception.ResourceNotFoundException;
+import com.educational.platform.common.outbox.IntegrationEventOutbox;
 import jakarta.inject.Named;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -24,12 +24,12 @@ public class DeclineCourseProposalCommandHandler {
 
     private final TransactionTemplate transactionTemplate;
     private final CourseProposalRepository repository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final IntegrationEventOutbox integrationEventOutbox;
 
-    public DeclineCourseProposalCommandHandler(TransactionTemplate transactionTemplate, CourseProposalRepository repository, ApplicationEventPublisher eventPublisher) {
+    public DeclineCourseProposalCommandHandler(TransactionTemplate transactionTemplate, CourseProposalRepository repository, IntegrationEventOutbox integrationEventOutbox) {
         this.transactionTemplate = transactionTemplate;
         this.repository = repository;
-        this.eventPublisher = eventPublisher;
+        this.integrationEventOutbox = integrationEventOutbox;
     }
 
     /**
@@ -55,7 +55,7 @@ public class DeclineCourseProposalCommandHandler {
         });
 
         final CourseProposalDTO dto = Objects.requireNonNull(proposal).toDTO();
-        eventPublisher.publishEvent(new CourseDeclinedByAdminIntegrationEvent(dto.uuid()));
+        integrationEventOutbox.publish(new CourseDeclinedByAdminIntegrationEvent(dto.uuid()));
     }
 
 }
