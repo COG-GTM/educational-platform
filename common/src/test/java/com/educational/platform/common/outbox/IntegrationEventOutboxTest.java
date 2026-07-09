@@ -1,5 +1,6 @@
 package com.educational.platform.common.outbox;
 
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,6 +10,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -42,5 +45,14 @@ class IntegrationEventOutboxTest {
 
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> sut.publish(new Object()));
+    }
+
+    @Test
+    void publish_isTransactionalWithMandatoryPropagation() throws Exception {
+        // then
+        final Method method = IntegrationEventOutbox.class.getMethod("publish", Object.class);
+        final Transactional transactional = method.getAnnotation(Transactional.class);
+        assertThat(transactional).isNotNull();
+        assertThat(transactional.propagation()).isEqualTo(Propagation.MANDATORY);
     }
 }
