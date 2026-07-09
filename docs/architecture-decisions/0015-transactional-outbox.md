@@ -18,7 +18,7 @@ We introduce a transactional outbox in the **common** module:
 
 ## Consequences
 - Events survive process restarts: an event is durable exactly when its producing transaction commits, and undelivered (`NEW`) entries are re-dispatched on startup.
-- Delivery becomes *at-least-once* — a crash after listeners ran but before the entry is marked `PROCESSED` re-dispatches the event — so listeners should be idempotent.
+- Dispatch by the relay is *at-least-once*: a crash before the relay's transaction commits re-dispatches the event, so listeners should be idempotent. Because `AFTER_COMMIT` listeners run only after the entry is already marked `PROCESSED`, a crash *during* listener execution does not re-dispatch — end-to-end processing of a dispatched event remains at-most-once, as it was before the outbox.
 - Event delivery gains up to one poll interval of latency compared to direct in-memory publication.
 - `FAILED` entries and `PROCESSED` history accumulate in the outbox table; cleanup/archival is left to operations.
 - A future Axon migration (ADR-0010, ADR-0011) would replace both the outbox and the Spring event plumbing.
