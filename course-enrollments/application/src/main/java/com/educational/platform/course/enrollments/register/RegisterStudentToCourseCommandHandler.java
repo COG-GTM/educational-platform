@@ -1,5 +1,6 @@
 package com.educational.platform.course.enrollments.register;
 
+import com.educational.platform.common.outbox.IntegrationEventOutbox;
 import com.educational.platform.course.enrollments.CourseEnrollment;
 import com.educational.platform.course.enrollments.CourseEnrollmentFactory;
 import com.educational.platform.course.enrollments.CourseEnrollmentRepository;
@@ -7,7 +8,6 @@ import com.educational.platform.course.enrollments.CurrentUserAsStudent;
 import com.educational.platform.course.enrollments.integration.event.StudentEnrolledToCourseIntegrationEvent;
 
 import jakarta.annotation.Nonnull;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,14 +27,14 @@ public class RegisterStudentToCourseCommandHandler {
     private final CourseEnrollmentRepository courseEnrollmentRepository;
     private final CourseEnrollmentFactory courseEnrollmentFactory;
     private final CurrentUserAsStudent currentUserAsStudent;
-    private final ApplicationEventPublisher eventPublisher;
+    private final IntegrationEventOutbox integrationEventOutbox;
 
-    public RegisterStudentToCourseCommandHandler(TransactionTemplate transactionTemplate, CourseEnrollmentRepository courseEnrollmentRepository, CourseEnrollmentFactory courseEnrollmentFactory, CurrentUserAsStudent currentUserAsStudent, ApplicationEventPublisher eventPublisher) {
+    public RegisterStudentToCourseCommandHandler(TransactionTemplate transactionTemplate, CourseEnrollmentRepository courseEnrollmentRepository, CourseEnrollmentFactory courseEnrollmentFactory, CurrentUserAsStudent currentUserAsStudent, IntegrationEventOutbox integrationEventOutbox) {
         this.transactionTemplate = transactionTemplate;
         this.courseEnrollmentRepository = courseEnrollmentRepository;
         this.courseEnrollmentFactory = courseEnrollmentFactory;
         this.currentUserAsStudent = currentUserAsStudent;
-        this.eventPublisher = eventPublisher;
+        this.integrationEventOutbox = integrationEventOutbox;
     }
 
     /**
@@ -53,7 +53,7 @@ public class RegisterStudentToCourseCommandHandler {
         });
 
         final UUID uuid = Objects.requireNonNull(courseEnrollment).getUuid();
-        eventPublisher.publishEvent(new StudentEnrolledToCourseIntegrationEvent(command.courseId(),
+        integrationEventOutbox.publish(new StudentEnrolledToCourseIntegrationEvent(command.courseId(),
                 currentUserAsStudent.userAsStudent().toReference()));
 
         return uuid;

@@ -15,7 +15,7 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
+import com.educational.platform.common.outbox.IntegrationEventOutbox;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -45,7 +45,7 @@ public class SendCourseToApproveCommandHandlerTest {
     private CourseRepository repository;
 
     @Mock
-    private ApplicationEventPublisher eventPublisher;
+    private IntegrationEventOutbox integrationEventOutbox;
 
     @InjectMocks
     private SendCourseToApproveCommandHandler sut;
@@ -77,7 +77,7 @@ public class SendCourseToApproveCommandHandlerTest {
 
         // then
         final ArgumentCaptor<SendCourseToApproveIntegrationEvent> argument = ArgumentCaptor.forClass(SendCourseToApproveIntegrationEvent.class);
-        verify(eventPublisher).publishEvent(argument.capture());
+        verify(integrationEventOutbox).publish(argument.capture());
         assertThat(argument.getValue())
                 .hasFieldOrPropertyWithValue("courseId", uuid);
     }
@@ -106,8 +106,8 @@ public class SendCourseToApproveCommandHandlerTest {
         transactionTemplate.executeWithoutResult(status -> sut.handle(command));
 
         // then
-        final InOrder inOrder = inOrder(eventPublisher, transactionManager);
-        inOrder.verify(eventPublisher).publishEvent(any(SendCourseToApproveIntegrationEvent.class));
+        final InOrder inOrder = inOrder(integrationEventOutbox, transactionManager);
+        inOrder.verify(integrationEventOutbox).publish(any(SendCourseToApproveIntegrationEvent.class));
         inOrder.verify(transactionManager).commit(any());
     }
 

@@ -14,7 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
+import com.educational.platform.common.outbox.IntegrationEventOutbox;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -42,7 +42,7 @@ public class UserRegistrationCommandHandlerTest {
     private TransactionTemplate transactionTemplate;
 
     @Mock
-    private ApplicationEventPublisher eventPublisher;
+    private IntegrationEventOutbox integrationEventOutbox;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -56,7 +56,7 @@ public class UserRegistrationCommandHandlerTest {
     void setUp() {
         transactionTemplate = new TransactionTemplate(transactionManager);
         final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
-        sut = new UserRegistrationCommandHandler(transactionTemplate, passwordEncoder, jwtTokenProvider, repository, eventPublisher, validator);
+        sut = new UserRegistrationCommandHandler(transactionTemplate, passwordEncoder, jwtTokenProvider, repository, integrationEventOutbox, validator);
     }
 
     @Test
@@ -83,7 +83,7 @@ public class UserRegistrationCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("role", Role.ROLE_STUDENT);
 
         final ArgumentCaptor<UserCreatedIntegrationEvent> eventArgument = ArgumentCaptor.forClass(UserCreatedIntegrationEvent.class);
-        verify(eventPublisher).publishEvent(eventArgument.capture());
+        verify(integrationEventOutbox).publish(eventArgument.capture());
         final UserCreatedIntegrationEvent event = eventArgument.getValue();
         assertThat(event)
                 .hasFieldOrPropertyWithValue("username", "username")

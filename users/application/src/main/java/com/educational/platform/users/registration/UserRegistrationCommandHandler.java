@@ -1,6 +1,7 @@
 package com.educational.platform.users.registration;
 
 import com.educational.platform.common.exception.UnprocessableEntityException;
+import com.educational.platform.common.outbox.IntegrationEventOutbox;
 import com.educational.platform.users.Role;
 import com.educational.platform.users.User;
 import com.educational.platform.users.UserDTO;
@@ -8,7 +9,6 @@ import com.educational.platform.users.UserRepository;
 import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
 import com.educational.platform.users.security.JwtTokenProvider;
 
-import org.springframework.context.ApplicationEventPublisher;
 import jakarta.annotation.Nonnull;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -33,15 +33,15 @@ public class UserRegistrationCommandHandler {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final UserRepository repository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final IntegrationEventOutbox integrationEventOutbox;
     private final Validator validator;
 
-    public UserRegistrationCommandHandler(TransactionTemplate transactionTemplate, PasswordEncoder passwordEncoder, JwtTokenProvider jwtTokenProvider, UserRepository repository, ApplicationEventPublisher eventPublisher, Validator validator) {
+    public UserRegistrationCommandHandler(TransactionTemplate transactionTemplate, PasswordEncoder passwordEncoder, JwtTokenProvider jwtTokenProvider, UserRepository repository, IntegrationEventOutbox integrationEventOutbox, Validator validator) {
         this.transactionTemplate = transactionTemplate;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.repository = repository;
-        this.eventPublisher = eventPublisher;
+        this.integrationEventOutbox = integrationEventOutbox;
         this.validator = validator;
     }
 
@@ -71,7 +71,7 @@ public class UserRegistrationCommandHandler {
         });
 
         final UserDTO dto = Objects.requireNonNull(user).toDTO();
-        eventPublisher.publishEvent(new UserCreatedIntegrationEvent(dto.username(), dto.email()));
+        integrationEventOutbox.publish(new UserCreatedIntegrationEvent(dto.username(), dto.email()));
 
         return jwtTokenProvider.createToken(dto.username(), Collections.singletonList(Role.from(dto.role())));
     }

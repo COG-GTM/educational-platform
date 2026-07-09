@@ -358,13 +358,14 @@ ArchUnit are used for implementing architecture tests. These tests are placed in
 **LayerTest** - tests for validating the dependencies between layers of application.
 
 ### 3.11. Communication between bounded contexts
-Communication between bounded contexts is performed via Spring's `ApplicationEventPublisher` for publishing integration events and asynchronous listeners for handling them. The messaging infrastructure provides the following reliability guarantees:
+Communication between bounded contexts is performed via integration events stored in a transactional outbox and dispatched to asynchronous listeners with Spring's `ApplicationEventPublisher`. The messaging infrastructure provides the following reliability guarantees:
 
 - **Bounded async executor.** Async listeners run on a dedicated, bounded `ThreadPoolTaskExecutor` bean named `integrationEventExecutor` (configured in `AsyncConfig`) instead of the default `SimpleAsyncTaskExecutor`, which spawns an unbounded thread per event. The pool has fixed core/max sizes, a bounded queue, a named thread prefix, and a `CallerRunsPolicy` rejection handler that applies back-pressure to the publisher when the queue is saturated. Exceptions that escape `void` `@Async` listeners — which Spring would otherwise swallow — are logged by an `AsyncUncaughtExceptionHandler` (`LoggingAsyncUncaughtExceptionHandler`).
-- **After-commit publishing.** Listeners consume events with `@Async("integrationEventExecutor")` combined with `@TransactionalEventListener(phase = AFTER_COMMIT)`, so an event is only processed after the publishing transaction has committed successfully. Publishers still call `publishEvent(...)` inside their transaction, so events raised by a transaction that later rolls back are never delivered.
+- **Transactional outbox.** Command handlers publish events through `IntegrationEventOutbox`, which stores the serialized event in the `integration_event_outbox` table within the producing transaction (`@Transactional(propagation = MANDATORY)`), so an event becomes durable exactly when the business change commits and is discarded when it rolls back. A scheduled `IntegrationEventOutboxRelay` polls `NEW` entries, dispatches them via `ApplicationEventPublisher` inside its own transaction, and marks them `PROCESSED` — undelivered events therefore survive process restarts (at-least-once delivery). Entries that can no longer be materialized are marked `FAILED` and logged.
+- **After-commit publishing.** Listeners consume events with `@Async("integrationEventExecutor")` combined with `@TransactionalEventListener(phase = AFTER_COMMIT)`, so an event is only processed after the relay's dispatching transaction has committed successfully.
 - **Retry with back-off.** Each listener delegates the downstream command-handler invocation to a dedicated `@Retryable` collaborator (an `*RetryableInvoker`) with a bounded number of attempts and exponential back-off. Retries execute within the async post-commit thread. When retries are exhausted, a `@Recover` method logs the failing event and exception at `ERROR` so the event is not lost silently. Retry is enabled application-wide via `@EnableRetry` (`RetryConfig`) and Spring Retry.
 
-See [ADR-0014](docs/architecture-decisions/0014-async-integration-events-reliability.md) for the rationale.
+See [ADR-0014](docs/architecture-decisions/0014-async-integration-events-reliability.md) and [ADR-0015](docs/architecture-decisions/0015-transactional-outbox.md) for the rationale.
 
 ### 3.12. Bounded context map
 ![](docs/bounded_context_map.png)
