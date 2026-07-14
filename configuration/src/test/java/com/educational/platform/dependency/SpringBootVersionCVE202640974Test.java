@@ -21,7 +21,7 @@ class SpringBootVersionCVE202640974Test {
 
         boolean fixed = major > 4
                 || (major == 4 && (minor > 0 || patch >= 6))
-                || (major == 3 && minor == 5 && patch >= 14);
+                || (major == 3 && (minor > 5 || (minor == 5 && patch >= 14)));
 
         assertTrue(fixed, "Spring Boot " + version + " is vulnerable to CVE-2026-40974; requires >= 4.0.6 or 3.5.14");
     }
