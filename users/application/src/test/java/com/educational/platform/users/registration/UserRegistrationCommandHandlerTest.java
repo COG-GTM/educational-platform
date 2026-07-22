@@ -23,9 +23,12 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 
+import java.util.Collections;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -113,7 +116,7 @@ public class UserRegistrationCommandHandlerTest {
         // given
         final UserRegistrationCommand command = validCommand();
         when(repository.existsByUsername("username")).thenReturn(false);
-        when(jwtTokenProvider.createToken("username", java.util.Collections.singletonList(Role.ROLE_STUDENT)))
+        when(jwtTokenProvider.createToken("username", Collections.singletonList(Role.ROLE_STUDENT)))
                 .thenReturn("jwt-token");
 
         // when
@@ -121,7 +124,7 @@ public class UserRegistrationCommandHandlerTest {
 
         // then
         assertThat(result).isEqualTo("jwt-token");
-        verify(jwtTokenProvider).createToken("username", java.util.Collections.singletonList(Role.ROLE_STUDENT));
+        verify(jwtTokenProvider).createToken("username", Collections.singletonList(Role.ROLE_STUDENT));
     }
 
     @Test
@@ -141,7 +144,7 @@ public class UserRegistrationCommandHandlerTest {
         // then
         assertThatExceptionOfType(UnprocessableEntityException.class).isThrownBy(handle);
         verify(repository).existsByUsername("username");
-        verify(repository, org.mockito.Mockito.never()).save(any(User.class));
+        verify(repository, never()).save(any(User.class));
         verifyNoInteractions(eventPublisher);
     }
 
