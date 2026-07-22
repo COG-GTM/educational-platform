@@ -24,6 +24,8 @@ subprojects {
         targetCompatibility = JavaVersion.VERSION_25
     }
 
+    ext["spring-data-bom.version"] = "2025.1.6"
+
     dependencyManagement {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
