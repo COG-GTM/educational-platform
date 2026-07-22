@@ -24,6 +24,9 @@ subprojects {
         targetCompatibility = JavaVersion.VERSION_25
     }
 
+    ext["spring-security.version"] = "7.0.6"
+    ext["spring-framework.version"] = "7.0.8"
+
     dependencyManagement {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
