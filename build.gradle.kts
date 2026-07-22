@@ -24,9 +24,14 @@ subprojects {
         targetCompatibility = JavaVersion.VERSION_25
     }
 
+    ext["jackson-bom.version"] = "3.1.5"
+
     dependencyManagement {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
+        }
+        dependencies {
+            dependency("com.fasterxml.jackson.core:jackson-annotations:2.21")
         }
     }
 }
