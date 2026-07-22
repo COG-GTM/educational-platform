@@ -28,5 +28,8 @@ subprojects {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
         }
+        dependencies {
+            dependency("org.assertj:assertj-core:${rootProject.libs.versions.assertj.get()}")
+        }
     }
 }
