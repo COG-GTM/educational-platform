@@ -3,6 +3,7 @@ package com.educational.platform;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.SpringBootVersion;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -20,6 +21,7 @@ class SpringBootVersionCVEGuardTest {
     void springBootVersion_isAtLeast_4_0_7() {
         // given
         String version = SpringBootVersion.getVersion();
+        assertNotNull(version, "Spring Boot version must be available to verify the CVE guard");
 
         // when
         String[] parts = version.split("[.-]");
