@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -91,6 +92,39 @@ public class UserRegistrationCommandHandlerTest {
     }
 
     @Test
+    void handle_validCommand_passwordEncodedBeforePersist() {
+        // given
+        final UserRegistrationCommand command = validCommand();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        when(passwordEncoder.encode("password")).thenReturn("encoded-password");
+
+        // when
+        sut.handle(command);
+
+        // then
+        verify(passwordEncoder).encode("password");
+        final ArgumentCaptor<User> argument = ArgumentCaptor.forClass(User.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("password", "encoded-password");
+    }
+
+    @Test
+    void handle_validCommand_tokenReturnedAndJwtProviderCalled() {
+        // given
+        final UserRegistrationCommand command = validCommand();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        when(jwtTokenProvider.createToken("username", java.util.Collections.singletonList(Role.ROLE_STUDENT)))
+                .thenReturn("jwt-token");
+
+        // when
+        final String result = sut.handle(command);
+
+        // then
+        assertThat(result).isEqualTo("jwt-token");
+        verify(jwtTokenProvider).createToken("username", java.util.Collections.singletonList(Role.ROLE_STUDENT));
+    }
+
+    @Test
     void handle_usernameAlreadyExists_unprocessableEntityException() {
         // given
         final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
@@ -106,6 +140,9 @@ public class UserRegistrationCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(UnprocessableEntityException.class).isThrownBy(handle);
+        verify(repository).existsByUsername("username");
+        verify(repository, org.mockito.Mockito.never()).save(any(User.class));
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -123,6 +160,7 @@ public class UserRegistrationCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(repository, eventPublisher);
     }
 
     @Test
@@ -140,6 +178,7 @@ public class UserRegistrationCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(repository, eventPublisher);
     }
 
     @Test
@@ -157,6 +196,7 @@ public class UserRegistrationCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(repository, eventPublisher);
     }
 
     @Test
@@ -174,5 +214,135 @@ public class UserRegistrationCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(repository, eventPublisher);
+    }
+
+    @Test
+    void handle_usernameIsBlank_constraintViolationException() {
+        // given
+        final UserRegistrationCommand command = validCommandBuilder().username(" ").build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(repository, eventPublisher);
+    }
+
+    @Test
+    void handle_emailIsBlank_constraintViolationException() {
+        // given
+        final UserRegistrationCommand command = validCommandBuilder().email(" ").build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(repository, eventPublisher);
+    }
+
+    @Test
+    void handle_passwordIsBlank_constraintViolationException() {
+        // given
+        final UserRegistrationCommand command = validCommandBuilder().password(" ").build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(repository, eventPublisher);
+    }
+
+    @Test
+    void handle_emailHasInvalidFormat_constraintViolationException() {
+        // given
+        final UserRegistrationCommand command = validCommandBuilder().email("invalid-email").build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(repository, eventPublisher);
+    }
+
+    @Test
+    void handle_usernameIsTooShort_constraintViolationException() {
+        // given
+        final UserRegistrationCommand command = validCommandBuilder().username("usr").build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(repository, eventPublisher);
+    }
+
+    @Test
+    void handle_usernameIsTooLong_constraintViolationException() {
+        // given
+        final UserRegistrationCommand command = validCommandBuilder().username("a".repeat(256)).build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(repository, eventPublisher);
+    }
+
+    @Test
+    void handle_passwordIsTooShort_constraintViolationException() {
+        // given
+        final UserRegistrationCommand command = validCommandBuilder().password("short").build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(repository, eventPublisher);
+    }
+
+    @Test
+    void handle_passwordIsTooLong_constraintViolationException() {
+        // given
+        final UserRegistrationCommand command = validCommandBuilder().password("a".repeat(31)).build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(repository, eventPublisher);
+    }
+
+    @Test
+    void handle_passwordContainsWhitespace_constraintViolationException() {
+        // given
+        final UserRegistrationCommand command = validCommandBuilder().password("pass word").build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(repository, eventPublisher);
+    }
+
+    private static UserRegistrationCommand validCommand() {
+        return validCommandBuilder().build();
+    }
+
+    private static UserRegistrationCommand.UserRegistrationCommandBuilder validCommandBuilder() {
+        return UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT);
     }
 }
