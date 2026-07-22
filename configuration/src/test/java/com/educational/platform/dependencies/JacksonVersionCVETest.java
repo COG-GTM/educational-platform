@@ -18,15 +18,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class JacksonVersionCVETest {
 
-    private static final Version MINIMUM_SAFE_VERSION = new Version(3, 1, 5, null, "tools.jackson.core", "jackson-core");
-
     @Test
     void jacksonCoreVersion_isAtLeast315() {
         // given
         final Version resolved = tools.jackson.core.json.PackageVersion.VERSION;
 
         // then
-        assertTrue(resolved.compareTo(MINIMUM_SAFE_VERSION) >= 0,
+        assertTrue(isAtLeast(resolved, 3, 1, 5),
                 "tools.jackson.core:jackson-core must be >= 3.1.5 to remediate CVE-2026-29062 and related advisories, but was " + resolved);
     }
 
@@ -36,7 +34,7 @@ public class JacksonVersionCVETest {
         final Version resolved = tools.jackson.databind.cfg.PackageVersion.VERSION;
 
         // then
-        assertTrue(resolved.compareTo(MINIMUM_SAFE_VERSION) >= 0,
+        assertTrue(isAtLeast(resolved, 3, 1, 5),
                 "tools.jackson.core:jackson-databind must be >= 3.1.5 to remediate CVE-2026-54512/54513/59889, but was " + resolved);
     }
 
@@ -47,5 +45,15 @@ public class JacksonVersionCVETest {
         // application context fails at startup with NoClassDefFoundError.
         assertDoesNotThrow(() -> Class.forName("com.fasterxml.jackson.annotation.JsonSerializeAs"),
                 "com.fasterxml.jackson.core:jackson-annotations must be >= 2.21 (provides JsonSerializeAs required by jackson-databind 3.1.5)");
+    }
+
+    private static boolean isAtLeast(Version version, int major, int minor, int patch) {
+        if (version.getMajorVersion() != major) {
+            return version.getMajorVersion() > major;
+        }
+        if (version.getMinorVersion() != minor) {
+            return version.getMinorVersion() > minor;
+        }
+        return version.getPatchLevel() >= patch;
     }
 }
