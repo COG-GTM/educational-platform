@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -31,6 +32,16 @@ public interface CourseRepository extends JpaRepository<Course, Integer>, Course
 	@Query(value = "SELECT new com.educational.platform.courses.course.CourseLightDTO(c.uuid, c.name, c.description, c.numberOfStudents) "
 			+ "FROM com.educational.platform.courses.course.Course c")
 	List<CourseLightDTO> list();
+
+	/**
+	 * Atomically increments the number of students of a course.
+	 *
+	 * @param uuid course uuid.
+	 * @return the number of updated rows, 0 if no course with the given uuid exists.
+	 */
+	@Modifying
+	@Query("update Course c set c.numberOfStudents.number = c.numberOfStudents.number + 1 where c.uuid = :uuid")
+	int incrementNumberOfStudents(@Param("uuid") UUID uuid);
 
 	/**
 	 * Checks if passed username is an username of teacher of course.

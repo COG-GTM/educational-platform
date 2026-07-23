@@ -1,13 +1,10 @@
 package com.educational.platform.courses.course.numberofsudents.update;
 
 import com.educational.platform.common.exception.ResourceNotFoundException;
-import com.educational.platform.courses.course.Course;
 import com.educational.platform.courses.course.CourseRepository;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Optional;
 
 /**
  * Command handler for {@link IncreaseNumberOfStudentsCommand} increases a number of students.
@@ -23,14 +20,10 @@ public class IncreaseNumberOfStudentsCommandHandler {
     }
 
     public void handle(IncreaseNumberOfStudentsCommand command) {
-        final Optional<Course> dbResult = repository.findByUuid(command.uuid());
-        if (dbResult.isEmpty()) {
+        final int updatedRows = repository.incrementNumberOfStudents(command.uuid());
+        if (updatedRows == 0) {
             throw new ResourceNotFoundException(String.format("Course with uuid: %s not found", command.uuid()));
         }
-
-        final Course course = dbResult.get();
-        course.increaseNumberOfStudents();
-        repository.save(course);
     }
 
 }
