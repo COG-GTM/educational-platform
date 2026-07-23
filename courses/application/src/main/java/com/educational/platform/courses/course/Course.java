@@ -102,11 +102,6 @@ public class Course implements AggregateRoot {
 		rating = new CourseRating(value);
 	}
 
-	//todo how it works in concurrency
-	public void increaseNumberOfStudents() {
-		numberOfStudents = new NumberOfStudents(numberOfStudents.number() + 1);
-	}
-
 	public UUID toIdentity() {
 		return uuid;
 	}
