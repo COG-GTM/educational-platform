@@ -53,6 +53,7 @@ public class UpdateNumberOfStudentsCommandHandlerTest {
         final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
 
         // then
-        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle)
+                .withMessage("Course with uuid: %s not found", uuid);
     }
 }
