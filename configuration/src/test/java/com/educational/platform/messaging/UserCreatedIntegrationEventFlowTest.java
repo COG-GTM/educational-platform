@@ -8,6 +8,7 @@ import com.educational.platform.users.registration.UserRegistrationCommandHandle
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.jdbc.Sql;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -16,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * user registration publishes {@link UserCreatedIntegrationEvent} which is consumed
  * asynchronously by the courses context to replicate the teacher.
  */
+@Sql(scripts = "classpath:messaging/user_created_flow.sql")
 public class UserCreatedIntegrationEventFlowTest extends MessagingIntegrationTestSupport {
 
 	@Autowired
