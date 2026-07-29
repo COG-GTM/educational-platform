@@ -8,6 +8,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 
+import java.util.UUID;
+
 /**
  * Represents student domain model.
  */
@@ -18,6 +20,9 @@ public class Student implements AggregateRoot {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    private UUID uuid;
+
+    // username is kept for security-context lookups (the logged-in principal only exposes username)
     private String username;
 
     // for JPA
@@ -25,6 +30,7 @@ public class Student implements AggregateRoot {
     }
 
     public Student(CreateStudentCommand createStudentCommand) {
+        this.uuid = createStudentCommand.uuid();
         this.username = createStudentCommand.username();
     }
 
@@ -32,7 +38,7 @@ public class Student implements AggregateRoot {
         return id;
     }
 
-    public String toReference() {
-        return username;
+    public UUID toReference() {
+        return uuid;
     }
 }

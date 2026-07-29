@@ -95,6 +95,22 @@ databaseChangeLog:
                   name: username
                   type: VARCHAR(100)
   - changeSet:
+      id: 2026_07_29-1
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          columnExists:
+            tableName: student
+            columnName: uuid
+      changes:
+        - addColumn:
+            tableName: student
+            columns:
+              - column:
+                  name: uuid
+                  type: uuid
+  - changeSet:
       id: 2021_06_25-4
       author: antonliauchuk
       changes:

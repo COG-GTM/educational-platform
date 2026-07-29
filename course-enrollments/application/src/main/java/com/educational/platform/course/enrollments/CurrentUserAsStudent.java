@@ -9,6 +9,10 @@ import com.educational.platform.course.enrollments.student.StudentRepository;
 
 /**
  * Represents the logic for retrieving the student entity from database for current authenticated user.
+ *
+ * Lookup is intentionally keyed on username: the security principal only exposes the username of the
+ * logged-in user. This is a login/security concern within this module, not a cross-module identity
+ * handle — cross-module references use the student's stable UUID ({@link Student#toReference()}).
  */
 @Component
 public class CurrentUserAsStudent {

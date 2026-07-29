@@ -20,11 +20,15 @@ public class CreateStudentCommandHandler {
     }
 
     /**
-     * Creates student from command.
+     * Creates student from command. Does nothing if a student with the same username already exists.
      *
      * @param command command
      */
     public void handle(CreateStudentCommand command) {
+        if (studentRepository.existsByUsername(command.username())) {
+            return;
+        }
+
         final Student student = new Student(command);
         studentRepository.save(student);
     }
