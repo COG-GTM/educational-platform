@@ -1,6 +1,6 @@
 package com.educational.platform.courses.course.numberofstudents.update;
 
-import com.educational.platform.course.enrollments.integration.event.StudentEnrolledToCourseIntegrationEvent;
+import com.educational.platform.contracts.event.StudentEnrolledToCourseIntegrationEvent;
 import com.educational.platform.courses.course.numberofsudents.update.IncreaseNumberOfStudentsCommandHandler;
 import com.educational.platform.courses.course.numberofsudents.update.StudentEnrolledToCourseIntegrationEventHandler;
 import com.educational.platform.courses.course.numberofsudents.update.IncreaseNumberOfStudentsCommand;

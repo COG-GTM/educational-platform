@@ -4,7 +4,7 @@ import com.educational.platform.administration.course.CourseProposal;
 import com.educational.platform.administration.course.CourseProposalAlreadyApprovedException;
 import com.educational.platform.administration.course.CourseProposalDTO;
 import com.educational.platform.administration.course.CourseProposalRepository;
-import com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent;
+import com.educational.platform.contracts.event.CourseApprovedByAdminIntegrationEvent;
 import com.educational.platform.common.exception.ResourceNotFoundException;
 import jakarta.inject.Named;
 import org.springframework.context.ApplicationEventPublisher;

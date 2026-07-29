@@ -1,6 +1,6 @@
 package com.educational.platform.administration.course.create;
 
-import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
+import com.educational.platform.contracts.event.SendCourseToApproveIntegrationEvent;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

@@ -1,4 +1,4 @@
-package com.educational.platform.administration.integration.event;
+package com.educational.platform.contracts.event;
 
 import java.util.UUID;
 

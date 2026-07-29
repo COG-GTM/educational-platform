@@ -1,6 +1,6 @@
 package com.educational.platform.courses.course.approve;
 
-import com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent;
+import com.educational.platform.contracts.event.CourseApprovedByAdminIntegrationEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;

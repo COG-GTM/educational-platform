@@ -1,6 +1,6 @@
 package com.educational.platform.courses.teacher.create;
 
-import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
+import com.educational.platform.contracts.event.UserCreatedIntegrationEvent;
 
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;

@@ -1,7 +1,7 @@
 dependencies {
     implementation(project(":common"))
     implementation(project(":security:security-config"))
-    implementation(project(":users:users-integration-events"))
+    implementation(project(":contracts"))
 
     implementation("org.springframework.boot", "spring-boot-starter-web")
     implementation("org.springframework.boot", "spring-boot-starter-validation")
