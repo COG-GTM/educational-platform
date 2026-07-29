@@ -4,7 +4,7 @@ import com.educational.platform.common.exception.ResourceNotFoundException;
 import com.educational.platform.courses.course.Course;
 import com.educational.platform.courses.course.CourseAlreadyApprovedException;
 import com.educational.platform.courses.course.CourseRepository;
-import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
+import com.educational.platform.integration.event.SendCourseToApproveIntegrationEvent;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.prepost.PreAuthorize;
