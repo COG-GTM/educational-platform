@@ -5,7 +5,7 @@ import com.educational.platform.users.Role;
 import com.educational.platform.users.RoleDTO;
 import com.educational.platform.users.User;
 import com.educational.platform.users.UserRepository;
-import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
+import com.educational.platform.contracts.event.UserCreatedIntegrationEvent;
 import com.educational.platform.users.security.JwtTokenProvider;
 import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.BeforeEach;

@@ -1,4 +1,4 @@
-package com.educational.platform.users.integration.event;
+package com.educational.platform.contracts.event;
 
 /**
  * Represents user created integration event, should be published after user creation.

@@ -1,11 +1,7 @@
 dependencies {
     implementation(project(":common"))
     implementation(project(":security:security-config"))
-    implementation(project(":courses:courses-integration-events"))
-    implementation(project(":administration:administration-integration-events"))
-    implementation(project(":course-enrollments:course-enrollments-integration-events"))
-    implementation(project(":course-reviews:course-reviews-integration-events"))
-    implementation(project(":users:users-integration-events"))
+    implementation(project(":contracts"))
 
     implementation("org.springframework.boot", "spring-boot-starter-security")
     implementation("org.springframework.boot", "spring-boot-starter-data-jpa")

@@ -4,7 +4,7 @@ import com.educational.platform.course.enrollments.CourseEnrollment;
 import com.educational.platform.course.enrollments.CourseEnrollmentFactory;
 import com.educational.platform.course.enrollments.CourseEnrollmentRepository;
 import com.educational.platform.course.enrollments.CurrentUserAsStudent;
-import com.educational.platform.course.enrollments.integration.event.StudentEnrolledToCourseIntegrationEvent;
+import com.educational.platform.contracts.event.StudentEnrolledToCourseIntegrationEvent;
 
 import jakarta.annotation.Nonnull;
 import org.springframework.context.ApplicationEventPublisher;
