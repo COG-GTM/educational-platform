@@ -20,6 +20,7 @@ dependencies {
     implementation(project(":courses:courses-integration-events"))
 
     implementation(project(":security:security-config"))
+    implementation(project(":integration-events-contract"))
     implementation(project(":web"))
     implementation(project(":common"))
 
