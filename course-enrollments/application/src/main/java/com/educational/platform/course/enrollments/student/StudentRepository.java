@@ -16,4 +16,12 @@ public interface StudentRepository extends JpaRepository<Student, Integer> {
      */
     Student findByUsername(String username);
 
+    /**
+     * Checks whether a student with the given username exists.
+     *
+     * @param username must not be {@literal null}.
+     * @return {@literal true} if a student with the given username exists.
+     */
+    boolean existsByUsername(String username);
+
 }

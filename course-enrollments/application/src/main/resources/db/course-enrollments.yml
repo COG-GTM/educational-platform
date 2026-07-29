@@ -116,3 +116,19 @@ databaseChangeLog:
             referencedColumnNames: id
             referencedTableName: student
             validate: true
+  - changeSet:
+      id: 2026_07_29-1
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          columnExists:
+            tableName: student
+            columnName: uuid
+      changes:
+        - addColumn:
+            tableName: student
+            columns:
+              - column:
+                  name: uuid
+                  type: uuid

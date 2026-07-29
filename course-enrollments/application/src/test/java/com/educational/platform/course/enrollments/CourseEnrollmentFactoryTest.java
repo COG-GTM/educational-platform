@@ -50,7 +50,7 @@ public class CourseEnrollmentFactoryTest {
         final EnrollCourse correspondingCourse = new EnrollCourse(createCourseCommand);
         when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
 
-        final CreateStudentCommand createStudentCommand = new CreateStudentCommand("username");
+        final CreateStudentCommand createStudentCommand = new CreateStudentCommand(UUID.fromString("123e4567-e89b-12d3-a456-426655440002"), "username");
         final Student correspondingStudent = new Student(createStudentCommand);
         when(currentUserAsStudent.userAsStudent()).thenReturn(correspondingStudent);
 
