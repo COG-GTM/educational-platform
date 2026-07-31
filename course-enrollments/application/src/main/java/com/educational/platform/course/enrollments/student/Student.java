@@ -38,6 +38,16 @@ public class Student implements AggregateRoot {
         return id;
     }
 
+    /**
+     * Assigns the stable user uuid, reconciling students that were created before
+     * the user uuid was known (e.g. legacy rows with a generated uuid).
+     *
+     * @param uuid stable user uuid
+     */
+    public void assignUuid(UUID uuid) {
+        this.uuid = uuid;
+    }
+
     public UUID toReference() {
         return uuid;
     }
