@@ -54,7 +54,16 @@ databaseChangeLog:
             tableName: custom_user
             columns:
               - column:
-                  constraints:
-                    nullable: false
                   name: uuid
                   type: uuid
+        - update:
+            tableName: custom_user
+            columns:
+              - column:
+                  name: uuid
+                  valueComputed: RANDOM_UUID()
+            where: uuid IS NULL
+        - addNotNullConstraint:
+            tableName: custom_user
+            columnName: uuid
+            columnDataType: uuid
