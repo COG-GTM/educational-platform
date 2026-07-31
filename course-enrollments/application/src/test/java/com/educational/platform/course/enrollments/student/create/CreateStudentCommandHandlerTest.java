@@ -63,4 +63,21 @@ public class CreateStudentCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("uuid", userUuid)
                 .hasFieldOrPropertyWithValue("username", "username");
     }
+
+    @Test
+    void handle_existingStudent_noNewStudentCreated() {
+        // given
+        final UUID userUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440101");
+        final Student existing = new Student(new CreateStudentCommand(null, "username"));
+        when(repository.findByUsername("username")).thenReturn(existing);
+
+        // when
+        sut.handle(new CreateStudentCommand(userUuid, "username"));
+
+        // then
+        final ArgumentCaptor<Student> argument = ArgumentCaptor.forClass(Student.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue()).isSameAs(existing);
+        assertThat(existing.toReference()).isEqualTo(userUuid);
+    }
 }

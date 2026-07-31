@@ -24,6 +24,19 @@ public class StudentTest {
     }
 
     @Test
+    void assignUuid_legacyStudentWithoutUuid_referenceReturnsAssignedUuid() {
+        // given
+        final Student student = new Student(new CreateStudentCommand(null, "username"));
+        final UUID userUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440101");
+
+        // when
+        student.assignUuid(userUuid);
+
+        // then
+        assertThat(student.toReference()).isEqualTo(userUuid);
+    }
+
+    @Test
     void constructor_validCommand_uuidAndUsernamePopulated() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440101");
