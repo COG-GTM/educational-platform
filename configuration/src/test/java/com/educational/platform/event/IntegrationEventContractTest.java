@@ -28,8 +28,8 @@ public class IntegrationEventContractTest {
 					"com.educational.platform.courses..",
 					"com.educational.platform.administration..",
 					"com.educational.platform.users..",
-					"com.educational.platform.courseenrollments..",
-					"com.educational.platform.coursereviews..")
+					"com.educational.platform.course.enrollments..",
+					"com.educational.platform.course.reviews..")
 			.because("The shared contract module must be owned by no bounded context.");
 
 	@ArchTest
