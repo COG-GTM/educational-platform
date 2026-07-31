@@ -7,7 +7,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,5 +42,15 @@ public class UserCreatedIntegrationEventHandlerTest {
         assertThat(command)
                 .hasFieldOrPropertyWithValue("uuid", uuid)
                 .hasFieldOrPropertyWithValue("username", "username");
+    }
+
+    @Test
+    void handleUserCreatedEvent_annotatedAsAsyncEventListener() throws NoSuchMethodException {
+        // given
+        final Method method = UserCreatedIntegrationEventHandler.class.getMethod("handleUserCreatedEvent", UserCreatedIntegrationEvent.class);
+
+        // then
+        assertThat(method.getAnnotation(Async.class)).isNotNull();
+        assertThat(method.getAnnotation(EventListener.class)).isNotNull();
     }
 }
