@@ -9,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
 import java.util.UUID;
@@ -52,5 +53,15 @@ public class UserCreatedIntegrationEventHandlerTest {
         // then
         assertThat(method.getAnnotation(Async.class)).isNotNull();
         assertThat(method.getAnnotation(EventListener.class)).isNotNull();
+    }
+
+    @Test
+    void componentBeanName_distinctFromCoursesModuleHandler() {
+        // given
+        final Component component = UserCreatedIntegrationEventHandler.class.getAnnotation(Component.class);
+
+        // then
+        assertThat(component).isNotNull();
+        assertThat(component.value()).isEqualTo("studentUserCreatedIntegrationEventHandler");
     }
 }
