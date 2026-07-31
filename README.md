@@ -93,6 +93,10 @@ Modules with base technical functionality:
 
 Contains common functionality which can be used in other modules.
 
+**integration-events-contract**
+
+Neutral contract module for integration events shared between bounded contexts (e.g. `SendCourseToApproveIntegrationEvent`, published by `courses` and consumed by `administration`). Owning shared events here avoids compile-time coupling between the producer and consumer contexts.
+
 **configuration**
 
 Module contains start application logic for initializing application context, it's why this module has dependency to all other modules. Architecture tests are placed inside test folder.

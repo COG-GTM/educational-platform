@@ -3,6 +3,7 @@ rootProject.name = "platform"
 include("configuration")
 include("common")
 include("web")
+include("integration-events-contract")
 
 include("courses:application")
 findProject(":courses:application")?.name = "courses-application"
