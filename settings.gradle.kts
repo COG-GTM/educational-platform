@@ -4,7 +4,6 @@ include("configuration")
 include("common")
 include("web")
 include("integration-events-contract")
-findProject(":integration-events-contract")?.name = "integration-events-contract"
 
 include("courses:application")
 findProject(":courses:application")?.name = "courses-application"
