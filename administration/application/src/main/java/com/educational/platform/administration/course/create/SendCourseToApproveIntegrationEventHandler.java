@@ -1,6 +1,6 @@
 package com.educational.platform.administration.course.create;
 
-import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
+import com.educational.platform.integration.event.SendCourseToApproveIntegrationEvent;
 
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;

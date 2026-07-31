@@ -1,4 +1,4 @@
-package com.educational.platform.courses.integration.event;
+package com.educational.platform.integration.event;
 
 import java.util.UUID;
 

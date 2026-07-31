@@ -3,7 +3,7 @@ package com.educational.platform.courses.course.approve;
 import com.educational.platform.common.exception.ResourceNotFoundException;
 import com.educational.platform.courses.course.*;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
-import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
+import com.educational.platform.integration.event.SendCourseToApproveIntegrationEvent;
 import com.educational.platform.courses.teacher.Teacher;
 
 import org.assertj.core.api.ThrowableAssert;

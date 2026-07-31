@@ -22,6 +22,7 @@ dependencies {
     implementation(project(":security:security-config"))
     implementation(project(":web"))
     implementation(project(":common"))
+    implementation(project(":integration-events-contract"))
 
     implementation("org.springframework.boot", "spring-boot-starter-web")
     implementation("org.liquibase", "liquibase-core")
