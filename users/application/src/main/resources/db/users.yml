@@ -40,3 +40,21 @@ databaseChangeLog:
                     nullable: false
                   name: role
                   type: VARCHAR(100)
+  - changeSet:
+      id: 2026_07_31-1
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          columnExists:
+            tableName: custom_user
+            columnName: uuid
+      changes:
+        - addColumn:
+            tableName: custom_user
+            columns:
+              - column:
+                  constraints:
+                    nullable: false
+                  name: uuid
+                  type: uuid

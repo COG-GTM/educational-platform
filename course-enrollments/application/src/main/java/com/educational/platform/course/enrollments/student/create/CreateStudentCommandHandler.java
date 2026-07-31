@@ -25,6 +25,10 @@ public class CreateStudentCommandHandler {
      * @param command command
      */
     public void handle(CreateStudentCommand command) {
+        if (studentRepository.existsByUsername(command.username())) {
+            return;
+        }
+
         final Student student = new Student(command);
         studentRepository.save(student);
     }

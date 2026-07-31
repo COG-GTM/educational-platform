@@ -69,7 +69,7 @@ public class UserRegistrationCommandHandler {
         });
 
         final UserDTO dto = Objects.requireNonNull(user).toDTO();
-        eventPublisher.publishEvent(new UserCreatedIntegrationEvent(dto.username(), dto.email()));
+        eventPublisher.publishEvent(new UserCreatedIntegrationEvent(dto.uuid(), dto.username(), dto.email()));
 
         return jwtTokenProvider.createToken(dto.username(), Collections.singletonList(Role.from(dto.role())));
     }

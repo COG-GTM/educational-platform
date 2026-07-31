@@ -31,7 +31,7 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
     void handleStudentEnrolledToCourseEvent_updateNumberOfStudentsCommandExecuted() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, "username");
+        final StudentEnrolledToCourseIntegrationEvent event = new StudentEnrolledToCourseIntegrationEvent(uuid, UUID.fromString("123e4567-e89b-12d3-a456-426655440101"));
 
         // when
         sut.handleStudentEnrolledToCourseEvent(event);

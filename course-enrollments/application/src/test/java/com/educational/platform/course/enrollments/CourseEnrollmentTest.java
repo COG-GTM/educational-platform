@@ -17,7 +17,7 @@ public class CourseEnrollmentTest {
 	void complete_completedStatus() {
 		// given
 		final CreateCourseCommand createCourseCommand = new CreateCourseCommand(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"));
-		final CreateStudentCommand createStudentCommand = new CreateStudentCommand("username");
+		final CreateStudentCommand createStudentCommand = new CreateStudentCommand(UUID.fromString("123e4567-e89b-12d3-a456-426655440101"), "username");
 		final CourseEnrollment enrollment = new CourseEnrollment(
 				new EnrollCourse(createCourseCommand).getId(),
 				new Student(createStudentCommand).getId()
