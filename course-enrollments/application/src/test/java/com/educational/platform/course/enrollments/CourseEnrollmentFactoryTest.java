@@ -87,4 +87,22 @@ public class CourseEnrollmentFactoryTest {
         assertThrows(RelatedResourceIsNotResolvedException.class, createAction);
     }
 
+    @Test
+    void createFrom_studentNotResolvedForCurrentUser_relatedResourceIsNotResolvedException() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CreateCourseCommand createCourseCommand = new CreateCourseCommand(courseId);
+        final EnrollCourse correspondingCourse = new EnrollCourse(createCourseCommand);
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
+
+        when(currentUserAsStudent.userAsStudent()).thenReturn(null);
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(RelatedResourceIsNotResolvedException.class, createAction);
+    }
+
 }
