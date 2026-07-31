@@ -88,6 +88,8 @@ public class UserRegistrationCommandHandlerTest {
         assertThat(event)
                 .hasFieldOrPropertyWithValue("username", "username")
                 .hasFieldOrPropertyWithValue("email", "email@gmail.com");
+        assertThat(event.uuid()).isNotNull();
+        assertThat(user).hasFieldOrPropertyWithValue("uuid", event.uuid());
     }
 
     @Test

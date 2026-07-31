@@ -1,20 +1,28 @@
 package com.educational.platform.users;
 
+import java.util.UUID;
+
 /**
  * Represents User DTO.
  */
-public record UserDTO(String username, String email, RoleDTO role) {
+public record UserDTO(UUID uuid, String username, String email, RoleDTO role) {
 
     public static UserDTOBuilder builder() {
         return new UserDTOBuilder();
     }
 
     public static final class UserDTOBuilder {
+        private UUID uuid;
         private String username;
         private String email;
         private RoleDTO role;
 
         private UserDTOBuilder() {
+        }
+
+        public UserDTOBuilder uuid(UUID uuid) {
+            this.uuid = uuid;
+            return this;
         }
 
         public UserDTOBuilder username(String username) {
@@ -33,7 +41,7 @@ public record UserDTO(String username, String email, RoleDTO role) {
         }
 
         public UserDTO build() {
-            return new UserDTO(username, email, role);
+            return new UserDTO(uuid, username, email, role);
         }
     }
 }

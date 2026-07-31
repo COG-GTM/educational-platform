@@ -40,3 +40,51 @@ databaseChangeLog:
                     nullable: false
                   name: role
                   type: VARCHAR(100)
+  - changeSet:
+      id: 2026_07_31-1
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          columnExists:
+            tableName: custom_user
+            columnName: uuid
+      changes:
+        - addColumn:
+            tableName: custom_user
+            columns:
+              - column:
+                  name: uuid
+                  type: uuid
+        - update:
+            tableName: custom_user
+            columns:
+              - column:
+                  name: uuid
+                  valueComputed: RANDOM_UUID()
+            where: uuid IS NULL
+        - addNotNullConstraint:
+            tableName: custom_user
+            columnName: uuid
+            columnDataType: uuid
+  # Data reconciliation across module tables: the course-enrollments changelog runs
+  # before this one, so its student.uuid backfill cannot see custom_user.uuid yet.
+  # This changeset copies the user's uuid into matching student rows so pre-existing
+  # students share the user's stable cross-module identity.
+  - changeSet:
+      id: 2026_07_31-2
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        and:
+          - tableExists:
+              tableName: student
+          - columnExists:
+              tableName: student
+              columnName: uuid
+      changes:
+        - sql:
+            sql: >-
+              UPDATE student s
+              SET uuid = (SELECT u.uuid FROM custom_user u WHERE u.username = s.username)
+              WHERE EXISTS (SELECT 1 FROM custom_user u WHERE u.username = s.username)

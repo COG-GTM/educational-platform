@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.util.Collections;
+import java.util.UUID;
 
 /**
  * Represents User domain model.
@@ -24,6 +25,8 @@ public class User implements AggregateRoot {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    private UUID uuid;
+
     private String username;
     private String email;
     private String password;
@@ -34,6 +37,7 @@ public class User implements AggregateRoot {
     }
 
     public User(UserRegistrationCommand command, PasswordEncoder passwordEncoder) {
+        this.uuid = UUID.randomUUID();
         this.username = command.username();
         this.email = command.email();
         this.password = passwordEncoder.encode(command.password());
@@ -42,6 +46,7 @@ public class User implements AggregateRoot {
 
     public UserDTO toDTO() {
         return UserDTO.builder()
+                .uuid(uuid)
                 .username(username)
                 .email(email)
                 .role(role.toDTO())

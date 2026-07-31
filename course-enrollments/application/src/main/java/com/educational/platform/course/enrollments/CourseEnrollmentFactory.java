@@ -47,6 +47,9 @@ public class CourseEnrollmentFactory {
                 .orElseThrow(() -> new RelatedResourceIsNotResolvedException("Course cannot be found by uuid = " + command.courseId()));
 
         final Student student = currentUserAsStudent.userAsStudent();
+        if (student == null) {
+            throw new RelatedResourceIsNotResolvedException("Student cannot be found for the current user");
+        }
 
         return new CourseEnrollment(course.getId(), student.getId());
     }

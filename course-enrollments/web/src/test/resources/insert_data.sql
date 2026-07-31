@@ -3,4 +3,4 @@ DELETE FROM enroll_course;
 DELETE FROM student;
 
 INSERT INTO enroll_course (uuid) VALUES ('123E4567E89B12D3A456426655440001');
-INSERT INTO student (username) VALUES ('username');
+INSERT INTO student (username, uuid) VALUES ('username', '123E4567E89B12D3A456426655440101');

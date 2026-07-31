@@ -8,7 +8,7 @@ Accepted
 During communications between bounded contexts, global identifiers for entities are needed. Also, these identifiers are needed for possible future integrations with external systems.
 
 ## Decision
-Natural keys or uuids should be used. Primary keys are forbidden for communications between modules or with external systems. If entity has good natural key - it's the most preferable choice for identifier between modules.
+Natural keys or uuids should be used. Primary keys are forbidden for communications between modules or with external systems. If entity has good natural key - it's the most preferable choice for identifier between modules. A natural key is only "good" if it is stable: mutable attributes such as usernames are not suitable cross-module identifiers, so users/students are referenced by a stable uuid (usernames remain a login/display concern).
 
 Useful links:
 - https://tomharrisonjr.com/uuid-or-guid-as-primary-keys-be-careful-7b2aa3dcb439

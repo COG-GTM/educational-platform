@@ -50,7 +50,7 @@ public class CourseEnrollmentFactoryTest {
         final EnrollCourse correspondingCourse = new EnrollCourse(createCourseCommand);
         when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
 
-        final CreateStudentCommand createStudentCommand = new CreateStudentCommand("username");
+        final CreateStudentCommand createStudentCommand = new CreateStudentCommand(UUID.fromString("123e4567-e89b-12d3-a456-426655440101"), "username");
         final Student correspondingStudent = new Student(createStudentCommand);
         when(currentUserAsStudent.userAsStudent()).thenReturn(correspondingStudent);
 
@@ -79,6 +79,24 @@ public class CourseEnrollmentFactoryTest {
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
         when(courseRepository.findByUuid(courseId)).thenReturn(Optional.empty());
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(RelatedResourceIsNotResolvedException.class, createAction);
+    }
+
+    @Test
+    void createFrom_studentNotResolvedForCurrentUser_relatedResourceIsNotResolvedException() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final CreateCourseCommand createCourseCommand = new CreateCourseCommand(courseId);
+        final EnrollCourse correspondingCourse = new EnrollCourse(createCourseCommand);
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(correspondingCourse));
+
+        when(currentUserAsStudent.userAsStudent()).thenReturn(null);
 
         // when
         final Executable createAction = () -> sut.createFrom(command);
