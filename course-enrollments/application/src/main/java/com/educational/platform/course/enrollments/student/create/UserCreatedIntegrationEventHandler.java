@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 /**
  * Event listener for {@link UserCreatedIntegrationEvent}.
  */
-@Component
+@Component("studentUserCreatedIntegrationEventHandler")
 public class UserCreatedIntegrationEventHandler {
 
     private final CreateStudentCommandHandler createStudentCommandHandler;
