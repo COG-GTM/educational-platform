@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 /**
  * Event listener for {@link UserCreatedIntegrationEvent}.
  */
+// explicit bean name: the courses module has an identically named handler scanned into the same context
 @Component("studentUserCreatedIntegrationEventHandler")
 public class UserCreatedIntegrationEventHandler {
 
