@@ -11,6 +11,7 @@ import com.educational.platform.course.enrollments.student.create.CreateStudentC
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -22,8 +23,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -80,6 +84,44 @@ class RegisterStudentToCourseCommandHandlerTest {
         final StudentEnrolledToCourseIntegrationEvent event = argument.getValue();
         assertThat(event.courseId()).isEqualTo(courseId);
         assertThat(event.username()).isEqualTo("username");
+    }
+
+    @Test
+    void handle_validCommand_eventPublishedAfterTransactionCompletes() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        final Student student = new Student(new CreateStudentCommand("username"));
+
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            final TransactionCallback<CourseEnrollment> callback = invocation.getArgument(0);
+            return callback.doInTransaction(transactionStatus);
+        });
+        when(courseEnrollmentFactory.createFrom(command)).thenReturn(courseEnrollment);
+        when(courseEnrollment.getUuid()).thenReturn(UUID.fromString("123e4567-e89b-12d3-a456-426655440002"));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        sut.handle(command);
+
+        // then
+        final InOrder inOrder = inOrder(transactionTemplate, eventPublisher);
+        inOrder.verify(transactionTemplate).execute(any());
+        inOrder.verify(eventPublisher).publishEvent(any(StudentEnrolledToCourseIntegrationEvent.class));
+    }
+
+    @Test
+    void handle_transactionResultIsNull_nullPointerExceptionAndNoEventPublished() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+
+        when(transactionTemplate.execute(any())).thenReturn(null);
+
+        // when // then
+        assertThatThrownBy(() -> sut.handle(command))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(eventPublisher);
     }
 
 }
