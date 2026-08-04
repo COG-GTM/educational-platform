@@ -15,6 +15,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -26,7 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class RegisterStudentToCourseCommandHandlerTest {
+class RegisterStudentToCourseCommandHandlerTest {
 
     @Mock
     private TransactionTemplate transactionTemplate;
@@ -46,6 +47,9 @@ public class RegisterStudentToCourseCommandHandlerTest {
     @Mock
     private CourseEnrollment courseEnrollment;
 
+    @Mock
+    private TransactionStatus transactionStatus;
+
     @InjectMocks
     private RegisterStudentToCourseCommandHandler sut;
 
@@ -59,7 +63,7 @@ public class RegisterStudentToCourseCommandHandlerTest {
 
         when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
             final TransactionCallback<CourseEnrollment> callback = invocation.getArgument(0);
-            return callback.doInTransaction(null);
+            return callback.doInTransaction(transactionStatus);
         });
         when(courseEnrollmentFactory.createFrom(command)).thenReturn(courseEnrollment);
         when(courseEnrollment.getUuid()).thenReturn(enrollmentUuid);
