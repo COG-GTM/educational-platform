@@ -5,6 +5,7 @@ import java.util.UUID;
 public abstract class CurriculumItemDTO {
 
 	public static final String TYPE = "curriculumItems_type";
+	public static final String UUID_COLUMN = "curriculumItems_uuid";
 	public static final String TITLE = "curriculumItems_title";
 	public static final String DESCRIPTION = "curriculumItems_description";
 	public static final String SERIAL_NUMBER = "curriculumItems_serialNumber";

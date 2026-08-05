@@ -10,16 +10,17 @@ public class CourseDTOResultTransformerTest {
 
 	private static final String[] ALIASES = {
 			CourseDTO.UUID_COLUMN, CourseDTO.NAME_COLUMN, CourseDTO.DESCRIPTION_COLUMN, CourseDTO.NUMBER_OF_STUDENTS_COLUMN,
-			CurriculumItemDTO.SERIAL_NUMBER, "curriculumItems_uuid", CurriculumItemDTO.TITLE, CurriculumItemDTO.DESCRIPTION,
+			CurriculumItemDTO.SERIAL_NUMBER, CurriculumItemDTO.UUID_COLUMN, CurriculumItemDTO.TITLE, CurriculumItemDTO.DESCRIPTION,
 			CurriculumItemDTO.TYPE, LectureDTO.TEXT
 	};
 
 	private static final UUID COURSE_UUID = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+	private static final UUID ITEM_UUID = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
 
 	private final CourseDTOResultTransformer sut = new CourseDTOResultTransformer();
 
 	private Object[] tuple(Object type, String title, String text) {
-		return new Object[]{COURSE_UUID, "name", "description", new NumberOfStudents(5), 1, UUID.randomUUID(), title, "item description", type, text};
+		return new Object[]{COURSE_UUID, "name", "description", new NumberOfStudents(5), 1, ITEM_UUID, title, "item description", type, text};
 	}
 
 	@Test
@@ -34,6 +35,7 @@ public class CourseDTOResultTransformerTest {
 		assertThat(item).isInstanceOf(LectureDTO.class);
 		assertThat(((LectureDTO) item).text).isEqualTo("lecture text");
 		assertThat(item.title).isEqualTo("lecture");
+		assertThat(item.uuid).isEqualTo(ITEM_UUID);
 	}
 
 	@Test
