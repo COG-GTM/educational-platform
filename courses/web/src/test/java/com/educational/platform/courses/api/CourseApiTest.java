@@ -15,7 +15,6 @@ import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 
 /**
  * Represents API tests for course functionality.
@@ -67,7 +66,8 @@ public class CourseApiTest {
 
                 .then()
                 .statusCode(HttpStatus.OK.value())
-                .body("content.size()", greaterThanOrEqualTo(1))
+                .body("content.size()", equalTo(1))
+                .body("content[0].uuid", equalTo("123e4567-e89b-12d3-a456-426655440001"))
                 .body("page.size", equalTo(10));
     }
 
