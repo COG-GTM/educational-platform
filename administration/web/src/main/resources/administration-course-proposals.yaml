@@ -89,13 +89,28 @@ paths:
       summary: List course proposals
       description: List course proposals
       operationId: listCourseProposals
+      parameters:
+        - name: page
+          in: query
+          description: Zero-based page index
+          required: false
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          description: Page size (max 100)
+          required: false
+          schema:
+            type: integer
+            default: 20
       responses:
         '200':
-          description: Course Proposals returned.
+          description: Page of Course Proposals returned.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ListCourseProposalsResponse'
+                $ref: '#/components/schemas/CourseProposalPage'
         '500':
           description: Unexpected server error.
           content:
@@ -104,22 +119,47 @@ paths:
                 $ref: '#/components/schemas/RestApiErrorResponse'
 components:
   schemas:
-    ListCourseProposalsResponse:
-      description: List of Course Proposals response model
-      type: array
-      items:
-        type: object
-        properties:
-          uuid:
-            type: string
-            description: Course UUID
-            format: uuid
-            example: 123e4567-e89b-12d3-a456-426655440001
-          status:
-            type: string
-            description: status
-            example: APPROVED
-            enum: [WAITING_FOR_APPROVAL, DECLINED, APPROVED]
+    CourseProposalPage:
+      description: Page of Course Proposals response model
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/CourseProposal'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    CourseProposal:
+      description: Course Proposal model
+      type: object
+      properties:
+        uuid:
+          type: string
+          description: Course UUID
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440001
+        status:
+          type: string
+          description: status
+          example: APPROVED
+          enum: [WAITING_FOR_APPROVAL, DECLINED, APPROVED]
+    PageMetadata:
+      description: Pagination metadata
+      type: object
+      properties:
+        size:
+          type: integer
+          example: 20
+        number:
+          type: integer
+          example: 0
+        totalElements:
+          type: integer
+          format: int64
+          example: 100
+        totalPages:
+          type: integer
+          example: 5
     RestApiError:
       type: object
       required:
