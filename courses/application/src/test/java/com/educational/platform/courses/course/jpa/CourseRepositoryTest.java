@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 
 import com.educational.platform.courses.course.Course;
+import com.educational.platform.courses.course.CourseLightDTO;
 import com.educational.platform.courses.course.CourseRepository;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
 import com.educational.platform.courses.teacher.Teacher;
@@ -63,6 +64,49 @@ public class CourseRepositoryTest {
 		// then
 		assertThat(result.getContent()).hasSize(2);
 		assertThat(result.getTotalElements()).isEqualTo(3);
+	}
+
+	@Test
+	void list_draftAndPublishedCourses_onlyPublishedReturned() {
+		// given
+		var createTeacherCommand = new CreateTeacherCommand(TEACHER);
+		var teacher = new Teacher(createTeacherCommand);
+		teacherRepository.save(teacher);
+		var draft = new Course(CreateCourseCommand.builder().name("draft").description("draft description").build(), teacher.getId());
+		courseRepository.save(draft);
+		var published = new Course(CreateCourseCommand.builder().name("published").description("published description").build(), teacher.getId());
+		published.approve();
+		published.publish();
+		courseRepository.save(published);
+
+		// when
+		var result = courseRepository.list(PageRequest.of(0, 20));
+
+		// then
+		assertThat(result.getTotalElements()).isEqualTo(1);
+		assertThat(result.getContent()).extracting(CourseLightDTO::name).containsExactly("published");
+	}
+
+	@Test
+	void list_secondPage_remainingCoursesInStableOrder() {
+		// given
+		var createTeacherCommand = new CreateTeacherCommand(TEACHER);
+		var teacher = new Teacher(createTeacherCommand);
+		teacherRepository.save(teacher);
+		for (int i = 0; i < 3; i++) {
+			var course = new Course(CreateCourseCommand.builder().name("name" + i).description("description" + i).build(), teacher.getId());
+			course.approve();
+			course.publish();
+			courseRepository.save(course);
+		}
+
+		// when
+		var result = courseRepository.list(PageRequest.of(1, 2));
+
+		// then
+		assertThat(result.getContent()).extracting(CourseLightDTO::name).containsExactly("name2");
+		assertThat(result.getTotalElements()).isEqualTo(3);
+		assertThat(result.getTotalPages()).isEqualTo(2);
 	}
 
 }
