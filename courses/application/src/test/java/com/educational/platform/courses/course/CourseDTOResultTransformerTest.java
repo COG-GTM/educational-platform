@@ -46,6 +46,7 @@ public class CourseDTOResultTransformerTest {
 		// then
 		assertThat(result.curriculumItems()).hasSize(1);
 		assertThat(result.curriculumItems().get(0)).isInstanceOf(QuizDTO.class);
+		assertThat(result.curriculumItems().get(0).uuid).isEqualTo(ITEM_UUID);
 	}
 
 	@Test

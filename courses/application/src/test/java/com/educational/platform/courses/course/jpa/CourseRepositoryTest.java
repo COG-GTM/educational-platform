@@ -90,6 +90,7 @@ public class CourseRepositoryTest {
 		assertThat(result.get().curriculumItems()).hasSize(2);
 		assertThat(result.get().curriculumItems()).allSatisfy(item -> assertThat(item).isInstanceOf(LectureDTO.class));
 		assertThat(result.get().curriculumItems()).extracting("text").containsExactlyInAnyOrder("text 1", "text 2");
+		assertThat(result.get().curriculumItems()).extracting("uuid").doesNotHaveDuplicates().doesNotContain(course.toIdentity());
 	}
 
 	@Test
