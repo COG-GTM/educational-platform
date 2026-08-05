@@ -21,7 +21,7 @@ public class CourseRepositoryCustomImpl implements CourseRepositoryCustom {
 		var results = (List<CourseDTO>) entityManager
 				.createQuery(
 						"select course.uuid as course_uuid, course.name as course_name, course.description as course_description, course.numberOfStudents as course_numberOfStudents, "
-								+ " curriculumItems.serialNumber as curriculumItems_serialNumber, curriculumItems.uuid as curriculumItems_uuid, curriculumItems.title as curriculumItems_title, curriculumItems.description as curriculumItems_description, curriculumItems.class as curriculumItems_type"
+								+ " curriculumItems.serialNumber as curriculumItems_serialNumber, curriculumItems.uuid as curriculumItems_uuid, curriculumItems.title as curriculumItems_title, curriculumItems.description as curriculumItems_description, curriculumItems.class as curriculumItems_type, treat(curriculumItems as com.educational.platform.courses.course.Lecture).content as text"
 								+ " from com.educational.platform.courses.course.Course course left join course.curriculumItems curriculumItems WHERE course.uuid = :uuid")
 				.setParameter("uuid", uuid)
 				.unwrap(org.hibernate.query.Query.class)

@@ -86,6 +86,7 @@ public class CourseRepositoryTest {
 		// then
 		assertThat(result).isNotEmpty();
 		assertThat(result.get()).hasFieldOrPropertyWithValue("name", "name").hasFieldOrPropertyWithValue("description", "description");
+		assertThat(result.get().curriculumItems()).hasSize(2);
 	}
 
 	// Hibernate generates a discriminator check constraint on curriculum_item that H2 cannot evaluate,

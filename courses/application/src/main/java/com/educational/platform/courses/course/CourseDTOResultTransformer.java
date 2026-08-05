@@ -26,12 +26,23 @@ public class CourseDTOResultTransformer implements TupleTransformer<CourseDTO> {
                 uuid,
                 id -> new CourseDTO(tuple, aliasToIndexMap)
         );
-        if (aliasToIndexMap.get(CurriculumItemDTO.TYPE).toString().equals("Lecture")) {
+        String type = typeName(tuple[aliasToIndexMap.get(CurriculumItemDTO.TYPE)]);
+        if ("Lecture".equals(type)) {
             courseDTO.curriculumItems().add(new LectureDTO(uuid, tuple, aliasToIndexMap));
-        } else if (aliasToIndexMap.get(CurriculumItemDTO.TYPE).toString().equals("Quiz")) {
+        } else if ("Quiz".equals(type)) {
             courseDTO.curriculumItems().add(new QuizDTO(uuid, tuple, aliasToIndexMap));
         }
         return courseDTO;
+    }
+
+    private String typeName(Object type) {
+        if (type == null) {
+            return null;
+        }
+        if (type instanceof Class<?> clazz) {
+            return clazz.getSimpleName();
+        }
+        return type.toString();
     }
 
     public Map<String, Integer> aliasToIndexMap(
