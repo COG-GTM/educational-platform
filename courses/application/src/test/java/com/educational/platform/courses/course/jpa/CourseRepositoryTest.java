@@ -14,6 +14,7 @@ import com.educational.platform.courses.teacher.Teacher;
 import com.educational.platform.courses.teacher.TeacherRepository;
 import com.educational.platform.courses.teacher.create.CreateTeacherCommand;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 
 @DataJpaTest
 public class CourseRepositoryTest {
@@ -25,6 +26,9 @@ public class CourseRepositoryTest {
 
 	@Autowired
 	private TeacherRepository teacherRepository;
+
+	@Autowired
+	private TestEntityManager entityManager;
 
 	@Test
 	void queryDtoByUUID_validQuery_dtoRetrieved() {
@@ -107,6 +111,27 @@ public class CourseRepositoryTest {
 		assertThat(result.getContent()).extracting(CourseLightDTO::name).containsExactly("name2");
 		assertThat(result.getTotalElements()).isEqualTo(3);
 		assertThat(result.getTotalPages()).isEqualTo(2);
+	}
+
+	@Test
+	void findByUuid_persistedCourse_curriculumItemsLazilyLoaded() {
+		// given
+		var createTeacherCommand = new CreateTeacherCommand(TEACHER);
+		var teacher = new Teacher(createTeacherCommand);
+		teacherRepository.save(teacher);
+		var createCourseCommand = CreateCourseCommand.builder().name("name").description("description").build();
+		var course = new Course(createCourseCommand, teacher.getId());
+		courseRepository.save(course);
+		entityManager.flush();
+		entityManager.clear();
+
+		// when
+		var result = courseRepository.findByUuid(course.toIdentity());
+
+		// then
+		assertThat(result).isNotEmpty();
+		var persistenceUnitUtil = entityManager.getEntityManager().getEntityManagerFactory().getPersistenceUnitUtil();
+		assertThat(persistenceUnitUtil.isLoaded(result.get(), "curriculumItems")).isFalse();
 	}
 
 }
