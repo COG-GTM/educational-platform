@@ -4,6 +4,7 @@ import jakarta.annotation.Nonnull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import jakarta.inject.Named;
 
 import com.educational.platform.administration.course.CourseProposalDTO;
@@ -29,6 +30,7 @@ public class ListCourseProposalsQueryHandler {
 	 */
 	@PreAuthorize("hasRole('ADMIN')")
 	@Nonnull
+	@Transactional(readOnly = true)
 	public Page<CourseProposalDTO> handle(ListCourseProposalsQuery query) {
 		return repository.listCourseProposals(PageRequest.of(query.page(), query.size()));
 	}
