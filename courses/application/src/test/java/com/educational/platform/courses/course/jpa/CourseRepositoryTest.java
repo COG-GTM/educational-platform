@@ -12,6 +12,7 @@ import org.springframework.data.domain.PageRequest;
 import com.educational.platform.courses.course.Course;
 import com.educational.platform.courses.course.CourseLightDTO;
 import com.educational.platform.courses.course.CourseRepository;
+import com.educational.platform.courses.course.LectureDTO;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
 import com.educational.platform.courses.course.create.CreateLectureCommand;
 import com.educational.platform.courses.teacher.Teacher;
@@ -87,6 +88,8 @@ public class CourseRepositoryTest {
 		assertThat(result).isNotEmpty();
 		assertThat(result.get()).hasFieldOrPropertyWithValue("name", "name").hasFieldOrPropertyWithValue("description", "description");
 		assertThat(result.get().curriculumItems()).hasSize(2);
+		assertThat(result.get().curriculumItems()).allSatisfy(item -> assertThat(item).isInstanceOf(LectureDTO.class));
+		assertThat(result.get().curriculumItems()).extracting("text").containsExactlyInAnyOrder("text 1", "text 2");
 	}
 
 	// Hibernate generates a discriminator check constraint on curriculum_item that H2 cannot evaluate,
