@@ -1,0 +1,65 @@
+package com.educational.platform.courses.course.query;
+
+import java.util.List;
+import java.util.UUID;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+
+import com.educational.platform.courses.course.CourseLightDTO;
+import com.educational.platform.courses.course.CourseRepository;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+public class ListCourseQueryHandlerTest {
+
+	@Mock
+	private CourseRepository repository;
+
+	@InjectMocks
+	private ListCourseQueryHandler sut;
+
+	@Test
+	void handle_pagedQuery_repositoryCalledWithCorrespondingPageRequest() {
+		// given
+		var query = new ListCourseQuery(2, 15);
+		var dto = new CourseLightDTO(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"), "name", "description", 5);
+		when(repository.list(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(dto)));
+
+		// when
+		var result = sut.handle(query);
+
+		// then
+		assertThat(result.getContent()).containsExactly(dto);
+		var pageable = ArgumentCaptor.forClass(Pageable.class);
+		verify(repository).list(pageable.capture());
+		assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
+		assertThat(pageable.getValue().getPageSize()).isEqualTo(15);
+	}
+
+	@Test
+	void handle_defaultQuery_repositoryCalledWithFirstPageAndDefaultSize() {
+		// given
+		var query = new ListCourseQuery();
+		when(repository.list(any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+
+		// when
+		sut.handle(query);
+
+		// then
+		var pageable = ArgumentCaptor.forClass(Pageable.class);
+		verify(repository).list(pageable.capture());
+		assertThat(pageable.getValue().getPageNumber()).isZero();
+		assertThat(pageable.getValue().getPageSize()).isEqualTo(ListCourseQuery.DEFAULT_PAGE_SIZE);
+	}
+}
