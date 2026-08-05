@@ -55,12 +55,12 @@ public class ListCourseProposalsQueryTest {
 	}
 
 	@Test
-	void constructor_sizeAboveMax_fallsBackToDefault() {
+	void constructor_sizeAboveMax_clampedToMax() {
 		// when
 		var query = new ListCourseProposalsQuery(0, ListCourseProposalsQuery.MAX_PAGE_SIZE + 1);
 
 		// then
-		assertThat(query.size()).isEqualTo(ListCourseProposalsQuery.DEFAULT_PAGE_SIZE);
+		assertThat(query.size()).isEqualTo(ListCourseProposalsQuery.MAX_PAGE_SIZE);
 	}
 
 	@Test

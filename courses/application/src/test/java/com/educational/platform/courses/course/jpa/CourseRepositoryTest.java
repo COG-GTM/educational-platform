@@ -51,7 +51,10 @@ public class CourseRepositoryTest {
 		teacherRepository.save(teacher);
 		for (int i = 0; i < 3; i++) {
 			var createCourseCommand = CreateCourseCommand.builder().name("name" + i).description("description" + i).build();
-			courseRepository.save(new Course(createCourseCommand, teacher.getId()));
+			var course = new Course(createCourseCommand, teacher.getId());
+			course.approve();
+			course.publish();
+			courseRepository.save(course);
 		}
 
 		// when

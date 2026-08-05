@@ -30,7 +30,9 @@ public interface CourseRepository extends JpaRepository<Course, Integer>, Course
 	 * @return the page of course dtos.
 	 */
 	@Query(value = "SELECT new com.educational.platform.courses.course.CourseLightDTO(c.uuid, c.name, c.description, c.numberOfStudents) "
-			+ "FROM com.educational.platform.courses.course.Course c")
+			+ "FROM com.educational.platform.courses.course.Course c "
+			+ "WHERE c.publishStatus = com.educational.platform.courses.course.PublishStatus.PUBLISHED "
+			+ "ORDER BY c.id")
 	Page<CourseLightDTO> list(Pageable pageable);
 
 	/**

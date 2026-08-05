@@ -6,11 +6,14 @@ import java.util.UUID;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
+import org.springframework.transaction.annotation.Transactional;
+
 public class CourseRepositoryCustomImpl implements CourseRepositoryCustom {
 
 	@PersistenceContext
 	private EntityManager entityManager;
 
+	@Transactional(readOnly = true)
 	@Override
 	public Optional<CourseDTO> findDTOByUuid(UUID uuid) {
 		CourseDTO result = (CourseDTO) entityManager

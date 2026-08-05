@@ -28,7 +28,7 @@ public interface CourseProposalRepository extends JpaRepository<CourseProposal, 
      * @param pageable pagination information, must not be {@literal null}.
      * @return page of course proposals.
      */
-    @Query("select new com.educational.platform.administration.course.CourseProposalDTO(cp.uuid, cp.status) from CourseProposal cp")
+    @Query("select new com.educational.platform.administration.course.CourseProposalDTO(cp.uuid, cp.status) from CourseProposal cp order by cp.id")
     Page<CourseProposalDTO> listCourseProposals(Pageable pageable);
 
 }

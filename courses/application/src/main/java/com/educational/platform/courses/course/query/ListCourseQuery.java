@@ -12,8 +12,10 @@ public record ListCourseQuery(int page, int size) {
 		if (page < 0) {
 			page = 0;
 		}
-		if (size < 1 || size > MAX_PAGE_SIZE) {
+		if (size < 1) {
 			size = DEFAULT_PAGE_SIZE;
+		} else if (size > MAX_PAGE_SIZE) {
+			size = MAX_PAGE_SIZE;
 		}
 	}
 

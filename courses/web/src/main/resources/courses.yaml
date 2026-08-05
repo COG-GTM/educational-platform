@@ -10,6 +10,40 @@ tags:
     description: Courses API
 paths:
   /courses:
+    get:
+      tags:
+        - Courses
+      summary: List published courses
+      description: Retrieves a page of published courses
+      operationId: listCourses
+      parameters:
+        - name: page
+          in: query
+          description: Zero-based page index
+          required: false
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          description: Page size (max 100)
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Page of published courses.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoursePage'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiErrorResponse'
     post:
       tags:
         - Courses
@@ -82,6 +116,54 @@ paths:
 
 components:
   schemas:
+    CoursePage:
+      description: Page of courses
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/CourseLight'
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    CourseLight:
+      description: Course list item
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440001
+          description: Course UUID.
+        name:
+          type: string
+          example: Java 11 for beginners
+          description: Course name.
+        description:
+          type: string
+          example: Course created for Java developers
+          description: Course description.
+        numberOfStudents:
+          type: integer
+          example: 10
+          description: Number of enrolled students.
+    PageMetadata:
+      description: Pagination metadata
+      type: object
+      properties:
+        size:
+          type: integer
+          example: 20
+        number:
+          type: integer
+          example: 0
+        totalElements:
+          type: integer
+          format: int64
+          example: 100
+        totalPages:
+          type: integer
+          example: 5
     CreateCourseRequest:
       description: Course creation model
       type: object
