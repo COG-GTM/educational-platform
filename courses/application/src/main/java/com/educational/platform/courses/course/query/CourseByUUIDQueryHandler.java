@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import jakarta.annotation.Nonnull;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.educational.platform.courses.course.CourseDTO;
 import com.educational.platform.courses.course.CourseRepository;
@@ -27,6 +28,7 @@ public class CourseByUUIDQueryHandler {
 	 * @return corresponding course dto.
 	 */
 	@Nonnull
+	@Transactional(readOnly = true)
 	public Optional<CourseDTO> handle(CourseByUUIDQuery query) {
 		return repository.findDTOByUuid(query.uuid());
 	}
