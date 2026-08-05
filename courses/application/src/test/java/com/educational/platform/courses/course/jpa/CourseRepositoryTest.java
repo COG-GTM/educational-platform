@@ -2,6 +2,7 @@ package com.educational.platform.courses.course.jpa;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,7 @@ import com.educational.platform.courses.course.Course;
 import com.educational.platform.courses.course.CourseLightDTO;
 import com.educational.platform.courses.course.CourseRepository;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
+import com.educational.platform.courses.course.create.CreateLectureCommand;
 import com.educational.platform.courses.teacher.Teacher;
 import com.educational.platform.courses.teacher.TeacherRepository;
 import com.educational.platform.courses.teacher.create.CreateTeacherCommand;
@@ -57,6 +59,46 @@ public class CourseRepositoryTest {
 
 		// then
 		assertThat(result).isEmpty();
+	}
+
+	@Test
+	void findDTOByUuid_courseWithMultipleCurriculumItems_singleDto() {
+		// given
+		dropInvalidCurriculumItemCheckConstraints();
+		var createTeacherCommand = new CreateTeacherCommand(TEACHER);
+		var teacher = new Teacher(createTeacherCommand);
+		teacherRepository.save(teacher);
+		var createCourseCommand = CreateCourseCommand.builder()
+				.name("name")
+				.description("description")
+				.curriculumItems(List.of(
+						CreateLectureCommand.builder().title("lecture 1").description("lecture 1 description").serialNumber(1).text("text 1").build(),
+						CreateLectureCommand.builder().title("lecture 2").description("lecture 2 description").serialNumber(2).text("text 2").build()))
+				.build();
+		var course = new Course(createCourseCommand, teacher.getId());
+		courseRepository.save(course);
+		entityManager.flush();
+		entityManager.clear();
+
+		// when
+		var result = courseRepository.findDTOByUuid(course.toIdentity());
+
+		// then
+		assertThat(result).isNotEmpty();
+		assertThat(result.get()).hasFieldOrPropertyWithValue("name", "name").hasFieldOrPropertyWithValue("description", "description");
+	}
+
+	// Hibernate generates a discriminator check constraint on curriculum_item that H2 cannot evaluate,
+	// rejecting every insert into the single-table hierarchy. Drop it so child rows can be persisted.
+	@SuppressWarnings("unchecked")
+	private void dropInvalidCurriculumItemCheckConstraints() {
+		var em = entityManager.getEntityManager();
+		var names = (List<String>) em
+				.createNativeQuery("select constraint_name from information_schema.table_constraints where table_name = 'CURRICULUM_ITEM' and constraint_type = 'CHECK'")
+				.getResultList();
+		for (var name : names) {
+			em.createNativeQuery("alter table curriculum_item drop constraint \"" + name + "\"").executeUpdate();
+		}
 	}
 
 	@Test
