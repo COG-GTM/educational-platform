@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.educational.platform.administration.course.CourseProposalDTO;
 import com.educational.platform.administration.course.CourseProposalRepository;
@@ -62,5 +63,15 @@ public class ListCourseProposalsQueryHandlerTest {
 		verify(repository).listCourseProposals(pageable.capture());
 		assertThat(pageable.getValue().getPageNumber()).isZero();
 		assertThat(pageable.getValue().getPageSize()).isEqualTo(ListCourseProposalsQuery.DEFAULT_PAGE_SIZE);
+	}
+
+	@Test
+	void handle_method_annotatedWithReadOnlyTransaction() throws NoSuchMethodException {
+		// when
+		var transactional = ListCourseProposalsQueryHandler.class.getMethod("handle", ListCourseProposalsQuery.class).getAnnotation(Transactional.class);
+
+		// then
+		assertThat(transactional).isNotNull();
+		assertThat(transactional.readOnly()).isTrue();
 	}
 }

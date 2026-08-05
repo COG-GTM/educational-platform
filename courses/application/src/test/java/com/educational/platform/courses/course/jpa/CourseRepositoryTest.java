@@ -92,6 +92,34 @@ public class CourseRepositoryTest {
 		assertThat(result.get().curriculumItems()).extracting("text").containsExactlyInAnyOrder("text 1", "text 2");
 	}
 
+	@Test
+	void findDTOByUuid_itemsPersistedOutOfSerialOrder_orderedBySerialNumber() {
+		// given
+		dropInvalidCurriculumItemCheckConstraints();
+		var createTeacherCommand = new CreateTeacherCommand(TEACHER);
+		var teacher = new Teacher(createTeacherCommand);
+		teacherRepository.save(teacher);
+		var createCourseCommand = CreateCourseCommand.builder()
+				.name("name")
+				.description("description")
+				.curriculumItems(List.of(
+						CreateLectureCommand.builder().title("lecture 3").description("lecture 3 description").serialNumber(3).text("text 3").build(),
+						CreateLectureCommand.builder().title("lecture 1").description("lecture 1 description").serialNumber(1).text("text 1").build(),
+						CreateLectureCommand.builder().title("lecture 2").description("lecture 2 description").serialNumber(2).text("text 2").build()))
+				.build();
+		var course = new Course(createCourseCommand, teacher.getId());
+		courseRepository.save(course);
+		entityManager.flush();
+		entityManager.clear();
+
+		// when
+		var result = courseRepository.findDTOByUuid(course.toIdentity());
+
+		// then
+		assertThat(result).isNotEmpty();
+		assertThat(result.get().curriculumItems()).extracting("text").containsExactly("text 1", "text 2", "text 3");
+	}
+
 	// Hibernate generates a discriminator check constraint on curriculum_item that H2 cannot evaluate,
 	// rejecting every insert into the single-table hierarchy. Drop it so child rows can be persisted.
 	@SuppressWarnings("unchecked")
