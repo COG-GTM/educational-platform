@@ -2,6 +2,8 @@ package com.educational.platform.courses.course.jpa;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.UUID;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -46,6 +48,15 @@ public class CourseRepositoryTest {
 		// then
 		assertThat(result).isNotEmpty();
 		assertThat(result.get()).hasFieldOrPropertyWithValue("name", "name").hasFieldOrPropertyWithValue("description", "description");
+	}
+
+	@Test
+	void findDTOByUuid_missingUuid_emptyOptional() {
+		// when
+		var result = courseRepository.findDTOByUuid(UUID.fromString("123e4567-e89b-12d3-a456-426655440999"));
+
+		// then
+		assertThat(result).isEmpty();
 	}
 
 	@Test
