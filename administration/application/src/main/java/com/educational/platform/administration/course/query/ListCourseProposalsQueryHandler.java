@@ -1,9 +1,10 @@
 package com.educational.platform.administration.course.query;
 
-import java.util.List;
-
 import jakarta.annotation.Nonnull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import jakarta.inject.Named;
 
 import com.educational.platform.administration.course.CourseProposalDTO;
@@ -22,15 +23,16 @@ public class ListCourseProposalsQueryHandler {
     }
 
     /**
-	 * Retrieves course proposals.
+	 * Retrieves a page of course proposals.
 	 *
 	 * @param query query.
-	 * @return course proposals.
+	 * @return page of course proposals.
 	 */
 	@PreAuthorize("hasRole('ADMIN')")
 	@Nonnull
-	public List<CourseProposalDTO> handle(ListCourseProposalsQuery query) {
-		return repository.listCourseProposals();
+	@Transactional(readOnly = true)
+	public Page<CourseProposalDTO> handle(ListCourseProposalsQuery query) {
+		return repository.listCourseProposals(PageRequest.of(query.page(), query.size()));
 	}
 
 }

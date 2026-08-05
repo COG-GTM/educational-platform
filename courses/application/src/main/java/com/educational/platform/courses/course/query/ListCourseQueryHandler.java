@@ -1,9 +1,10 @@
 package com.educational.platform.courses.course.query;
 
-import java.util.List;
-
 import jakarta.annotation.Nonnull;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.educational.platform.courses.course.CourseLightDTO;
 import com.educational.platform.courses.course.CourseRepository;
@@ -21,14 +22,15 @@ public class ListCourseQueryHandler {
     }
 
     /**
-	 * Retrieves list of course dtos.
+	 * Retrieves a page of course dtos.
 	 *
 	 * @param query query.
-	 * @return corresponding list of course dtos.
+	 * @return corresponding page of course dtos.
 	 */
 	@Nonnull
-	public List<CourseLightDTO> handle(ListCourseQuery query) {
-		return repository.list();
+	@Transactional(readOnly = true)
+	public Page<CourseLightDTO> handle(ListCourseQuery query) {
+		return repository.list(PageRequest.of(query.page(), query.size()));
 	}
 
 }

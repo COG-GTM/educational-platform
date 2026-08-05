@@ -26,12 +26,27 @@ public class CourseDTOResultTransformer implements TupleTransformer<CourseDTO> {
                 uuid,
                 id -> new CourseDTO(tuple, aliasToIndexMap)
         );
-        if (aliasToIndexMap.get(CurriculumItemDTO.TYPE).toString().equals("Lecture")) {
-            courseDTO.curriculumItems().add(new LectureDTO(uuid, tuple, aliasToIndexMap));
-        } else if (aliasToIndexMap.get(CurriculumItemDTO.TYPE).toString().equals("Quiz")) {
-            courseDTO.curriculumItems().add(new QuizDTO(uuid, tuple, aliasToIndexMap));
+        String type = typeName(tuple[aliasToIndexMap.get(CurriculumItemDTO.TYPE)]);
+        if ("Lecture".equals(type)) {
+            courseDTO.curriculumItems().add(new LectureDTO(itemUuid(tuple, aliasToIndexMap), tuple, aliasToIndexMap));
+        } else if ("Quiz".equals(type)) {
+            courseDTO.curriculumItems().add(new QuizDTO(itemUuid(tuple, aliasToIndexMap), tuple, aliasToIndexMap));
         }
         return courseDTO;
+    }
+
+    private UUID itemUuid(Object[] tuple, Map<String, Integer> aliasToIndexMap) {
+        return UUID.fromString(String.valueOf(tuple[aliasToIndexMap.get(CurriculumItemDTO.UUID_COLUMN)]));
+    }
+
+    private String typeName(Object type) {
+        if (type == null) {
+            return null;
+        }
+        if (type instanceof Class<?> clazz) {
+            return clazz.getSimpleName();
+        }
+        return type.toString();
     }
 
     public Map<String, Integer> aliasToIndexMap(

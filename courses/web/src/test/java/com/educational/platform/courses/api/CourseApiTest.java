@@ -14,6 +14,7 @@ import org.springframework.test.context.jdbc.Sql;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.equalTo;
 
 /**
  * Represents API tests for course functionality.
@@ -48,6 +49,26 @@ public class CourseApiTest {
 
                 .then()
                 .statusCode(HttpStatus.CREATED.value());
+    }
+
+    @Test
+    void list_paged_ok() {
+        var token = SignUpHelper.signUpTeacher();
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .queryParam("page", 0)
+                .queryParam("size", 10)
+
+                .when()
+                .get("/courses")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("content.size()", equalTo(1))
+                .body("content[0].uuid", equalTo("123e4567-e89b-12d3-a456-426655440001"))
+                .body("page.size", equalTo(10));
     }
 
     @Test

@@ -7,11 +7,11 @@ import com.educational.platform.administration.course.decline.DeclineCoursePropo
 import com.educational.platform.administration.course.query.ListCourseProposalsQuery;
 import com.educational.platform.administration.course.query.ListCourseProposalsQueryHandler;
 import com.educational.platform.web.handler.ErrorResponse;
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
@@ -47,8 +47,9 @@ public class CourseProposalController {
 
     @GetMapping
     @ResponseStatus(HttpStatus.OK)
-    public List<CourseProposalDTO> courseProposals() {
-        return listCourseProposalsQueryHandler.handle(new ListCourseProposalsQuery());
+    public PagedModel<CourseProposalDTO> courseProposals(@RequestParam(value = "page", defaultValue = "0") int page,
+                                                         @RequestParam(value = "size", defaultValue = "20") int size) {
+        return new PagedModel<>(listCourseProposalsQueryHandler.handle(new ListCourseProposalsQuery(page, size)));
     }
 
     @ExceptionHandler({CourseProposalAlreadyDeclinedException.class, CourseProposalAlreadyApprovedException.class})
