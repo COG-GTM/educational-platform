@@ -12,6 +12,8 @@ import org.springframework.test.context.jdbc.Sql;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 
 /**
  * Represents API tests for administration of course proposal functionality.
@@ -38,6 +40,22 @@ public class CourseProposalApiTest {
 
                 .then()
                 .statusCode(HttpStatus.NO_CONTENT.value());
+    }
+
+    @Test
+    void courseProposals_paged_ok() {
+        given()
+                .contentType(ContentType.JSON)
+                .queryParam("page", 0)
+                .queryParam("size", 10)
+
+                .when()
+                .get("/administration/course-proposals")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("content.size()", greaterThanOrEqualTo(1))
+                .body("page.size", equalTo(10));
     }
 
     @Test

@@ -7,6 +7,7 @@ dependencies {
 
     implementation("org.springframework.boot", "spring-boot-starter-web")
     implementation("org.springframework.boot", "spring-boot-starter-validation")
+    implementation("org.springframework.data", "spring-data-commons")
 
     testImplementation("org.springframework.boot", "spring-boot-starter-test")
     testImplementation("org.springframework.boot", "spring-boot-webmvc-test")

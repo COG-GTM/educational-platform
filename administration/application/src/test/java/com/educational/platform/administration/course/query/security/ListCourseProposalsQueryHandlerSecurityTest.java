@@ -2,13 +2,14 @@ package com.educational.platform.administration.course.query.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
-
-import java.util.ArrayList;
 
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -58,7 +59,7 @@ public class ListCourseProposalsQueryHandlerSecurityTest {
 	void handle_userIsAdmin_result() {
 		// given
 		var query = new ListCourseProposalsQuery();
-		doReturn(new ArrayList<>()).when(courseProposalRepository).listCourseProposals();
+		doReturn(Page.empty()).when(courseProposalRepository).listCourseProposals(any(Pageable.class));
 
 		// when
 		var result = sut.handle(query);

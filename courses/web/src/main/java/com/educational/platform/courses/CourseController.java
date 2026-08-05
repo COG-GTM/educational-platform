@@ -1,12 +1,16 @@
 package com.educational.platform.courses;
 
 import com.educational.platform.courses.course.CourseCannotBePublishedException;
+import com.educational.platform.courses.course.CourseLightDTO;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
 import com.educational.platform.courses.course.create.CreateCourseCommandHandler;
 import com.educational.platform.courses.course.publish.PublishCourseCommand;
 import com.educational.platform.courses.course.publish.PublishCourseCommandHandler;
+import com.educational.platform.courses.course.query.ListCourseQuery;
+import com.educational.platform.courses.course.query.ListCourseQueryHandler;
 import com.educational.platform.web.handler.ErrorResponse;
 
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -27,10 +31,19 @@ public class CourseController {
 
     private final CreateCourseCommandHandler createCourseCommandHandler;
     private final PublishCourseCommandHandler publishCourseCommandHandler;
+    private final ListCourseQueryHandler listCourseQueryHandler;
 
-    public CourseController(CreateCourseCommandHandler createCourseCommandHandler, PublishCourseCommandHandler publishCourseCommandHandler) {
+    public CourseController(CreateCourseCommandHandler createCourseCommandHandler, PublishCourseCommandHandler publishCourseCommandHandler, ListCourseQueryHandler listCourseQueryHandler) {
         this.createCourseCommandHandler = createCourseCommandHandler;
         this.publishCourseCommandHandler = publishCourseCommandHandler;
+        this.listCourseQueryHandler = listCourseQueryHandler;
+    }
+
+    @GetMapping(produces = APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.OK)
+    PagedModel<CourseLightDTO> list(@RequestParam(value = "page", defaultValue = "0") int page,
+                                    @RequestParam(value = "size", defaultValue = "20") int size) {
+        return new PagedModel<>(listCourseQueryHandler.handle(new ListCourseQuery(page, size)));
     }
 
     @PostMapping(consumes = APPLICATION_JSON_VALUE, produces = APPLICATION_JSON_VALUE)

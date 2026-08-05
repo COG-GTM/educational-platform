@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 
 import com.educational.platform.administration.course.CourseProposal;
 import com.educational.platform.administration.course.CourseProposalRepository;
@@ -19,12 +20,12 @@ public class CourseProposalRepositoryTest {
 	private CourseProposalRepository sut;
 
 	@Test
-	void listCourseProposals_unpaged_courseProposals() {
+	void listCourseProposals_paged_courseProposals() {
 		// given
 		sut.save(new CourseProposal(new CreateCourseProposalCommand(UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))));
 
 		// when
-		var result = sut.listCourseProposals();
+		var result = sut.listCourseProposals(PageRequest.of(0, 20));
 
 		// then
 		assertThat(result).hasSize(1);

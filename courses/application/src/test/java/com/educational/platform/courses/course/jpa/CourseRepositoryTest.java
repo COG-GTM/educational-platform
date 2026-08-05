@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 
 import com.educational.platform.courses.course.Course;
 import com.educational.platform.courses.course.CourseRepository;
@@ -40,6 +41,25 @@ public class CourseRepositoryTest {
 		// then
 		assertThat(result).isNotEmpty();
 		assertThat(result.get()).hasFieldOrPropertyWithValue("name", "name").hasFieldOrPropertyWithValue("description", "description");
+	}
+
+	@Test
+	void list_paged_pageOfCourses() {
+		// given
+		var createTeacherCommand = new CreateTeacherCommand(TEACHER);
+		var teacher = new Teacher(createTeacherCommand);
+		teacherRepository.save(teacher);
+		for (int i = 0; i < 3; i++) {
+			var createCourseCommand = CreateCourseCommand.builder().name("name" + i).description("description" + i).build();
+			courseRepository.save(new Course(createCourseCommand, teacher.getId()));
+		}
+
+		// when
+		var result = courseRepository.list(PageRequest.of(0, 2));
+
+		// then
+		assertThat(result.getContent()).hasSize(2);
+		assertThat(result.getTotalElements()).isEqualTo(3);
 	}
 
 }
