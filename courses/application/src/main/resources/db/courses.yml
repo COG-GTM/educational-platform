@@ -62,20 +62,6 @@ databaseChangeLog:
                   name: teacher
                   type: int
   - changeSet:
-      id: 2026_08_06-1
-      author: devin
-      changes:
-        - addColumn:
-            tableName: course
-            columns:
-              - column:
-                  name: category
-                  type: VARCHAR(100)
-              - column:
-                  name: created_date
-                  type: timestamp
-                  defaultValueComputed: CURRENT_TIMESTAMP
-  - changeSet:
       id: 2021_06_25-2
       author: antonliauchuk
       preConditions:
@@ -223,3 +209,36 @@ databaseChangeLog:
             referencedColumnNames: id
             referencedTableName: curriculum_item
             validate: true
+  - changeSet:
+      id: 2026_08_06-1
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          columnExists:
+            tableName: course
+            columnName: category
+      changes:
+        - addColumn:
+            tableName: course
+            columns:
+              - column:
+                  name: category
+                  type: VARCHAR(100)
+  - changeSet:
+      id: 2026_08_06-2
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          columnExists:
+            tableName: course
+            columnName: created_date
+      changes:
+        - addColumn:
+            tableName: course
+            columns:
+              - column:
+                  name: created_date
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP

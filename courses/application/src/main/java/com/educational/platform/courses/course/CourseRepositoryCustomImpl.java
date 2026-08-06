@@ -42,8 +42,8 @@ public class CourseRepositoryCustomImpl implements CourseRepositoryCustom {
 		parameters.put("publishStatus", PublishStatus.PUBLISHED);
 
 		if (query.search() != null && !query.search().isBlank()) {
-			conditions.append(" and (lower(course.name) like :search or lower(course.description) like :search)");
-			parameters.put("search", "%" + query.search().toLowerCase() + "%");
+			conditions.append(" and (lower(course.name) like :search escape '\\' or lower(course.description) like :search escape '\\')");
+			parameters.put("search", "%" + escapeLikeWildcards(query.search().toLowerCase()) + "%");
 		}
 		if (query.category() != null && !query.category().isBlank()) {
 			conditions.append(" and course.category = :category");
@@ -72,13 +72,20 @@ public class CourseRepositoryCustomImpl implements CourseRepositoryCustom {
 						+ from + conditions + orderBy(query.sort()),
 				CourseCatalogItemDTO.class);
 		parameters.forEach(itemsQuery::setParameter);
-		final List<CourseCatalogItemDTO> items = itemsQuery
-				.setFirstResult(query.page() * query.size())
-				.setMaxResults(query.size())
-				.getResultList();
+		final long offset = (long) query.page() * query.size();
+		final List<CourseCatalogItemDTO> items = offset >= totalElements
+				? List.of()
+				: itemsQuery
+						.setFirstResult((int) offset)
+						.setMaxResults(query.size())
+						.getResultList();
 
 		final int totalPages = (int) Math.ceil((double) totalElements / query.size());
 		return new CourseCatalogPageDTO(items, query.page(), query.size(), totalElements, totalPages);
+	}
+
+	private String escapeLikeWildcards(String value) {
+		return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
 	}
 
 	private String orderBy(CourseCatalogSort sort) {

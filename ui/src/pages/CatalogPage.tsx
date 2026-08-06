@@ -26,6 +26,7 @@ export default function CatalogPage() {
   const [facets, setFacets] = useState<CatalogFacets>({ categories: [], teachers: [] });
   const [state, setState] = useState<LoadState>('loading');
   const [searchInput, setSearchInput] = useState(searchParams.get('search') ?? '');
+  const [reloadToken, setReloadToken] = useState(0);
 
   const search = searchParams.get('search') ?? '';
   const category = searchParams.get('category') ?? '';
@@ -35,6 +36,10 @@ export default function CatalogPage() {
   const page = Math.max(0, Number(searchParams.get('page') ?? '0') || 0);
 
   const hasActiveFilters = Boolean(search || category || teacher || minRating);
+
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
 
   useEffect(() => {
     fetchCatalogFacets()
@@ -58,7 +63,7 @@ export default function CatalogPage() {
     return () => {
       cancelled = true;
     };
-  }, [search, category, teacher, minRating, sort, page]);
+  }, [search, category, teacher, minRating, sort, page, reloadToken]);
 
   const updateParams = (updates: Record<string, string>) => {
     const next = new URLSearchParams(searchParams);
@@ -158,7 +163,7 @@ export default function CatalogPage() {
       {state === 'error' && (
         <div className="catalog-state catalog-error" role="alert">
           <p>We couldn't load the catalog. Please try again.</p>
-          <button type="button" onClick={() => updateParams({ page: String(page) })}>
+          <button type="button" onClick={() => setReloadToken((token) => token + 1)}>
             Retry
           </button>
         </div>

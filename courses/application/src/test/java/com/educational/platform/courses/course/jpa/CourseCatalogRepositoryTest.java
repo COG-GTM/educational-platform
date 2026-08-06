@@ -64,6 +64,28 @@ public class CourseCatalogRepositoryTest {
 	}
 
 	@Test
+	void findCatalog_searchWildcardsTreatedAsLiterals() {
+		savePublished("Java Basics", "Learn programming", "Programming", teacher);
+		savePublished("100% Java", "All about java", "Programming", teacher);
+
+		var percent = courseRepository.findCatalog(query("%", null, null, null, CourseCatalogSort.NEWEST, 0, 10));
+		var underscore = courseRepository.findCatalog(query("_", null, null, null, CourseCatalogSort.NEWEST, 0, 10));
+
+		assertThat(percent.items()).extracting(CourseCatalogItemDTO::name).containsExactly("100% Java");
+		assertThat(underscore.items()).isEmpty();
+	}
+
+	@Test
+	void findCatalog_pageBeyondResults_returnsEmptyPage() {
+		savePublished("Java Basics", "Learn Java", "Programming", teacher);
+
+		var result = courseRepository.findCatalog(query(null, null, null, null, CourseCatalogSort.NEWEST, Integer.MAX_VALUE, 100));
+
+		assertThat(result.items()).isEmpty();
+		assertThat(result.totalElements()).isEqualTo(1);
+	}
+
+	@Test
 	void findCatalog_filtersByCategoryTeacherAndMinRating() {
 		var lowRated = savePublished("Java Basics", "Learn Java", "Programming", teacher);
 		lowRated.updateRating(2.0);
