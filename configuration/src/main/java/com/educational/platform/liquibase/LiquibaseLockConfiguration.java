@@ -13,7 +13,7 @@ public class LiquibaseLockConfiguration {
     @Bean
     @ConditionalOnProperty(value = "platform.liquibase.release-stale-locks", havingValue = "true", matchIfMissing = true)
     public static StaleLiquibaseLockReleaser staleLiquibaseLockReleaser(Environment environment) {
-        Duration timeout = environment.getProperty("platform.liquibase.stale-lock-timeout", Duration.class, Duration.ofMinutes(5));
+        Duration timeout = environment.getProperty("platform.liquibase.stale-lock-timeout", Duration.class, Duration.ofMinutes(15));
         return new StaleLiquibaseLockReleaser(timeout);
     }
 }

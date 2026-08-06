@@ -10,7 +10,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -66,14 +65,26 @@ public class StaleLiquibaseLockReleaser implements BeanPostProcessor {
                     }
                     log.warn("Releasing stale Liquibase changelog lock held by '{}' since {} (stale lock timeout: {})",
                             lockedBy, lockGranted, staleLockTimeout);
+                    releaseLock(connection, lockTable, lockGranted);
                 }
-            }
-            try (Statement update = connection.createStatement()) {
-                update.executeUpdate(
-                        "UPDATE " + lockTable + " SET LOCKED = FALSE, LOCKGRANTED = NULL, LOCKEDBY = NULL WHERE ID = 1");
             }
         } catch (SQLException e) {
             log.warn("Failed to check for a stale Liquibase changelog lock; Liquibase will attempt to acquire the lock as usual", e);
+        }
+    }
+
+    private void releaseLock(Connection connection, String lockTable, Timestamp observedLockGranted) throws SQLException {
+        String condition = observedLockGranted == null ? "LOCKGRANTED IS NULL" : "LOCKGRANTED = ?";
+        try (PreparedStatement update = connection.prepareStatement(
+                "UPDATE " + lockTable + " SET LOCKED = ?, LOCKGRANTED = NULL, LOCKEDBY = NULL WHERE ID = 1 AND LOCKED = ? AND " + condition)) {
+            update.setBoolean(1, false);
+            update.setBoolean(2, true);
+            if (observedLockGranted != null) {
+                update.setTimestamp(3, observedLockGranted);
+            }
+            if (update.executeUpdate() == 0) {
+                log.info("Liquibase changelog lock changed since it was inspected (likely acquired by another instance); leaving it in place");
+            }
         }
     }
 

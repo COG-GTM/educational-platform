@@ -73,8 +73,12 @@ class StaleLiquibaseLockReleaserTest {
     }
 
     @Test
-    void missingLockTable_isIgnored() {
+    void missingLockTable_isIgnored() throws SQLException {
         process(new StaleLiquibaseLockReleaser(Duration.ofMinutes(5)));
+
+        try (ResultSet tables = keepAlive.getMetaData().getTables(null, null, "DATABASECHANGELOGLOCK", new String[]{"TABLE"})) {
+            assertFalse(tables.next());
+        }
     }
 
     @Test
