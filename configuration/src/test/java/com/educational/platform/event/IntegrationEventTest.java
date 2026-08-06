@@ -33,7 +33,7 @@ public class IntegrationEventTest {
 	@ArchTest
 	public static final ArchRule eventListenerMethods_shouldBeDeclared_inIntegrationEventHandlers = methods()
 			.that()
-			.areAnnotatedWith(EventListener.class)
+			.areMetaAnnotatedWith(EventListener.class)
 			.should()
 			.beDeclaredInClassesThat()
 			.haveSimpleNameEndingWith("IntegrationEventHandler")
