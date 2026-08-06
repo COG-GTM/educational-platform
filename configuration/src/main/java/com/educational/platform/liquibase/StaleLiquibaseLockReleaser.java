@@ -86,6 +86,9 @@ public class StaleLiquibaseLockReleaser implements BeanPostProcessor {
                 log.info("Liquibase changelog lock changed since it was inspected (likely acquired by another instance); leaving it in place");
             }
         }
+        if (!connection.getAutoCommit()) {
+            connection.commit();
+        }
     }
 
     private String findLockTable(Connection connection) throws SQLException {
