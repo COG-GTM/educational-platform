@@ -1,12 +1,14 @@
 package com.educational.platform.users.security;
 
+import com.educational.platform.security.JwtTokenProperties;
 import com.educational.platform.security.JwtTokenValidationException;
 import com.educational.platform.users.Role;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
-import org.springframework.beans.factory.annotation.Value;
+import io.jsonwebtoken.SignatureException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -28,13 +30,19 @@ public class JwtTokenProvider {
     private final MyUserDetails myUserDetails;
     private final long validityInMilliseconds;
     private final String secretKey;
+    private final String previousSecretKey;
 
-    public JwtTokenProvider(MyUserDetails myUserDetails,
-                            @Value("${security.jwt.token.expire-length:3600000}") long validityInMilliseconds,
-                            @Value("${security.jwt.token.secret-key:secret-key}") String secretKey) {
+    public JwtTokenProvider(MyUserDetails myUserDetails, JwtTokenProperties jwtTokenProperties) {
         this.myUserDetails = myUserDetails;
-        this.validityInMilliseconds = validityInMilliseconds;
-        this.secretKey = Base64.getEncoder().encodeToString(secretKey.getBytes());
+        this.validityInMilliseconds = jwtTokenProperties.getExpireLength();
+        this.secretKey = encode(jwtTokenProperties.getSecretKey());
+        this.previousSecretKey = jwtTokenProperties.getPreviousSecretKey() == null || jwtTokenProperties.getPreviousSecretKey().isBlank()
+                ? null
+                : encode(jwtTokenProperties.getPreviousSecretKey());
+    }
+
+    private static String encode(String key) {
+        return Base64.getEncoder().encodeToString(key.getBytes());
     }
 
 
@@ -62,7 +70,7 @@ public class JwtTokenProvider {
     }
 
     public String getUsername(String token) {
-        return Jwts.parser().setSigningKey(secretKey).parseClaimsJws(token).getBody().getSubject();
+        return parseClaims(token).getBody().getSubject();
     }
 
     public String resolveToken(HttpServletRequest req) {
@@ -75,10 +83,21 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parser().setSigningKey(secretKey).parseClaimsJws(token);
+            parseClaims(token);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
             throw new JwtTokenValidationException("Expired or invalid JWT token");
+        }
+    }
+
+    private Jws<Claims> parseClaims(String token) {
+        try {
+            return Jwts.parser().setSigningKey(secretKey).parseClaimsJws(token);
+        } catch (SignatureException e) {
+            if (previousSecretKey == null) {
+                throw e;
+            }
+            return Jwts.parser().setSigningKey(previousSecretKey).parseClaimsJws(token);
         }
     }
 
