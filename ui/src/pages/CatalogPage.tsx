@@ -34,7 +34,13 @@ export default function CatalogPage() {
   const rawSort = searchParams.get('sort');
   const sort: CatalogSort = SORT_OPTIONS.some((o) => o.value === rawSort) ? (rawSort as CatalogSort) : 'NEWEST';
   const rawMinRating = searchParams.get('minRating') ?? '';
-  const minRating = Number.isFinite(Number(rawMinRating)) && rawMinRating !== '' ? rawMinRating : '';
+  const minRating =
+    rawMinRating !== '' &&
+    Number.isFinite(Number(rawMinRating)) &&
+    Number(rawMinRating) >= 0 &&
+    Number(rawMinRating) <= 5
+      ? rawMinRating
+      : '';
   const page = Math.max(0, Math.floor(Number(searchParams.get('page') ?? '0') || 0));
 
   const hasActiveFilters = Boolean(search || category || teacher || minRating);

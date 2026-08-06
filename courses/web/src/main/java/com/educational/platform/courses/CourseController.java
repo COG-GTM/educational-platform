@@ -19,6 +19,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.util.UUID;
@@ -50,7 +52,7 @@ public class CourseController {
     CourseCatalogPageDTO catalog(@RequestParam(value = "search", required = false) String search,
                                  @RequestParam(value = "category", required = false) String category,
                                  @RequestParam(value = "teacher", required = false) String teacher,
-                                 @RequestParam(value = "minRating", required = false) Double minRating,
+                                 @RequestParam(value = "minRating", required = false) @DecimalMin("0") @DecimalMax("5") Double minRating,
                                  @RequestParam(value = "sort", defaultValue = "NEWEST") CourseCatalogSort sort,
                                  @RequestParam(value = "page", defaultValue = "0") @Min(0) int page,
                                  @RequestParam(value = "size", defaultValue = "12") @Min(1) @Max(100) int size) {

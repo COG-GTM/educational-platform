@@ -42,6 +42,8 @@ paths:
           schema:
             type: number
             format: double
+            minimum: 0
+            maximum: 5
         - name: sort
           in: query
           description: Sorting option
