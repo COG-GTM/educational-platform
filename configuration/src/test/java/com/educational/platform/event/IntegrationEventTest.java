@@ -43,9 +43,9 @@ public class IntegrationEventTest {
 	@ArchTest
 	public static final ArchRule eventListenerMethods_shouldBe_asynchronous = methods()
 			.that()
-			.areAnnotatedWith(EventListener.class)
+			.areMetaAnnotatedWith(EventListener.class)
 			.should()
-			.beAnnotatedWith(Async.class)
+			.beMetaAnnotatedWith(Async.class)
 			.because("Integration events cross module boundaries and must be handled asynchronously to keep modules decoupled.");
 
 }
