@@ -196,10 +196,16 @@ export default function CatalogPage() {
 
           {data.items.length === 0 ? (
             <div className="catalog-state catalog-empty">
-              <p>No courses match your search or filters.</p>
-              <button type="button" onClick={clearFilters}>
-                Clear filters
-              </button>
+              {hasActiveFilters ? (
+                <>
+                  <p>No courses match your search or filters.</p>
+                  <button type="button" onClick={clearFilters}>
+                    Clear filters
+                  </button>
+                </>
+              ) : (
+                <p>No courses are available yet.</p>
+              )}
             </div>
           ) : (
             <div className="catalog-grid">
