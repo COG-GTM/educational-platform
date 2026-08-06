@@ -1,5 +1,10 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import CatalogPage from './pages/CatalogPage';
+
+function RedirectToCatalog() {
+  const location = useLocation();
+  return <Navigate to={{ pathname: '/catalog', search: location.search }} replace />;
+}
 
 export default function App() {
   return (
@@ -10,7 +15,7 @@ export default function App() {
       <main>
         <Routes>
           <Route path="/catalog" element={<CatalogPage />} />
-          <Route path="*" element={<Navigate to="/catalog" replace />} />
+          <Route path="*" element={<RedirectToCatalog />} />
         </Routes>
       </main>
     </div>

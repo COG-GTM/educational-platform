@@ -10,6 +10,82 @@ tags:
     description: Courses API
 paths:
   /courses:
+    get:
+      tags:
+        - Courses
+      summary: Browse course catalog
+      description: Returns a page of published courses matching the search, filter and sorting criteria.
+      operationId: courseCatalog
+      parameters:
+        - name: search
+          in: query
+          description: Full-text search by course title and description
+          required: false
+          schema:
+            type: string
+        - name: category
+          in: query
+          description: Filter by course category
+          required: false
+          schema:
+            type: string
+        - name: teacher
+          in: query
+          description: Filter by teacher username
+          required: false
+          schema:
+            type: string
+        - name: minRating
+          in: query
+          description: Filter by minimum average rating
+          required: false
+          schema:
+            type: number
+            format: double
+        - name: sort
+          in: query
+          description: Sorting option
+          required: false
+          schema:
+            type: string
+            enum: [RATING, POPULARITY, NEWEST]
+            default: NEWEST
+        - name: page
+          in: query
+          description: Zero-based page index
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          description: Page size
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 12
+      responses:
+        '200':
+          description: Page of published courses.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseCatalogPage'
+        '400':
+          description: Validation issues in query parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiErrorResponse'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiErrorResponse'
     post:
       tags:
         - Courses
@@ -36,6 +112,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RestApiErrorResponse'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiErrorResponse'
+  /courses/catalog-facets:
+    get:
+      tags:
+        - Courses
+      summary: Get catalog facets
+      description: Returns available filter values (categories and teachers) of published courses.
+      operationId: catalogFacets
+      responses:
+        '200':
+          description: Available filter values.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogFacets'
         '500':
           description: Unexpected server error.
           content:
@@ -99,6 +195,96 @@ components:
           minLength: 1
           description: Course description
           example: Course created for Java developers
+        category:
+          type: string
+          maxLength: 100
+          description: Course category
+          example: Programming
+    CourseCatalogPage:
+      description: Page of published courses
+      type: object
+      required:
+        - items
+        - page
+        - size
+        - totalElements
+        - totalPages
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CourseCatalogItem'
+        page:
+          type: integer
+          description: Zero-based page index
+          example: 0
+        size:
+          type: integer
+          description: Page size
+          example: 12
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of matching courses
+          example: 42
+        totalPages:
+          type: integer
+          description: Total number of pages
+          example: 4
+    CourseCatalogItem:
+      description: Published course as shown in the catalog
+      type: object
+      required:
+        - uuid
+        - name
+        - description
+        - teacherName
+        - rating
+        - numberOfStudents
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440001
+        name:
+          type: string
+          example: Java 11 for beginners
+        description:
+          type: string
+          example: Course created for Java developers
+        teacherName:
+          type: string
+          example: teacher1
+        rating:
+          type: number
+          format: double
+          example: 4.5
+        numberOfStudents:
+          type: integer
+          example: 120
+        category:
+          type: string
+          example: Programming
+        createdDate:
+          type: string
+          format: date-time
+    CatalogFacets:
+      description: Available filter values of the course catalog
+      type: object
+      required:
+        - categories
+        - teachers
+      properties:
+        categories:
+          type: array
+          items:
+            type: string
+          example: [Programming, Cooking]
+        teachers:
+          type: array
+          items:
+            type: string
+          example: [teacher1]
     CreatedCourseResponse:
       description: Course model
       type: object

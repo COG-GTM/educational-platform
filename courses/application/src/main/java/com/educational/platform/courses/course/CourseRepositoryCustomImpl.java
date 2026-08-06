@@ -2,6 +2,7 @@ package com.educational.platform.courses.course;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,7 +44,7 @@ public class CourseRepositoryCustomImpl implements CourseRepositoryCustom {
 
 		if (query.search() != null && !query.search().isBlank()) {
 			conditions.append(" and (lower(course.name) like :search escape '\\' or lower(course.description) like :search escape '\\')");
-			parameters.put("search", "%" + escapeLikeWildcards(query.search().toLowerCase()) + "%");
+			parameters.put("search", "%" + escapeLikeWildcards(query.search().toLowerCase(Locale.ROOT)) + "%");
 		}
 		if (query.category() != null && !query.category().isBlank()) {
 			conditions.append(" and course.category = :category");
