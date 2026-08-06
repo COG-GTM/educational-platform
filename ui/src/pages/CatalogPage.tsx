@@ -135,6 +135,9 @@ export default function CatalogPage() {
           Category
           <select value={category} onChange={(e) => updateParams({ category: e.target.value, page: '' })}>
             <option value="">All categories</option>
+            {category && !facets.categories.includes(category) && (
+              <option value={category}>{category}</option>
+            )}
             {facets.categories.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -146,6 +149,9 @@ export default function CatalogPage() {
           Teacher
           <select value={teacher} onChange={(e) => updateParams({ teacher: e.target.value, page: '' })}>
             <option value="">All teachers</option>
+            {teacher && !facets.teachers.includes(teacher) && (
+              <option value={teacher}>{teacher}</option>
+            )}
             {facets.teachers.map((t) => (
               <option key={t} value={t}>
                 {t}
@@ -157,6 +163,9 @@ export default function CatalogPage() {
           Minimum rating
           <select value={minRating} onChange={(e) => updateParams({ minRating: e.target.value, page: '' })}>
             <option value="">Any rating</option>
+            {minRating && !MIN_RATING_OPTIONS.includes(minRating) && (
+              <option value={minRating}>{minRating}+ stars</option>
+            )}
             {MIN_RATING_OPTIONS.map((r) => (
               <option key={r} value={r}>
                 {r}+ stars

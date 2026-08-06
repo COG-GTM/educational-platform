@@ -61,6 +61,18 @@ public class CourseApiTest {
     }
 
     @Test
+    void catalog_emptyNumericParams_defaultsApplied() {
+        given()
+                .when()
+                .get("/courses?page=&size=&minRating=")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("page", equalTo(0))
+                .body("size", equalTo(12));
+    }
+
+    @Test
     void create_validRequest_created() {
         var token = SignUpHelper.signUpTeacher();
 
