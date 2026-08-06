@@ -57,7 +57,15 @@ export default function CatalogPage() {
         if (cancelled) return;
         const lastPage = Math.max(0, result.totalPages - 1);
         if (result.items.length === 0 && result.totalElements > 0 && page > lastPage) {
-          updateParams({ page: lastPage > 0 ? String(lastPage) : '' });
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            if (lastPage > 0) {
+              next.set('page', String(lastPage));
+            } else {
+              next.delete('page');
+            }
+            return next;
+          });
           return;
         }
         setData(result);
@@ -70,7 +78,7 @@ export default function CatalogPage() {
     return () => {
       cancelled = true;
     };
-  }, [search, category, teacher, minRating, sort, page, reloadToken]);
+  }, [search, category, teacher, minRating, sort, page, reloadToken, setSearchParams]);
 
   const updateParams = (updates: Record<string, string>) => {
     const next = new URLSearchParams(searchParams);
