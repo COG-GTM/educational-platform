@@ -2,6 +2,7 @@ package com.educational.platform.courses.course.catalog;
 
 import jakarta.annotation.Nonnull;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.educational.platform.courses.course.CourseRepository;
 
@@ -24,6 +25,7 @@ public class CourseCatalogQueryHandler {
 	 * @return corresponding page of catalog course dtos.
 	 */
 	@Nonnull
+	@Transactional(readOnly = true)
 	public CourseCatalogPageDTO handle(CourseCatalogQuery query) {
 		return repository.findCatalog(query);
 	}

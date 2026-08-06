@@ -55,8 +55,8 @@ export default function CatalogPage() {
     fetchCatalog({ search, category, teacher, minRating, sort, page })
       .then((result) => {
         if (cancelled) return;
-        if (result.items.length === 0 && result.totalElements > 0 && page > 0) {
-          const lastPage = Math.max(0, result.totalPages - 1);
+        const lastPage = Math.max(0, result.totalPages - 1);
+        if (result.items.length === 0 && result.totalElements > 0 && page > lastPage) {
           updateParams({ page: lastPage > 0 ? String(lastPage) : '' });
           return;
         }

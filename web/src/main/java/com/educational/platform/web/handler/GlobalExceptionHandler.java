@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.stream.Collectors;
 
@@ -37,6 +38,12 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.toList());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(errors));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> onMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException e) {
+        var response = new ErrorResponse("Invalid value for parameter '" + e.getName() + "'");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
     @ExceptionHandler(RelatedResourceIsNotResolvedException.class)
