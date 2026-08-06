@@ -3,11 +3,12 @@ package com.educational.platform.courses.course.create;
 import java.util.List;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * Create course command.
  */
-public record CreateCourseCommand(@NotBlank String name, @NotBlank String description, String category,
+public record CreateCourseCommand(@NotBlank String name, @NotBlank String description, @Size(max = 100) String category,
                                   List<CreateCurriculumItemCommand> curriculumItems) {
 
     public static CreateCourseCommandBuilder builder() {

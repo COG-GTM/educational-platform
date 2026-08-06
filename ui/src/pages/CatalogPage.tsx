@@ -31,8 +31,10 @@ export default function CatalogPage() {
   const search = searchParams.get('search') ?? '';
   const category = searchParams.get('category') ?? '';
   const teacher = searchParams.get('teacher') ?? '';
-  const minRating = searchParams.get('minRating') ?? '';
-  const sort = (searchParams.get('sort') as CatalogSort) || 'NEWEST';
+  const rawSort = searchParams.get('sort');
+  const sort: CatalogSort = SORT_OPTIONS.some((o) => o.value === rawSort) ? (rawSort as CatalogSort) : 'NEWEST';
+  const rawMinRating = searchParams.get('minRating') ?? '';
+  const minRating = Number.isFinite(Number(rawMinRating)) && rawMinRating !== '' ? rawMinRating : '';
   const page = Math.max(0, Number(searchParams.get('page') ?? '0') || 0);
 
   const hasActiveFilters = Boolean(search || category || teacher || minRating);
@@ -53,6 +55,11 @@ export default function CatalogPage() {
     fetchCatalog({ search, category, teacher, minRating, sort, page })
       .then((result) => {
         if (cancelled) return;
+        if (result.items.length === 0 && result.totalElements > 0 && page > 0) {
+          const lastPage = Math.max(0, result.totalPages - 1);
+          updateParams({ page: lastPage > 0 ? String(lastPage) : '' });
+          return;
+        }
         setData(result);
         setState('loaded');
       })
@@ -84,7 +91,11 @@ export default function CatalogPage() {
 
   const clearFilters = () => {
     setSearchInput('');
-    setSearchParams(new URLSearchParams());
+    const next = new URLSearchParams();
+    if (sort !== 'NEWEST') {
+      next.set('sort', sort);
+    }
+    setSearchParams(next);
   };
 
   return (
