@@ -1,5 +1,6 @@
 package com.educational.platform.courses.course;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -31,6 +32,8 @@ public class Course implements AggregateRoot {
 
 	private String name;
 	private String description;
+	private String category;
+	private LocalDateTime createdDate;
 
 	@Enumerated(EnumType.STRING)
 	private PublishStatus publishStatus;
@@ -56,6 +59,8 @@ public class Course implements AggregateRoot {
 		this.uuid = UUID.randomUUID();
 		this.name = command.name();
 		this.description = command.description();
+		this.category = command.category();
+		this.createdDate = LocalDateTime.now();
 		this.rating = new CourseRating(0);
 		this.numberOfStudents = new NumberOfStudents(0);
 		this.publishStatus = PublishStatus.DRAFT;

@@ -3,6 +3,7 @@ package com.educational.platform.users.security;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -40,7 +41,9 @@ public class WebSecurityConfig {
 				"/webjars/**",
 				"/h2-console/**",
 				"/public"
-		).permitAll().anyRequest().authenticated());
+		).permitAll()
+				.requestMatchers(HttpMethod.GET, "/courses", "/courses/catalog-facets").permitAll()
+				.anyRequest().authenticated());
 
 		http.addFilterBefore(new JwtTokenFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
 		return http.build();

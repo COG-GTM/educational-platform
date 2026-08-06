@@ -14,6 +14,8 @@ import org.springframework.test.context.jdbc.Sql;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasItem;
 
 /**
  * Represents API tests for course functionality.
@@ -29,6 +31,45 @@ public class CourseApiTest {
     @BeforeEach
     void setup() {
         RestAssured.port = port;
+    }
+
+    @Test
+    void catalog_anonymousRequest_publishedCoursesReturned() {
+        given()
+                .when()
+                .get("/courses?search=published&sort=RATING")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("totalElements", equalTo(1))
+                .body("items[0].name", equalTo("published course"))
+                .body("items[0].teacherName", equalTo("username"))
+                .body("items[0].rating", equalTo(4.5f))
+                .body("items[0].numberOfStudents", equalTo(3));
+    }
+
+    @Test
+    void catalogFacets_anonymousRequest_facetsReturned() {
+        given()
+                .when()
+                .get("/courses/catalog-facets")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("categories", hasItem("Programming"))
+                .body("teachers", hasItem("username"));
+    }
+
+    @Test
+    void catalog_emptyNumericParams_defaultsApplied() {
+        given()
+                .when()
+                .get("/courses?page=&size=&minRating=")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("page", equalTo(0))
+                .body("size", equalTo(12));
     }
 
     @Test
