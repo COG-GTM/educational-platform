@@ -42,4 +42,20 @@ public interface CourseRepository extends JpaRepository<Course, Integer>, Course
 	@Query("select count(c) > 0 from Course c join com.educational.platform.courses.teacher.Teacher r on c.teacher = r.id where c.uuid = :uuid and r.username = :username")
 	boolean isTeacher(@Param("uuid") UUID uuid, @Param("username") String username);
 
+	/**
+	 * Retrieves distinct categories of published courses.
+	 *
+	 * @return the sorted list of categories.
+	 */
+	@Query("select distinct c.category from Course c where c.publishStatus = com.educational.platform.courses.course.PublishStatus.PUBLISHED and c.category is not null order by c.category")
+	List<String> publishedCategories();
+
+	/**
+	 * Retrieves distinct teacher usernames of published courses.
+	 *
+	 * @return the sorted list of teacher usernames.
+	 */
+	@Query("select distinct r.username from Course c join com.educational.platform.courses.teacher.Teacher r on c.teacher = r.id where c.publishStatus = com.educational.platform.courses.course.PublishStatus.PUBLISHED order by r.username")
+	List<String> publishedTeachers();
+
 }

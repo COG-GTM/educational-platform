@@ -62,6 +62,20 @@ databaseChangeLog:
                   name: teacher
                   type: int
   - changeSet:
+      id: 2026_08_06-1
+      author: devin
+      changes:
+        - addColumn:
+            tableName: course
+            columns:
+              - column:
+                  name: category
+                  type: VARCHAR(100)
+              - column:
+                  name: created_date
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+  - changeSet:
       id: 2021_06_25-2
       author: antonliauchuk
       preConditions:
