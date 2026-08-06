@@ -7,6 +7,10 @@ import org.springframework.stereotype.Component;
  * Represents centralized JWT token settings shared across modules.
  * Supports an optional previous secret key so tokens signed with the old key
  * remain valid during a rotation window.
+ *
+ * Values are read once at startup, so key rotation requires a rolling restart:
+ * deploy with the new secret key and the old one as previous secret key, then
+ * remove the previous key after all old tokens have expired.
  */
 @Component
 @ConfigurationProperties(prefix = "security.jwt.token")
