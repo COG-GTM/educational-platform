@@ -57,15 +57,18 @@ export default function CatalogPage() {
         if (cancelled) return;
         const lastPage = Math.max(0, result.totalPages - 1);
         if (result.items.length === 0 && result.totalElements > 0 && page > lastPage) {
-          setSearchParams((prev) => {
-            const next = new URLSearchParams(prev);
-            if (lastPage > 0) {
-              next.set('page', String(lastPage));
-            } else {
-              next.delete('page');
-            }
-            return next;
-          });
+          setSearchParams(
+            (prev) => {
+              const next = new URLSearchParams(prev);
+              if (lastPage > 0) {
+                next.set('page', String(lastPage));
+              } else {
+                next.delete('page');
+              }
+              return next;
+            },
+            { replace: true },
+          );
           return;
         }
         setData(result);
