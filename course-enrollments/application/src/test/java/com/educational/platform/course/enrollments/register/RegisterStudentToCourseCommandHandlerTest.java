@@ -81,6 +81,29 @@ public class RegisterStudentToCourseCommandHandlerTest {
     }
 
     @Test
+    void handle_validCommand_enrollmentSavedWithinTransaction() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+
+        final CourseEnrollment enrollment = new CourseEnrollment(1, 2);
+        when(courseEnrollmentFactory.createFrom(command)).thenReturn(enrollment);
+
+        final Student student = mock(Student.class);
+        when(student.toReference()).thenReturn("username");
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        sut.handle(command);
+
+        // then
+        final InOrder inOrder = inOrder(transactionManager, courseEnrollmentRepository);
+        inOrder.verify(transactionManager).getTransaction(any());
+        inOrder.verify(courseEnrollmentRepository).save(enrollment);
+        inOrder.verify(transactionManager).commit(any());
+    }
+
+    @Test
     void handle_validCommand_studentEnrolledToCourseIntegrationEventPublished() {
         // given
         final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
