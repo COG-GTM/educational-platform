@@ -1,6 +1,10 @@
 package com.educational.platform.event;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
+
+import org.springframework.context.event.EventListener;
 
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -17,5 +21,22 @@ public class IntegrationEventTest {
 			.should()
 			.beFinal()
 			.because("Events should be immutable.");
+
+	@ArchTest
+	public static final ArchRule integrationEvents_shouldReside_inIntegrationEventPackage = classes()
+			.that()
+			.haveSimpleNameEndingWith("IntegrationEvent")
+			.should()
+			.resideInAPackage("..integration.event..")
+			.because("Integration events form the public contract between modules and should live in the integration.event package.");
+
+	@ArchTest
+	public static final ArchRule eventListenerMethods_shouldBeDeclared_inIntegrationEventHandlers = methods()
+			.that()
+			.areAnnotatedWith(EventListener.class)
+			.should()
+			.beDeclaredInClassesThat()
+			.haveSimpleNameEndingWith("IntegrationEventHandler")
+			.because("Integration event listeners should be encapsulated in dedicated *IntegrationEventHandler classes.");
 
 }
