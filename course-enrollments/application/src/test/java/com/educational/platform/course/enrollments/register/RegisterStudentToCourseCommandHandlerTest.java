@@ -21,9 +21,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -100,6 +102,26 @@ public class RegisterStudentToCourseCommandHandlerTest {
         assertThat(argument.getValue())
                 .hasFieldOrPropertyWithValue("courseId", courseId)
                 .hasFieldOrPropertyWithValue("username", "username");
+    }
+
+    @Test
+    void handle_enrollmentCreationFails_transactionRolledBackAndNoEventPublished() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+
+        final RuntimeException failure = new RuntimeException("enrollment creation failed");
+        when(courseEnrollmentFactory.createFrom(command)).thenThrow(failure);
+
+        // when
+        final Throwable thrown = catchThrowable(() -> sut.handle(command));
+
+        // then
+        assertThat(thrown).isSameAs(failure);
+        verify(transactionManager).rollback(any());
+        verify(transactionManager, never()).commit(any());
+        verify(courseEnrollmentRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any(StudentEnrolledToCourseIntegrationEvent.class));
     }
 
 }
