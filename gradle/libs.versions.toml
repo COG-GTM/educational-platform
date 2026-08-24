@@ -1,5 +1,5 @@
 [versions]
-spring = "4.0.1"
+spring = "4.0.7"
 restAssured = "6.0.0"
 mockito = "5.19.0"
 assertj = "3.27.3"
