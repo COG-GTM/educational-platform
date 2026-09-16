@@ -68,6 +68,20 @@ def test_validate_wrongSecret_invalidJwtTokenException() -> None:
         JwtTokenProvider("secret-key").validate_token(_java_style_token("other"))
 
 
+def test_validate_tamperedPayload_invalidJwtTokenException() -> None:
+    header, _payload, signature = _java_style_token("secret-key").split(".")
+    forged_payload = base64.urlsafe_b64encode(b'{"sub":"admin","exp":9999999999}').rstrip(b"=").decode()
+
+    with pytest.raises(InvalidJwtTokenException):
+        JwtTokenProvider("secret-key").validate_token(f"{header}.{forged_payload}.{signature}")
+
+
+@pytest.mark.parametrize("token", ["", "garbage", "a.b", "a.b.c", _java_style_token("secret-key") + "x"])
+def test_validate_malformedToken_invalidJwtTokenException(token: str) -> None:
+    with pytest.raises(InvalidJwtTokenException):
+        JwtTokenProvider("secret-key").validate_token(token)
+
+
 def test_validate_noneAlgorithm_rejected() -> None:
     token = jwt.encode({"sub": "teacher"}, key="", algorithm="none")  # noqa: S106
 

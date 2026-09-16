@@ -12,9 +12,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from courses_py.api.app import create_app
 from courses_py.api.dependencies import create_course_handler
+from courses_py.application.course.create import CreateCourseCommand, CreateCourseCommandHandler
 from courses_py.application.security import ROLE_STUDENT, ROLE_TEACHER
+from courses_py.domain import ApprovalStatus
 from courses_py.infrastructure.messaging import topics
 from courses_py.infrastructure.messaging.broker import InMemoryMessageBroker, MessageBroker, MessageHandler, Payload
+from courses_py.infrastructure.persistence.repositories import SqlAlchemyCourseRepository
 from courses_py.infrastructure.security.jwt import JwtTokenProvider
 from courses_py.tests.conftest import TEACHER_USERNAME, TEST_SETTINGS, count, insert_teacher
 
@@ -204,6 +207,32 @@ def test_create_unexpectedHandlerError_internalServerErrorShape(
     assert response.json() == {"errors": ["database exploded"]}
 
 
+def test_create_handlerFailsAfterSave_internalServerErrorAndRolledBack(
+    client: TestClient,
+    teacher_token: str,
+    insert_data: UUID,
+    session_factory: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The request session is only committed when the handler returns; a late failure discards the saved course."""
+    original = CreateCourseCommandHandler.handle
+
+    def failing(self: CreateCourseCommandHandler, command: CreateCourseCommand) -> UUID:
+        original(self, command)
+        raise RuntimeError("failure after save")
+
+    monkeypatch.setattr(CreateCourseCommandHandler, "handle", failing)
+
+    response = client.post(
+        "/courses", json={"name": "name", "description": "description"}, headers=_auth(teacher_token)
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"errors": ["failure after save"]}
+    with session_factory() as session:
+        assert count(session, "course") == 1
+
+
 def test_publish_alreadyApprovedCourse_noContent(client: TestClient, teacher_token: str, insert_data: UUID) -> None:
     response = client.put(f"/courses/{insert_data}/publish-status", headers=_auth(teacher_token))
 
@@ -333,6 +362,34 @@ def test_sendToApprove_thenApprovedByAdminEvent_coursePublishable(
     broker.publish(topics.COURSE_APPROVED_BY_ADMIN, {"courseId": uuid})
 
     assert client.put(f"/courses/{uuid}/publish-status", headers=_auth(teacher_token)).status_code == 204
+
+
+def test_sendToApprove_brokerFails_stateCommittedAndFailureLogged(
+    engine: Engine, teacher_token: str, session_factory: sessionmaker[Session], caplog: pytest.LogCaptureFixture
+) -> None:
+    """Events are published after the commit, so a broker outage surfaces as an error but never rolls back state."""
+
+    class FailingBroker(InMemoryMessageBroker):
+        def publish(self, topic: str, payload: Payload) -> None:
+            raise ConnectionError("broker down")
+
+    with session_factory() as session:
+        insert_teacher(session)
+        session.commit()
+    app = create_app(TEST_SETTINGS, engine=engine, broker=FailingBroker())
+    with TestClient(app, raise_server_exceptions=False) as client:
+        uuid = client.post(
+            "/courses", json={"name": "name", "description": "description"}, headers=_auth(teacher_token)
+        ).json()["uuid"]
+
+        with caplog.at_level("ERROR", logger="courses_py.api.errors"):
+            client.put(f"/courses/{uuid}/approval-status", headers=_auth(teacher_token))
+
+    assert any("Unhandled error" in record.message for record in caplog.records)
+    with session_factory() as session:
+        course = SqlAlchemyCourseRepository(session).find_by_uuid(UUID(uuid))
+        assert course is not None
+        assert course.approval_status == ApprovalStatus.WAITING_FOR_APPROVAL
 
 
 def test_studentEnrolledEvent_visibleInListing(

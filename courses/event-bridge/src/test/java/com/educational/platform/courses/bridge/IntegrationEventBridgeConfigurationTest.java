@@ -1,14 +1,18 @@
 package com.educational.platform.courses.bridge;
 
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.amqp.core.AmqpTemplate;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.annotation.RabbitListenerAnnotationBeanPostProcessor;
+import org.springframework.amqp.rabbit.listener.AbstractRabbitListenerEndpoint;
 import org.springframework.amqp.rabbit.listener.MessageListenerContainer;
 import org.springframework.amqp.rabbit.listener.RabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.listener.RabbitListenerEndpoint;
+import org.springframework.amqp.rabbit.listener.RabbitListenerEndpointRegistry;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +20,7 @@ import org.springframework.context.annotation.Configuration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class IntegrationEventBridgeConfigurationTest {
@@ -63,6 +68,27 @@ class IntegrationEventBridgeConfigurationTest {
             assertThat(binding.getDestinationType()).isEqualTo(Binding.DestinationType.QUEUE);
             assertThat(binding.getRoutingKey()).isEqualTo("courses.send-course-to-approve");
         });
+    }
+
+    @Test
+    void propertyTrue_inboundListenerContainerCreatedForMonolithQueue() {
+        runner.withPropertyValues("courses.event-bridge.enabled=true").run(context -> {
+            assertThat(context.getBean(RabbitListenerEndpointRegistry.class).getListenerContainerIds()).hasSize(1);
+
+            var endpoint = ArgumentCaptor.forClass(RabbitListenerEndpoint.class);
+            verify(context.getBean(RabbitListenerContainerFactory.class)).createListenerContainer(endpoint.capture());
+            assertThat(endpoint.getValue())
+                    .asInstanceOf(InstanceOfAssertFactories.type(AbstractRabbitListenerEndpoint.class))
+                    .extracting(AbstractRabbitListenerEndpoint::getQueueNames)
+                    .asInstanceOf(InstanceOfAssertFactories.collection(String.class))
+                    .containsExactly("java-monolith.courses.send-course-to-approve");
+        });
+    }
+
+    @Test
+    void propertyFalse_noListenerContainerCreated() {
+        runner.withPropertyValues("courses.event-bridge.enabled=false").run(context ->
+                assertThat(context).doesNotHaveBean(RabbitListenerEndpointRegistry.class));
     }
 
     /**
