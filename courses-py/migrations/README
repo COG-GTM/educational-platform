@@ -1,0 +1,6 @@
+Alembic migrations for courses-py.
+
+Phase 1 (shared database with the Java monolith): the schema is owned by Liquibase
+(courses/application/src/main/resources/db/courses.yml). These migrations are guarded with
+"create if not exists" checks so `alembic upgrade head` is a no-op on the shared DB and only
+creates tables on a standalone database. See ../README.md, section "Database".

@@ -18,6 +18,7 @@ dependencies {
     implementation(project(":courses:courses-application"))
     implementation(project(":courses:courses-web"))
     implementation(project(":courses:courses-integration-events"))
+    implementation(project(":courses:courses-event-bridge"))
 
     implementation(project(":security:security-config"))
     implementation(project(":web"))

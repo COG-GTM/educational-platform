@@ -1,0 +1,21 @@
+dependencies {
+    implementation(project(":common"))
+    implementation(project(":courses:courses-integration-events"))
+    implementation(project(":administration:administration-integration-events"))
+    implementation(project(":course-enrollments:course-enrollments-integration-events"))
+    implementation(project(":course-reviews:course-reviews-integration-events"))
+    implementation(project(":users:users-integration-events"))
+
+    implementation("org.springframework.boot", "spring-boot-starter-amqp")
+
+    testImplementation("org.springframework.boot", "spring-boot-starter-test")
+    testImplementation("org.junit.jupiter", "junit-jupiter-api")
+    testImplementation("org.junit.platform", "junit-platform-engine")
+    testImplementation("org.junit.platform", "junit-platform-launcher")
+    testImplementation("org.mockito", "mockito-junit-jupiter", libs.versions.mockito.get())
+    testImplementation("org.assertj", "assertj-core", libs.versions.assertj.get())
+}
+
+tasks.test {
+    useJUnitPlatform()
+}

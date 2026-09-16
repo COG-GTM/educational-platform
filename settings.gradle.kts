@@ -10,6 +10,9 @@ include("courses:web")
 findProject(":courses:web")?.name = "courses-web"
 include("courses:integration-events")
 findProject(":courses:integration-events")?.name = "courses-integration-events"
+// Strangler-fig bridge to the Python `courses-py` service; remove together with the Java `courses` module at cutover.
+include("courses:event-bridge")
+findProject(":courses:event-bridge")?.name = "courses-event-bridge"
 
 include("administration:application")
 findProject(":administration:application")?.name = "administration-application"
