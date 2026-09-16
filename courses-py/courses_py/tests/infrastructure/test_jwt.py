@@ -44,6 +44,46 @@ def test_javaSigningKey_verifiesTokenIssuedByJjwt() -> None:
         jwt.decode(JAVA_ISSUED_TOKEN, b"c2VjcmV0LWtleQ==", algorithms=["HS256"], options={"verify_exp": False})
 
 
+def test_java_signing_key_utf8BytesOfSecret() -> None:
+    assert java_signing_key("clé-secrète") == "clé-secrète".encode()
+    assert java_signing_key("") == b""
+
+
+def test_validate_tokenSignedWithBase64EncodedSecret_invalidJwtTokenException() -> None:
+    # The previous (wrong) key derivation: Base64(secret) as HMAC key.
+    now = int(time.time())
+    token = jwt.encode(
+        {"sub": "teacher", "auth": [{"authority": "ROLE_TEACHER"}], "iat": now, "exp": now + 3600},
+        b"c2VjcmV0LWtleQ==",
+        algorithm="HS256",
+    )
+
+    with pytest.raises(InvalidJwtTokenException):
+        JwtTokenProvider("secret-key").validate_token(token)
+
+
+def test_validate_javaIssuedToken_providerConfiguredWithBase64Secret_signatureRejected() -> None:
+    # Configuring courses-py with Base64("secret-key") (what the Java code passes to jjwt) must NOT work: the
+    # provider has to be given the raw `security.jwt.token.secret-key` value.
+    with pytest.raises(InvalidJwtTokenException) as exc_info:
+        JwtTokenProvider("c2VjcmV0LWtleQ==").validate_token(JAVA_ISSUED_TOKEN)
+
+    assert isinstance(exc_info.value.__cause__, jwt.InvalidSignatureError)
+
+
+def test_validate_javaIssuedToken_rawSecret_failsOnlyOnExpiry() -> None:
+    # Signature verification runs before claim validation, so with the right key the captured token can only fail
+    # because its fixed `exp` has passed - never with a signature error.
+    try:
+        principal = JwtTokenProvider("secret-key").validate_token(JAVA_ISSUED_TOKEN)
+    except InvalidJwtTokenException as e:
+        assert isinstance(e.__cause__, jwt.ExpiredSignatureError)
+        assert time.time() >= JAVA_ISSUED_TOKEN_EXP
+    else:
+        assert principal.username == "teacher"
+        assert principal.authorities == frozenset({"ROLE_TEACHER"})
+
+
 def test_validate_javaToken_principalWithAuthorities() -> None:
     principal = JwtTokenProvider("secret-key").validate_token(_java_style_token("secret-key"))
 

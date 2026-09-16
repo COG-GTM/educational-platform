@@ -81,6 +81,52 @@ class InboundIntegrationEventBridgeTest {
         verifyNoInteractions(eventPublisher);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"nested\":{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"}}",
+            "[{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"}]",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"} trailing",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"",
+            "\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\":[1]}"
+    })
+    void onSendCourseToApprove_notAFlatJsonObject_rejectedWithoutRequeue(String json) {
+        var bridge = new InboundIntegrationEventBridge(eventPublisher);
+
+        assertThatThrownBy(() -> bridge.onSendCourseToApprove(json))
+                .isInstanceOf(AmqpRejectAndDontRequeueException.class)
+                .hasMessageContaining(json);
+
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"courseId\":\"------------------------------------\"}",
+            "{\"courseId\":\"123e4567e89b12d3a456426655440001abcd\"}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456426655440001-\"}"
+    })
+    void onSendCourseToApprove_thirtySixCharactersButNotAUuid_rejectedWithoutRequeueInsteadOfIllegalArgument(
+            String json) {
+        var bridge = new InboundIntegrationEventBridge(eventPublisher);
+
+        assertThatThrownBy(() -> bridge.onSendCourseToApprove(json))
+                .isInstanceOf(AmqpRejectAndDontRequeueException.class)
+                .isNotInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining(json);
+
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void onSendCourseToApprove_surroundingWhitespace_courseIdExtracted() {
+        var bridge = new InboundIntegrationEventBridge(eventPublisher);
+
+        bridge.onSendCourseToApprove(" \n{\"courseId\": \"123e4567-e89b-12d3-a456-426655440001\"}\n");
+
+        verify(eventPublisher).publishEvent(new SendCourseToApproveIntegrationEvent(COURSE_ID));
+    }
+
     @Test
     void onSendCourseToApprove_publisherFails_exceptionPropagatesForBrokerRetry() {
         var bridge = new InboundIntegrationEventBridge(eventPublisher);

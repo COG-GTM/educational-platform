@@ -113,6 +113,81 @@ class IntegrationEventJsonTest {
         assertThat(IntegrationEventJson.readCourseId(json)).isEmpty();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"courseId\":\"------------------------------------\"}",
+            "{\"courseId\":\"123e4567e89b12d3a456426655440001abcd\"}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456426655440001-\"}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001-\"}",
+            "{\"courseId\":\"-123e4567-e89b-12d3-a456-426655440001\"}",
+            "{\"courseId\":\" 123e4567-e89b-12d3-a456-426655440001\"}"
+    })
+    void readCourseId_thirtySixCharactersButNotAUuid_emptyWithoutThrowing(String json) {
+        assertThat(IntegrationEventJson.readCourseId(json)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\":\"\\q\"}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\":\"\\u00e\"}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\":01}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\":1.}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\":+1}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\":True}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\":'s'}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\":}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\"}",
+            "{,\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"}"
+    })
+    void readCourseId_flatObjectWithInvalidMember_empty(String json) {
+        assertThat(IntegrationEventJson.readCourseId(json)).isEmpty();
+    }
+
+    @Test
+    void readCourseId_pythonJsonDumpsPayloads_courseId() {
+        // json.dumps default separators (", " / ": ") and ensure_ascii escapes
+        assertThat(IntegrationEventJson.readCourseId(
+                "{\"courseId\": \"123e4567-e89b-12d3-a456-426655440001\", \"username\": \"\\u00fcser\"}"))
+                .contains(COURSE_ID);
+        assertThat(IntegrationEventJson.readCourseId(
+                "{\"courseId\": \"123e4567-e89b-12d3-a456-426655440001\", \"rating\": 4.5}"))
+                .contains(COURSE_ID);
+        assertThat(IntegrationEventJson.readCourseId(
+                "{\"courseId\": \"123e4567-e89b-12d3-a456-426655440001\", \"email\": null}"))
+                .contains(COURSE_ID);
+    }
+
+    @Test
+    void readCourseId_ownSerialisationWithEscapedAndUnicodeStrings_courseId() {
+        assertThat(IntegrationEventJson.readCourseId(
+                IntegrationEventJson.courseIdAndUsername(COURSE_ID, "a\"b\\c/d\n\r\t\u0001\u001f ünïcødé")))
+                .contains(COURSE_ID);
+        assertThat(IntegrationEventJson.readCourseId(IntegrationEventJson.courseIdAndUsername(COURSE_ID, null)))
+                .contains(COURSE_ID);
+        assertThat(IntegrationEventJson.readCourseId(IntegrationEventJson.courseIdAndUsername(COURSE_ID, "")))
+                .contains(COURSE_ID);
+        assertThat(IntegrationEventJson.readCourseId(IntegrationEventJson.courseIdAndRating(COURSE_ID, -0.0)))
+                .contains(COURSE_ID);
+        assertThat(IntegrationEventJson.readCourseId(IntegrationEventJson.courseIdAndRating(COURSE_ID, 1e-7)))
+                .contains(COURSE_ID);
+        assertThat(IntegrationEventJson.readCourseId(IntegrationEventJson.courseIdAndRating(COURSE_ID, 1e21)))
+                .contains(COURSE_ID);
+    }
+
+    @Test
+    void readCourseId_emptyKeyAndEmptyValueMembers_courseId() {
+        assertThat(IntegrationEventJson.readCourseId(
+                "{\"\":\"\",\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"}"))
+                .contains(COURSE_ID);
+    }
+
+    @Test
+    void readCourseId_courseIdAsKeyOfAnotherMember_notMistakenForCourseId() {
+        assertThat(IntegrationEventJson.readCourseId(
+                "{\"x\":\"courseId\",\"y\":\"123e4567-e89b-12d3-a456-426655440001\"}"))
+                .isEmpty();
+    }
+
     @Test
     void readCourseId_flatObjectWithExtraScalarMembers_courseId() {
         assertThat(IntegrationEventJson.readCourseId(
