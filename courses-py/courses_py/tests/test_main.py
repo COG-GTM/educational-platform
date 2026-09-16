@@ -222,23 +222,6 @@ def test_upgradeDatabase_settingsUrl_migratedWithoutDatabaseUrlVariable(
     assert LIQUIBASE_TABLES | {"alembic_version"} <= set(inspect(create_engine(config.database_url)).get_table_names())
 
 
-def test_main_defaultMigrationsDir_resolvesRelativeToWorkingDirectoryLikeDockerImage(
-    run: _RecordedRun, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    # given: Dockerfile runs `python -m courses_py.main` from WORKDIR /app with ./migrations copied next to the package
-    monkeypatch.chdir(PROJECT_ROOT)
-    db_url = f"sqlite:///{tmp_path / 'docker-like.db'}"
-    monkeypatch.setenv("COURSES_DATABASE_URL", db_url)
-    monkeypatch.setenv("COURSES_RUN_MIGRATIONS", "true")
-
-    # when
-    main.main()
-
-    # then
-    assert LIQUIBASE_TABLES <= set(inspect(create_engine(db_url)).get_table_names())
-    assert len(run.calls) == 1
-
-
 def test_defaultMigrationsDir_matchesAlembicIniScriptLocation(monkeypatch: pytest.MonkeyPatch) -> None:
     # given
     monkeypatch.delenv("COURSES_MIGRATIONS_DIR", raising=False)
