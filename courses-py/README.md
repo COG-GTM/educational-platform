@@ -29,9 +29,15 @@ pip install -e '.[test,dev]'
 pytest                                # tests (SQLite, in-memory broker, no external services)
 ruff check . && ruff format --check . && mypy courses_py migrations
 
+alembic upgrade head                  # standalone DB only: create the schema (no-op on the Liquibase-managed DB)
 python -m courses_py.main             # API on http://localhost:8081  (docs: /docs)
 courses-py-consumer                   # broker consumer process (only needed with COURSES_BROKER=rabbitmq)
 ```
+
+The service does not create its schema on its own: against the shared database Liquibase already has, and for the
+default standalone `sqlite:///./courses.db` you must run `alembic upgrade head` first (or start with
+`COURSES_RUN_MIGRATIONS=true`, which runs the same guarded upgrade before serving) — otherwise every database-backed
+request fails with 500 because the tables do not exist.
 
 Configuration is environment based:
 
@@ -42,9 +48,12 @@ Configuration is environment based:
 | `COURSES_BROKER`         | `memory`                                | – (`memory` or `rabbitmq`)               |
 | `COURSES_RABBITMQ_URL`   | `amqp://guest:guest@localhost:5672/%2F` | `spring.rabbitmq.*`                      |
 | `COURSES_HOST` / `COURSES_PORT` | `0.0.0.0` / `8081`               | `server.port` (the monolith uses 8080)   |
+| `COURSES_RUN_MIGRATIONS` | `false`                                 | `spring.liquibase.enabled` — run the guarded `alembic upgrade head` on startup (standalone DBs) |
+| `COURSES_MIGRATIONS_DIR` | `migrations`                            | Alembic `script_location` for `COURSES_RUN_MIGRATIONS` |
 
 Docker: `docker build -t courses-py . && docker run -p 8081:8081 -e COURSES_DATABASE_URL=... courses-py`
-(the image also installs `psycopg` for PostgreSQL URLs, e.g. `postgresql+psycopg://user:pw@host/db`).
+(the image also installs `psycopg` for PostgreSQL URLs, e.g. `postgresql+psycopg://user:pw@host/db`). Add
+`-e COURSES_RUN_MIGRATIONS=true` when the target database is not managed by Liquibase.
 
 ### REST API
 

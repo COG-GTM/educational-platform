@@ -6,7 +6,14 @@ import pytest
 
 from courses_py.config import Settings
 
-ENV_VARS = ("COURSES_DATABASE_URL", "COURSES_JWT_SECRET_KEY", "COURSES_BROKER", "COURSES_RABBITMQ_URL")
+ENV_VARS = (
+    "COURSES_DATABASE_URL",
+    "COURSES_JWT_SECRET_KEY",
+    "COURSES_BROKER",
+    "COURSES_RABBITMQ_URL",
+    "COURSES_RUN_MIGRATIONS",
+    "COURSES_MIGRATIONS_DIR",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -29,13 +36,24 @@ def test_fromEnv_allVariables_overridden(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("COURSES_JWT_SECRET_KEY", "shared-with-java")
     monkeypatch.setenv("COURSES_BROKER", "rabbitmq")
     monkeypatch.setenv("COURSES_RABBITMQ_URL", "amqp://u:p@rabbit:5672/vhost")
+    monkeypatch.setenv("COURSES_RUN_MIGRATIONS", "TRUE")
+    monkeypatch.setenv("COURSES_MIGRATIONS_DIR", "/opt/courses-py/migrations")
 
     assert Settings.from_env() == Settings(
         database_url="postgresql+psycopg://u:p@db/platform",
         jwt_secret_key="shared-with-java",
         broker="rabbitmq",
         rabbitmq_url="amqp://u:p@rabbit:5672/vhost",
+        run_migrations=True,
+        migrations_dir="/opt/courses-py/migrations",
     )
+
+
+@pytest.mark.parametrize("value", ["false", "1", "yes", ""])
+def test_fromEnv_runMigrationsNotTrue_disabled(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("COURSES_RUN_MIGRATIONS", value)
+
+    assert Settings.from_env().run_migrations is False
 
 
 def test_fromEnv_emptyVariable_keptAsEmptyString(monkeypatch: pytest.MonkeyPatch) -> None:

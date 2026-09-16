@@ -12,6 +12,9 @@ import org.springframework.context.ApplicationEventPublisher;
  */
 public class InboundIntegrationEventBridge {
 
+    /** Same limit as the {@code courses-py} consumer (MAX_BODY_BYTES); a valid payload is well under 1 KiB. */
+    static final int MAX_BODY_LENGTH = 64 * 1024;
+
     private final ApplicationEventPublisher eventPublisher;
 
     public InboundIntegrationEventBridge(ApplicationEventPublisher eventPublisher) {
@@ -20,6 +23,10 @@ public class InboundIntegrationEventBridge {
 
     @RabbitListener(queues = IntegrationEventTopics.MONOLITH_SEND_COURSE_TO_APPROVE_QUEUE)
     public void onSendCourseToApprove(String json) {
+        if (json.length() > MAX_BODY_LENGTH) {
+            throw new AmqpRejectAndDontRequeueException(IntegrationEventTopics.SEND_COURSE_TO_APPROVE
+                    + " message of " + json.length() + " chars exceeds " + MAX_BODY_LENGTH);
+        }
         var courseId = IntegrationEventJson.readCourseId(json).orElseThrow(() -> new AmqpRejectAndDontRequeueException(
                 IntegrationEventTopics.SEND_COURSE_TO_APPROVE + " message without courseId: " + json));
         eventPublisher.publishEvent(new SendCourseToApproveIntegrationEvent(courseId));

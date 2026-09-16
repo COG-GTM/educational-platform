@@ -100,6 +100,32 @@ class InboundIntegrationEventBridgeTest {
     }
 
     @Test
+    void onSendCourseToApprove_oversizedPayload_rejectedWithoutRequeueBeforeParsing() {
+        var bridge = new InboundIntegrationEventBridge(eventPublisher);
+        var padding = " ".repeat(InboundIntegrationEventBridge.MAX_BODY_LENGTH);
+        var json = "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"," + padding + "\"x\":1}";
+
+        assertThatThrownBy(() -> bridge.onSendCourseToApprove(json))
+                .isInstanceOf(AmqpRejectAndDontRequeueException.class)
+                .hasMessageContaining("exceeds " + InboundIntegrationEventBridge.MAX_BODY_LENGTH)
+                .satisfies(e -> assertThat(e.getMessage()).hasSizeLessThan(512));
+
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void onSendCourseToApprove_payloadAtSizeLimit_courseIdExtracted() {
+        var bridge = new InboundIntegrationEventBridge(eventPublisher);
+        var prefix = "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\":1";
+        var json = prefix + " ".repeat(InboundIntegrationEventBridge.MAX_BODY_LENGTH - prefix.length() - 1) + "}";
+
+        assertThat(json).hasSize(InboundIntegrationEventBridge.MAX_BODY_LENGTH);
+        bridge.onSendCourseToApprove(json);
+
+        verify(eventPublisher).publishEvent(new SendCourseToApproveIntegrationEvent(COURSE_ID));
+    }
+
+    @Test
     void onSendCourseToApprove_surroundingWhitespace_courseIdExtracted() {
         var bridge = new InboundIntegrationEventBridge(eventPublisher);
 

@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import uvicorn
+from sqlalchemy import create_engine, inspect
 
 from courses_py import main
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class _RecordedRun:
@@ -18,7 +23,7 @@ class _RecordedRun:
 
 @pytest.fixture
 def run(monkeypatch: pytest.MonkeyPatch) -> _RecordedRun:
-    for name in ("COURSES_HOST", "COURSES_PORT", "COURSES_RELOAD"):
+    for name in ("COURSES_HOST", "COURSES_PORT", "COURSES_RELOAD", "COURSES_RUN_MIGRATIONS", "COURSES_DATABASE_URL"):
         monkeypatch.delenv(name, raising=False)
     recorded = _RecordedRun()
     monkeypatch.setattr(uvicorn, "run", recorded)
@@ -63,6 +68,40 @@ def test_main_reloadVariable_enabledOnlyForLowercaseTrue(
     # then
     [(_, kwargs)] = run.calls
     assert kwargs["reload"] is expected
+
+
+def test_main_runMigrations_createsStandaloneSchemaBeforeServing(
+    run: _RecordedRun, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # given
+    db_url = f"sqlite:///{tmp_path / 'standalone.db'}"
+    monkeypatch.setenv("COURSES_DATABASE_URL", db_url)
+    monkeypatch.setenv("COURSES_RUN_MIGRATIONS", "true")
+    monkeypatch.setenv("COURSES_MIGRATIONS_DIR", str(PROJECT_ROOT / "migrations"))
+
+    # when
+    main.main()
+
+    # then
+    assert {"teacher", "course", "curriculum_item", "question", "alembic_version"} <= set(
+        inspect(create_engine(db_url)).get_table_names()
+    )
+    assert len(run.calls) == 1
+
+
+def test_main_runMigrationsUnset_doesNotTouchDatabase(
+    run: _RecordedRun, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # given
+    db_file = tmp_path / "untouched.db"
+    monkeypatch.setenv("COURSES_DATABASE_URL", f"sqlite:///{db_file}")
+
+    # when
+    main.main()
+
+    # then
+    assert not db_file.exists()
+    assert len(run.calls) == 1
 
 
 def test_main_nonNumericPort_valueErrorBeforeServerStarts(run: _RecordedRun, monkeypatch: pytest.MonkeyPatch) -> None:
