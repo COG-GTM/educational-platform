@@ -113,10 +113,18 @@ def test_courseRatingRecalculated_integerRatingCoercedToFloat(
     assert _course(session_factory, draft_course_uuid).rating.rating == 4.0
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param({"username": "no-email"}, id="email key missing"),
+        # IntegrationEventJson.usernameAndEmail(username, null) on the Java side serialises the email as JSON null.
+        pytest.param({"username": "no-email", "email": None}, id="email explicitly null"),
+    ],
+)
 def test_userCreated_withoutEmail_teacherCreated(
-    consuming_broker: InMemoryMessageBroker, session_factory: sessionmaker[Session]
+    consuming_broker: InMemoryMessageBroker, session_factory: sessionmaker[Session], payload: Payload
 ) -> None:
-    consuming_broker.publish(topics.USER_CREATED, {"username": "no-email"})
+    consuming_broker.publish(topics.USER_CREATED, payload)
 
     with session_factory() as session:
         assert SqlAlchemyTeacherRepository(session).find_by_username("no-email") is not None
