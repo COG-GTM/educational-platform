@@ -9,10 +9,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
+from course_reviews.application.checker import CourseReviewChecker
 from course_reviews.infrastructure.database import get_session
 from course_reviews.integration_events.events import CourseRatingRecalculatedIntegrationEvent
 from course_reviews.tests.conftest import execute_script
-from course_reviews.web.dependencies import event_bus
+from course_reviews.web.dependencies import event_bus, get_course_review_checker
 from course_reviews.web.main import app
 
 COURSE_UUID = UUID("123e4567-e89b-12d3-a456-426655440001")
@@ -315,3 +316,56 @@ def test_update_x_username_header_authenticates_owner(client: TestClient) -> Non
     )
 
     assert response.status_code == 204
+
+
+class _PermissiveChecker(CourseReviewChecker):
+    def __init__(self) -> None:
+        pass
+
+    def has_access(self, username: str, review_id: UUID) -> bool:
+        return True
+
+
+def test_update_unknown_review_when_ownership_check_passes_not_found(
+    client: TestClient, published: list[CourseRatingRecalculatedIntegrationEvent]
+) -> None:
+    unknown = UUID("123e4567-e89b-12d3-a456-426655440099")
+    app.dependency_overrides[get_course_review_checker] = _PermissiveChecker
+
+    response = client.put(f"/courses/{COURSE_UUID}/reviews/{unknown}", json={"rating": 1.0}, headers=student_auth())
+
+    assert response.status_code == 404
+    assert response.json() == {"errors": [f"Course Review with uuid: {unknown} not found"]}
+    assert published == []
+
+
+def test_update_course_path_segment_not_validated_against_review(
+    client: TestClient, published: list[CourseRatingRecalculatedIntegrationEvent]
+) -> None:
+    """Like ``CourseReviewController``, the course UUID in the path is not cross-checked with the review."""
+    review_uuid = create_review(client, {"rating": 3.2})
+    other_course = UUID("123e4567-e89b-12d3-a456-426655440099")
+
+    response = client.put(
+        f"/courses/{other_course}/reviews/{review_uuid}", json={"rating": 4.5}, headers=student_auth()
+    )
+
+    assert response.status_code == 204
+    assert client.get(f"/courses/{COURSE_UUID}/reviews").json()[0]["rating"] == 4.5
+    assert published == [CourseRatingRecalculatedIntegrationEvent(course_id=COURSE_UUID, rating=4.5)]
+
+
+def test_reviews_malformed_course_uuid_bad_request(client: TestClient) -> None:
+    response = client.get("/courses/not-a-uuid/reviews")
+
+    assert response.status_code == 400
+    assert response.json()["errors"][0].startswith("path.uuid: ")
+
+
+def test_review_comment_at_column_limit_round_trips(client: TestClient) -> None:
+    comment = "x" * 100
+
+    review_uuid = create_review(client, {"rating": 3.0, "comment": comment})
+
+    listed = client.get(f"/courses/{COURSE_UUID}/reviews").json()
+    assert [(r["uuid"], r["comment"], r["rating"]) for r in listed] == [(str(review_uuid), comment, 3.0)]
