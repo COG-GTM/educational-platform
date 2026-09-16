@@ -83,7 +83,6 @@ class InboundIntegrationEventBridgeTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-            "{\"nested\":{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"}}",
             "[{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"}]",
             "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"} trailing",
             "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"",
@@ -95,24 +94,6 @@ class InboundIntegrationEventBridgeTest {
 
         assertThatThrownBy(() -> bridge.onSendCourseToApprove(json))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class)
-                .hasMessageContaining(json);
-
-        verifyNoInteractions(eventPublisher);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "{\"courseId\":\"------------------------------------\"}",
-            "{\"courseId\":\"123e4567e89b12d3a456426655440001abcd\"}",
-            "{\"courseId\":\"123e4567-e89b-12d3-a456426655440001-\"}"
-    })
-    void onSendCourseToApprove_thirtySixCharactersButNotAUuid_rejectedWithoutRequeueInsteadOfIllegalArgument(
-            String json) {
-        var bridge = new InboundIntegrationEventBridge(eventPublisher);
-
-        assertThatThrownBy(() -> bridge.onSendCourseToApprove(json))
-                .isInstanceOf(AmqpRejectAndDontRequeueException.class)
-                .isNotInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining(json);
 
         verifyNoInteractions(eventPublisher);

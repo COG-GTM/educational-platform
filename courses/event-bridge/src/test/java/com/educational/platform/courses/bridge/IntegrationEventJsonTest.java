@@ -88,7 +88,9 @@ class IntegrationEventJsonTest {
             "{\"courseId\":\"123e4567e89b12d3a456426655440001----\"}",
             "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001-\"}",
             "{\"courseId\":\" 123e4567-e89b-12d3-a456-426655440001\"}",
-            "{\"courseId\":123e4567-e89b-12d3-a456-426655440001}"
+            "{\"courseId\":123e4567-e89b-12d3-a456-426655440001}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456426655440001-\"}",
+            "{\"courseId\":\"-123e4567-e89b-12d3-a456-426655440001\"}"
     })
     void readCourseId_noValidCourseId_empty(String json) {
         assertThat(IntegrationEventJson.readCourseId(json)).isEmpty();
@@ -110,19 +112,6 @@ class IntegrationEventJsonTest {
             "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\":\"\n\"}"
     })
     void readCourseId_notAFlatJsonObject_empty(String json) {
-        assertThat(IntegrationEventJson.readCourseId(json)).isEmpty();
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "{\"courseId\":\"------------------------------------\"}",
-            "{\"courseId\":\"123e4567e89b12d3a456426655440001abcd\"}",
-            "{\"courseId\":\"123e4567-e89b-12d3-a456426655440001-\"}",
-            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001-\"}",
-            "{\"courseId\":\"-123e4567-e89b-12d3-a456-426655440001\"}",
-            "{\"courseId\":\" 123e4567-e89b-12d3-a456-426655440001\"}"
-    })
-    void readCourseId_thirtySixCharactersButNotAUuid_emptyWithoutThrowing(String json) {
         assertThat(IntegrationEventJson.readCourseId(json)).isEmpty();
     }
 
