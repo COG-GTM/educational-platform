@@ -34,8 +34,9 @@ alembic/                migrations (Liquibase analogue)
   re-validates commands through `Validator` (the `jakarta.validation.Validator` analogue), raising
   `ConstraintViolationException`.
 - **In-process synchronous event bus** (`infrastructure/event_bus.py`) replaces
-  `ApplicationEventPublisher`. `UpdateCourseReviewCommandHandler` publishes
-  `CourseRatingRecalculatedIntegrationEvent(course_id, rating)` after a successful update.
+  `ApplicationEventPublisher`. `ReviewCourseCommandHandler` and `UpdateCourseReviewCommandHandler` publish
+  `CourseRatingRecalculatedIntegrationEvent(course_id, rating)` (the course's new average) after a review is
+  saved.
 - **Simplified authentication.** The Spring Security/JWT module is *not* reimplemented. The current username
   is taken from `Authorization: Bearer <username>` (the token *is* the username; no signature verification) or
   from an `X-Username` header. Missing credentials -> `401`. Roles are not enforced. Ownership of a review on

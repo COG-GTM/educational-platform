@@ -60,15 +60,26 @@ def reviewer_repository() -> Mock:
 # --- ReviewCourseCommandHandler -------------------------------------------------------------------------------------
 
 
+@pytest.fixture
+def recalculated_events() -> tuple[EventBus, list[CourseRatingRecalculatedIntegrationEvent]]:
+    bus = EventBus()
+    events: list[CourseRatingRecalculatedIntegrationEvent] = []
+    bus.subscribe(CourseRatingRecalculatedIntegrationEvent, events.append)
+    return bus, events
+
+
 def test_review_course_handle_valid_command_review_saved_and_identifier_returned(
     course_review_repository: Mock,
+    reviewable_course_repository: Mock,
+    recalculated_events: tuple[EventBus, list[CourseRatingRecalculatedIntegrationEvent]],
 ) -> None:
     # given
+    bus, _ = recalculated_events
     factory = create_autospec(CourseReviewFactory, instance=True)
     review = CourseReview.create(course=1, reviewer=2, rating=4.0, comment="comment")
     factory.create_from.return_value = review
     command = ReviewCourseCommand(course_id=COURSE_UUID, rating=4.0, comment="comment")
-    sut = ReviewCourseCommandHandler(course_review_repository, factory)
+    sut = ReviewCourseCommandHandler(course_review_repository, factory, reviewable_course_repository, bus)
 
     # when
     result = sut.handle(command)
@@ -79,16 +90,70 @@ def test_review_course_handle_valid_command_review_saved_and_identifier_returned
     course_review_repository.save.assert_called_once_with(review)
 
 
-def test_review_course_handle_factory_raises_nothing_saved(course_review_repository: Mock) -> None:
+def test_review_course_handle_event_carries_recalculated_average_for_reviews_course(
+    course_review_repository: Mock,
+    reviewable_course_repository: Mock,
+    recalculated_events: tuple[EventBus, list[CourseRatingRecalculatedIntegrationEvent]],
+) -> None:
+    # given
+    bus, published = recalculated_events
+    factory = create_autospec(CourseReviewFactory, instance=True)
+    factory.create_from.return_value = CourseReview.create(course=11, reviewer=2, rating=4.0, comment=None)
+    course = ReviewableCourse(COURSE_UUID)
+    course.id = 11
+    reviewable_course_repository.find_by_id.return_value = course
+    course_review_repository.average_rating.return_value = 3.5
+    sut = ReviewCourseCommandHandler(course_review_repository, factory, reviewable_course_repository, bus)
+
+    # when
+    sut.handle(ReviewCourseCommand(course_id=COURSE_UUID, rating=4.0))
+
+    # then
+    reviewable_course_repository.find_by_id.assert_called_once_with(11)
+    course_review_repository.average_rating.assert_called_once_with(11)
+    assert published == [CourseRatingRecalculatedIntegrationEvent(course_id=COURSE_UUID, rating=3.5)]
+
+
+def test_review_course_handle_event_published_after_review_saved(
+    course_review_repository: Mock,
+    reviewable_course_repository: Mock,
+) -> None:
     # given
     factory = create_autospec(CourseReviewFactory, instance=True)
+    factory.create_from.return_value = CourseReview.create(course=11, reviewer=2, rating=4.0, comment=None)
+    course = ReviewableCourse(COURSE_UUID)
+    course.id = 11
+    reviewable_course_repository.find_by_id.return_value = course
+    course_review_repository.average_rating.return_value = 4.0
+    bus = create_autospec(EventBus, instance=True)
+    parent = Mock()
+    parent.attach_mock(course_review_repository.save, "save")
+    parent.attach_mock(bus.publish, "publish")
+    sut = ReviewCourseCommandHandler(course_review_repository, factory, reviewable_course_repository, bus)
+
+    # when
+    sut.handle(ReviewCourseCommand(course_id=COURSE_UUID, rating=4.0))
+
+    # then
+    assert [call[0] for call in parent.mock_calls] == ["save", "publish"]
+
+
+def test_review_course_handle_factory_raises_nothing_saved_and_no_event_published(
+    course_review_repository: Mock,
+    reviewable_course_repository: Mock,
+    recalculated_events: tuple[EventBus, list[CourseRatingRecalculatedIntegrationEvent]],
+) -> None:
+    # given
+    bus, published = recalculated_events
+    factory = create_autospec(CourseReviewFactory, instance=True)
     factory.create_from.side_effect = RelatedResourceIsNotResolvedException("Course cannot be found")
-    sut = ReviewCourseCommandHandler(course_review_repository, factory)
+    sut = ReviewCourseCommandHandler(course_review_repository, factory, reviewable_course_repository, bus)
 
     # when / then
     with pytest.raises(RelatedResourceIsNotResolvedException):
         sut.handle(ReviewCourseCommand(course_id=COURSE_UUID, rating=4.0))
     course_review_repository.save.assert_not_called()
+    assert published == []
 
 
 # --- UpdateCourseReviewCommandHandler (edge cases beyond the Java test port) -----------------------------------------

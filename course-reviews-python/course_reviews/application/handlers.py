@@ -9,6 +9,7 @@ from course_reviews.application.dtos import CourseReviewDTO
 from course_reviews.application.factory import CourseReviewFactory
 from course_reviews.application.queries import ListCourseReviewsByCourseUUIDQuery
 from course_reviews.application.validation import Validator
+from course_reviews.domain.course_review import CourseReview
 from course_reviews.domain.reviewable_course import ReviewableCourse
 from course_reviews.domain.reviewer import Reviewer
 from course_reviews.exceptions import ResourceNotFoundException
@@ -21,14 +22,42 @@ from course_reviews.infrastructure.repositories import (
 from course_reviews.integration_events.events import CourseRatingRecalculatedIntegrationEvent
 
 
+def _publish_recalculated_rating(
+    review: CourseReview,
+    course_review_repository: CourseReviewRepository,
+    reviewable_course_repository: ReviewableCourseRepository,
+    event_bus: EventBus,
+) -> None:
+    course = reviewable_course_repository.find_by_id(review.course)
+    if course is not None:
+        event_bus.publish(
+            CourseRatingRecalculatedIntegrationEvent(
+                course_id=course.original_course_id,
+                rating=course_review_repository.average_rating(review.course),
+            )
+        )
+
+
 class ReviewCourseCommandHandler:
-    def __init__(self, course_review_repository: CourseReviewRepository, course_review_factory: CourseReviewFactory):
+    def __init__(
+        self,
+        course_review_repository: CourseReviewRepository,
+        course_review_factory: CourseReviewFactory,
+        reviewable_course_repository: ReviewableCourseRepository,
+        event_bus: EventBus,
+    ) -> None:
         self._course_review_repository = course_review_repository
         self._course_review_factory = course_review_factory
+        self._reviewable_course_repository = reviewable_course_repository
+        self._event_bus = event_bus
 
     def handle(self, command: ReviewCourseCommand) -> UUID:
+        """Creates a course review; publishes ``CourseRatingRecalculatedIntegrationEvent`` for its course."""
         course_review = self._course_review_factory.create_from(command)
         self._course_review_repository.save(course_review)
+        _publish_recalculated_rating(
+            course_review, self._course_review_repository, self._reviewable_course_repository, self._event_bus
+        )
         return course_review.to_identifier()
 
 
@@ -59,15 +88,9 @@ class UpdateCourseReviewCommandHandler:
 
         review.update(command.rating, command.comment)
         self._course_review_repository.save(review)
-
-        course = self._reviewable_course_repository.find_by_id(review.course)
-        if course is not None:
-            self._event_bus.publish(
-                CourseRatingRecalculatedIntegrationEvent(
-                    course_id=course.original_course_id,
-                    rating=self._course_review_repository.average_rating(review.course),
-                )
-            )
+        _publish_recalculated_rating(
+            review, self._course_review_repository, self._reviewable_course_repository, self._event_bus
+        )
 
 
 class ListCourseReviewsByCourseUUIDQueryHandler:

@@ -100,8 +100,10 @@ def get_course_review_factory(
 def get_review_course_command_handler(
     reviews: CourseReviewRepositoryDep,
     factory: Annotated[CourseReviewFactory, Depends(get_course_review_factory)],
+    courses: ReviewableCourseRepositoryDep,
+    bus: Annotated[EventBus, Depends(get_event_bus)],
 ) -> ReviewCourseCommandHandler:
-    return ReviewCourseCommandHandler(reviews, factory)
+    return ReviewCourseCommandHandler(reviews, factory, courses, bus)
 
 
 def get_update_course_review_command_handler(

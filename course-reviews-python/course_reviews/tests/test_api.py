@@ -57,17 +57,22 @@ def client(session_factory: sessionmaker[Session]) -> Iterator[TestClient]:
     app.dependency_overrides.clear()
 
 
+_published: list[CourseRatingRecalculatedIntegrationEvent] = []
+
+
 @pytest.fixture
 def published() -> Iterator[list[CourseRatingRecalculatedIntegrationEvent]]:
-    events: list[CourseRatingRecalculatedIntegrationEvent] = []
-    event_bus.subscribe(CourseRatingRecalculatedIntegrationEvent, events.append)
-    yield events
-    event_bus.unsubscribe(CourseRatingRecalculatedIntegrationEvent, events.append)
+    """Events published by the request(s) under test; the ``create_review`` seeding helper discards its own."""
+    _published.clear()
+    event_bus.subscribe(CourseRatingRecalculatedIntegrationEvent, _published.append)
+    yield _published
+    event_bus.unsubscribe(CourseRatingRecalculatedIntegrationEvent, _published.append)
 
 
 def create_review(client: TestClient, body: dict[str, object], username: str = "username") -> UUID:
     response = client.post(f"/courses/{COURSE_UUID}/reviews", json=body, headers=student_auth(username))
     assert response.status_code == 201, response.text
+    _published.clear()
     return UUID(response.json()["uuid"])
 
 
@@ -83,6 +88,37 @@ def test_reviews_valid_request_reviews(client: TestClient) -> None:
     assert body[0]["username"] == "username"
     assert body[0]["rating"] == 3.2
     assert body[0]["comment"] is None
+
+
+def test_review_valid_request_publishes_recalculated_rating(
+    client: TestClient, published: list[CourseRatingRecalculatedIntegrationEvent]
+) -> None:
+    response = client.post(f"/courses/{COURSE_UUID}/reviews", json={"rating": 3.0}, headers=student_auth())
+
+    assert response.status_code == 201
+    assert published == [CourseRatingRecalculatedIntegrationEvent(course_id=COURSE_UUID, rating=3.0)]
+
+
+def test_review_event_rating_is_average_over_all_course_reviews(
+    client: TestClient, published: list[CourseRatingRecalculatedIntegrationEvent]
+) -> None:
+    create_review(client, {"rating": 1.0}, username="another-user")
+
+    response = client.post(f"/courses/{COURSE_UUID}/reviews", json={"rating": 5.0}, headers=student_auth())
+
+    assert response.status_code == 201
+    assert published == [CourseRatingRecalculatedIntegrationEvent(course_id=COURSE_UUID, rating=3.0)]
+
+
+def test_review_unknown_course_no_event_published(
+    client: TestClient, published: list[CourseRatingRecalculatedIntegrationEvent]
+) -> None:
+    unknown = UUID("123e4567-e89b-12d3-a456-426655440099")
+
+    response = client.post(f"/courses/{unknown}/reviews", json={"rating": 3.0}, headers=student_auth())
+
+    assert response.status_code == 400
+    assert published == []
 
 
 def test_review_valid_request_created(client: TestClient) -> None:
