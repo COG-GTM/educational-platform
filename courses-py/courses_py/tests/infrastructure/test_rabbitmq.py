@@ -242,6 +242,20 @@ def test_publish_closedChannel_reconnects(sut: RabbitMQMessageBroker, factory: F
     assert [m["routing_key"] for m in factory.channel.published] == ["b"]
 
 
+def test_publish_closedChannel_reconnectedChannelHasConfirmsEnabled(
+    sut: RabbitMQMessageBroker, factory: FakeConnectionFactory
+) -> None:
+    sut.publish("a", {})
+    first_channel = factory.channel
+    first_channel.is_closed = True
+
+    sut.publish("b", {})
+
+    assert factory.channel is not first_channel
+    assert factory.channel.confirms_enabled
+    assert factory.channel.published[0]["mandatory"] is True
+
+
 def test_subscribe_declaresDurablePrefixedQueueBoundToTopic(
     sut: RabbitMQMessageBroker, factory: FakeConnectionFactory
 ) -> None:
