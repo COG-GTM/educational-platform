@@ -102,3 +102,18 @@ def test_request_validation_error_strips_body_prefix_but_keeps_other_locations(c
     assert any(e.startswith("path.uuid: ") for e in errors)
     assert any(e.startswith("rating: ") for e in errors)
     assert not any(e.startswith("body") for e in errors)
+
+
+def test_openapi_leaves_operations_without_request_validation_untouched(client: TestClient) -> None:
+    schema = client.get("/openapi.json").json()
+
+    # given: the throwaway routes take no parameters or body, so FastAPI documents no 422 for them
+    operation = schema["paths"]["/raise/not-found"]["get"]
+
+    # then: no synthetic 400 is added and the default responses are preserved
+    assert "400" not in operation["responses"]
+    assert "422" not in operation["responses"]
+    assert set(operation["responses"]) == {"200"}
+    assert schema["paths"]["/courses/{uuid}/reviews"]["post"]["responses"]["400"]["content"]["application/json"][
+        "schema"
+    ] == {"$ref": "#/components/schemas/ErrorResponse"}
