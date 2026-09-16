@@ -28,7 +28,8 @@ public class InboundIntegrationEventBridge {
                     + " message of " + json.length() + " chars exceeds " + MAX_BODY_LENGTH);
         }
         var courseId = IntegrationEventJson.readCourseId(json).orElseThrow(() -> new AmqpRejectAndDontRequeueException(
-                IntegrationEventTopics.SEND_COURSE_TO_APPROVE + " message without courseId: " + json));
+                IntegrationEventTopics.SEND_COURSE_TO_APPROVE + " message of " + json.length()
+                        + " chars without a valid courseId"));
         eventPublisher.publishEvent(new SendCourseToApproveIntegrationEvent(courseId));
     }
 }

@@ -75,8 +75,9 @@ class InboundIntegrationEventBridgeTest {
 
         assertThatThrownBy(() -> bridge.onSendCourseToApprove(json))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class)
-                .hasMessageContaining("courses.send-course-to-approve message without courseId")
-                .hasMessageContaining(json);
+                .hasMessageContaining("courses.send-course-to-approve message of " + json.length()
+                        + " chars without a valid courseId")
+                .satisfies(e -> assertThat(e.getMessage()).doesNotContain("courseId\"", "123e4567"));
 
         verifyNoInteractions(eventPublisher);
     }
@@ -94,7 +95,8 @@ class InboundIntegrationEventBridgeTest {
 
         assertThatThrownBy(() -> bridge.onSendCourseToApprove(json))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class)
-                .hasMessageContaining(json);
+                .hasMessageContaining("without a valid courseId")
+                .satisfies(e -> assertThat(e.getMessage()).doesNotContain("123e4567-e89b-12d3-a456-426655440001"));
 
         verifyNoInteractions(eventPublisher);
     }
