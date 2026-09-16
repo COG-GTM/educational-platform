@@ -126,6 +126,27 @@ class InboundIntegrationEventBridgeTest {
     }
 
     @Test
+    void onSendCourseToApprove_validPayloadOneCharOverSizeLimit_rejectedWithoutRequeueAndBodyNotEchoed() {
+        var bridge = new InboundIntegrationEventBridge(eventPublisher);
+        var prefix = "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\":1";
+        var json = prefix + " ".repeat(InboundIntegrationEventBridge.MAX_BODY_LENGTH - prefix.length()) + "}";
+
+        assertThat(json).hasSize(InboundIntegrationEventBridge.MAX_BODY_LENGTH + 1);
+        assertThatThrownBy(() -> bridge.onSendCourseToApprove(json))
+                .isInstanceOf(AmqpRejectAndDontRequeueException.class)
+                .hasMessageContaining(IntegrationEventTopics.SEND_COURSE_TO_APPROVE)
+                .hasMessageContaining((InboundIntegrationEventBridge.MAX_BODY_LENGTH + 1) + " chars")
+                .satisfies(e -> assertThat(e.getMessage()).doesNotContain(COURSE_ID.toString()));
+
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void maxBodyLength_matchesCoursesPyConsumerLimit() {
+        assertThat(InboundIntegrationEventBridge.MAX_BODY_LENGTH).isEqualTo(64 * 1024);
+    }
+
+    @Test
     void onSendCourseToApprove_surroundingWhitespace_courseIdExtracted() {
         var bridge = new InboundIntegrationEventBridge(eventPublisher);
 

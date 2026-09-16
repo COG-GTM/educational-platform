@@ -6,9 +6,11 @@ from pathlib import Path
 
 import pytest
 import uvicorn
+from alembic.util.exc import CommandError
 from sqlalchemy import create_engine, inspect
 
 from courses_py import main
+from courses_py.infrastructure.persistence.orm import metadata
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -102,6 +104,62 @@ def test_main_runMigrationsUnset_doesNotTouchDatabase(
     # then
     assert not db_file.exists()
     assert len(run.calls) == 1
+
+
+def test_main_runMigrationsAgainstSharedDatabase_leavesLiquibaseTablesAndRowsUntouched(
+    run: _RecordedRun, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # given
+    db_url = f"sqlite:///{tmp_path / 'shared.db'}"
+    engine = create_engine(db_url)
+    metadata.create_all(engine)  # stands in for Liquibase having created the schema
+    with engine.begin() as connection:
+        connection.exec_driver_sql("insert into teacher (username) values ('existing')")
+    monkeypatch.setenv("COURSES_DATABASE_URL", db_url)
+    monkeypatch.setenv("COURSES_RUN_MIGRATIONS", "true")
+    monkeypatch.setenv("COURSES_MIGRATIONS_DIR", str(PROJECT_ROOT / "migrations"))
+
+    # when
+    main.main()
+
+    # then
+    with engine.connect() as connection:
+        assert connection.exec_driver_sql("select count(*) from teacher").scalar_one() == 1
+    assert "alembic_version" in inspect(engine).get_table_names()
+    assert len(run.calls) == 1
+
+
+def test_main_runMigrationsTwice_idempotentAndStillServes(
+    run: _RecordedRun, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # given
+    db_url = f"sqlite:///{tmp_path / 'restarted.db'}"
+    monkeypatch.setenv("COURSES_DATABASE_URL", db_url)
+    monkeypatch.setenv("COURSES_RUN_MIGRATIONS", "true")
+    monkeypatch.setenv("COURSES_MIGRATIONS_DIR", str(PROJECT_ROOT / "migrations"))
+
+    # when
+    main.main()
+    main.main()
+
+    # then
+    with create_engine(db_url).connect() as connection:
+        assert connection.exec_driver_sql("select count(*) from alembic_version").scalar_one() == 1
+    assert len(run.calls) == 2
+
+
+def test_main_runMigrationsFail_serverNotStarted(
+    run: _RecordedRun, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # given
+    monkeypatch.setenv("COURSES_DATABASE_URL", f"sqlite:///{tmp_path / 'never-served.db'}")
+    monkeypatch.setenv("COURSES_RUN_MIGRATIONS", "true")
+    monkeypatch.setenv("COURSES_MIGRATIONS_DIR", str(tmp_path / "no-such-migrations"))
+
+    # when / then
+    with pytest.raises(CommandError):
+        main.main()
+    assert run.calls == []
 
 
 def test_main_nonNumericPort_valueErrorBeforeServerStarts(run: _RecordedRun, monkeypatch: pytest.MonkeyPatch) -> None:
