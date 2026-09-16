@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import replace
 from uuid import UUID
 
 import pytest
@@ -12,8 +14,9 @@ from courses_py.application.course.create import CreateCourseCommand
 from courses_py.domain.course import Course
 from courses_py.domain.enums import ApprovalStatus
 from courses_py.infrastructure.messaging import topics
-from courses_py.infrastructure.messaging.broker import InMemoryMessageBroker
+from courses_py.infrastructure.messaging.broker import InMemoryMessageBroker, Payload
 from courses_py.infrastructure.persistence.repositories import SqlAlchemyCourseRepository, SqlAlchemyTeacherRepository
+from courses_py.integration_events import consumer
 from courses_py.integration_events.consumer import IntegrationEventHandlers, register_consumers
 from courses_py.integration_events.events import (
     INBOUND_EVENTS,
@@ -23,7 +26,7 @@ from courses_py.integration_events.events import (
     StudentEnrolledToCourseIntegrationEvent,
     UserCreatedIntegrationEvent,
 )
-from courses_py.tests.conftest import count, insert_teacher
+from courses_py.tests.conftest import TEST_SETTINGS, count, insert_teacher
 
 
 @pytest.fixture
@@ -216,3 +219,65 @@ def test_event_acceptsSnakeCaseAndIsFrozen() -> None:
     assert event.course_id == uuid
     with pytest.raises(ValidationError):
         event.course_id = UUID(int=0)  # type: ignore[misc]
+
+
+class _RecordingBroker(InMemoryMessageBroker):
+    """Stand-in for the RabbitMQ broker in the consumer process: ``start_consuming`` blocks until interrupted."""
+
+    def __init__(self, stop_with: BaseException) -> None:
+        super().__init__()
+        self._stop_with = stop_with
+        self.calls: list[str] = []
+        self.subscribed: set[str] = set()
+
+    def subscribe(self, topic: str, handler: Callable[[Payload], None]) -> None:
+        self.subscribed.add(topic)
+        super().subscribe(topic, handler)
+
+    def start_consuming(self) -> None:
+        self.calls.append("start_consuming")
+        raise self._stop_with
+
+    def close(self) -> None:
+        self.calls.append("close")
+        super().close()
+
+
+@pytest.fixture
+def consumer_broker_factory(monkeypatch: pytest.MonkeyPatch) -> Callable[[BaseException], _RecordingBroker]:
+    """Wires ``consumer.main`` to the test settings and a recording broker instead of the environment."""
+    monkeypatch.setattr(consumer, "settings", replace(TEST_SETTINGS, broker="rabbitmq"))
+
+    def factory(stop_with: BaseException) -> _RecordingBroker:
+        broker = _RecordingBroker(stop_with)
+        monkeypatch.setattr(consumer, "build_broker", lambda config: broker)
+        return broker
+
+    return factory
+
+
+def test_main_subscribesInboundTopicsThenConsumesAndClosesOnInterrupt(
+    consumer_broker_factory: Callable[[BaseException], _RecordingBroker],
+) -> None:
+    # given
+    broker = consumer_broker_factory(KeyboardInterrupt())
+
+    # when
+    consumer.main()
+
+    # then
+    assert broker.subscribed == {event.TOPIC for event in INBOUND_EVENTS}
+    assert broker.calls == ["start_consuming", "close"]
+
+
+def test_main_brokerFailure_propagatesAndStillClosesBroker(
+    consumer_broker_factory: Callable[[BaseException], _RecordingBroker],
+) -> None:
+    # given
+    broker = consumer_broker_factory(ConnectionError("broker unreachable"))
+
+    # when / then
+    with pytest.raises(ConnectionError, match="broker unreachable"):
+        consumer.main()
+
+    assert broker.calls == ["start_consuming", "close"]

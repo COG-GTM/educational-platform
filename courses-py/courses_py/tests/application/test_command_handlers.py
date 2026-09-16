@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -36,6 +36,7 @@ from courses_py.application.course.query import (
     ListCourseQueryHandler,
 )
 from courses_py.application.course.rating import UpdateCourseRatingCommand, UpdateCourseRatingCommandHandler
+from courses_py.application.dtos import CourseDTO, CourseLightDTO
 from courses_py.application.exceptions import (
     AccessDeniedException,
     RelatedResourceIsNotResolvedException,
@@ -62,6 +63,30 @@ def course_repository(session: Session) -> SqlAlchemyCourseRepository:
 @pytest.fixture
 def teacher_repository(session: Session) -> SqlAlchemyTeacherRepository:
     return SqlAlchemyTeacherRepository(session)
+
+
+class _OwnedButMissingCourseRepository:
+    """``CourseRepository`` whose ownership check passes but whose course cannot be loaded afterwards (e.g. the
+    row was deleted between ``@PreAuthorize`` evaluation and the handler body)."""
+
+    def __init__(self) -> None:
+        self.saved: list[Course] = []
+
+    def save(self, course: Course) -> Course:
+        self.saved.append(course)
+        return course
+
+    def find_by_uuid(self, uuid: UUID) -> Course | None:
+        return None
+
+    def find_dto_by_uuid(self, uuid: UUID) -> CourseDTO | None:
+        return None
+
+    def list(self) -> list[CourseLightDTO]:
+        return []
+
+    def is_teacher(self, uuid: UUID, username: str) -> bool:
+        return True
 
 
 def _create_handler(
@@ -289,6 +314,20 @@ class TestPublishCourseCommandHandler:
         with pytest.raises(AccessDeniedException):
             self._handler(course_repository, teacher_user).handle(PublishCourseCommand(uuid=uuid4()))
 
+    def test_handle_ownedCourseVanished_resourceNotFoundExceptionAndNothingSaved(
+        self, teacher_user: StaticCurrentUser
+    ) -> None:
+        # given
+        repository = _OwnedButMissingCourseRepository()
+        sut = PublishCourseCommandHandler(repository, CourseTeacherChecker(repository), teacher_user)
+        uuid = uuid4()
+
+        # when / then
+        with pytest.raises(ResourceNotFoundException, match=f"Course with uuid: {uuid} not found"):
+            sut.handle(PublishCourseCommand(uuid=uuid))
+
+        assert repository.saved == []
+
     def test_handle_notOwner_accessDenied(
         self, session: Session, course_repository: SqlAlchemyCourseRepository
     ) -> None:
@@ -418,6 +457,24 @@ class TestSendCourseToApproveCommandHandler:
         with pytest.raises(AccessDeniedException):
             self._handler(course_repository, broker, teacher_user).handle(SendCourseToApproveCommand(uuid=uuid4()))
 
+        assert broker.published == []
+
+    def test_handle_ownedCourseVanished_resourceNotFoundExceptionAndNoEvent(
+        self, teacher_user: StaticCurrentUser
+    ) -> None:
+        # given
+        repository = _OwnedButMissingCourseRepository()
+        broker = InMemoryMessageBroker()
+        sut = SendCourseToApproveCommandHandler(
+            repository, BrokerIntegrationEventPublisher(broker), CourseTeacherChecker(repository), teacher_user
+        )
+        uuid = uuid4()
+
+        # when / then
+        with pytest.raises(ResourceNotFoundException, match=f"Course with uuid: {uuid} not found"):
+            sut.handle(SendCourseToApproveCommand(uuid=uuid))
+
+        assert repository.saved == []
         assert broker.published == []
 
     def test_handle_declinedCourse_canBeResent(
