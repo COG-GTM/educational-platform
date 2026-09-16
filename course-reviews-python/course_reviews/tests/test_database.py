@@ -11,7 +11,7 @@ from typing import cast
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import String, create_engine, inspect, select
+from sqlalchemy import Engine, String, create_engine, event, inspect, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
@@ -74,6 +74,64 @@ def test_build_engine_sqlite_enforces_foreign_keys(url: str, tmp_path: Path) -> 
         with pytest.raises(IntegrityError, match="FOREIGN KEY constraint failed"):
             session.flush()
     engine.dispose()
+
+
+def test_build_engine_sqlite_registers_foreign_key_pragma_listener() -> None:
+    engine = build_engine("sqlite://")
+
+    assert event.contains(engine, "connect", database._enable_sqlite_foreign_keys)
+    engine.dispose()
+
+
+def test_build_engine_non_sqlite_does_not_register_foreign_key_pragma_listener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # given: a non-SQLite dialect (no driver installed, so the engine is stubbed)
+    class FakeDialect:
+        name = "postgresql"
+
+    class FakeEngine:
+        dialect = FakeDialect()
+
+    fake_engine = FakeEngine()
+    monkeypatch.setattr(database, "create_engine", lambda url, connect_args, **kwargs: fake_engine)
+    listened: list[tuple[object, str, object]] = []
+    monkeypatch.setattr(event, "listen", lambda *args: listened.append(args))
+
+    # when
+    engine = build_engine("postgresql://user:pass@localhost/reviews")
+
+    # then
+    assert engine.dialect.name == "postgresql"
+    assert listened == []
+
+
+def test_build_engine_file_sqlite_enables_foreign_keys_on_every_pooled_connection(tmp_path: Path) -> None:
+    # given: a file database uses a real pool, so distinct DBAPI connections are handed out
+    engine = build_engine(f"sqlite:///{tmp_path / 'reviews.db'}")
+
+    # when: two connections are checked out at once
+    with engine.connect() as first, engine.connect() as second:
+        # then: the PRAGMA was applied per connection, not just to the first one
+        assert first.exec_driver_sql("PRAGMA foreign_keys").scalar() == 1
+        assert second.exec_driver_sql("PRAGMA foreign_keys").scalar() == 1
+    engine.dispose()
+
+
+def test_build_engine_sqlite_rejects_deleting_referenced_projection(engine: Engine) -> None:
+    # given: a reviewer that is referenced by a review
+    with Session(engine) as session:
+        course = ReviewableCourseRepository(session).save(ReviewableCourse(uuid4()))
+        reviewer = ReviewerRepository(session).save(Reviewer("referenced"))
+        CourseReviewRepository(session).save(
+            CourseReview.create(course=course.local_id, reviewer=reviewer.local_id, rating=4.0, comment=None)
+        )
+        session.commit()
+
+        # when / then: removing the parent row is rejected while a review still points at it
+        session.delete(reviewer)
+        with pytest.raises(IntegrityError, match="FOREIGN KEY constraint failed"):
+            session.flush()
 
 
 def test_build_engine_without_url_uses_configured_database_url() -> None:
