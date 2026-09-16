@@ -64,7 +64,11 @@ class InboundIntegrationEventBridgeTest {
             "{\"courseId\":\"\"}",
             "{\"courseId\":\"not-a-uuid\"}",
             "{\"courseId\":\"123e4567-e89b-12d3-a456-42665544000\"}",
-            "{\"course_id\":\"123e4567-e89b-12d3-a456-426655440001\"}"
+            "{\"course_id\":\"123e4567-e89b-12d3-a456-426655440001\"}",
+            "{\"courseId\":\"------------------------------------\"}",
+            "{\"courseId\":\"123e4567e89b12d3a456426655440001----\"}",
+            "{\"event\":{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"}}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"} {\"courseId\":\"123e4567-e89b-12d3-a456-426655440002\"}"
     })
     void onSendCourseToApprove_payloadWithoutValidCourseId_rejectedWithoutRequeue(String json) {
         var bridge = new InboundIntegrationEventBridge(eventPublisher);

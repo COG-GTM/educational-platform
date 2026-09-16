@@ -83,7 +83,12 @@ class IntegrationEventJsonTest {
             "{\"courseId\":\"123e4567-e89b-12d3-a456\"}",
             "{\"courseId\":\"123e4567-e89b-12d3-a456-42665544000g\"}",
             "{\"course_id\":\"123e4567-e89b-12d3-a456-426655440001\"}",
-            "{\"CourseId\":\"123e4567-e89b-12d3-a456-426655440001\"}"
+            "{\"CourseId\":\"123e4567-e89b-12d3-a456-426655440001\"}",
+            "{\"courseId\":\"------------------------------------\"}",
+            "{\"courseId\":\"123e4567e89b12d3a456426655440001----\"}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001-\"}",
+            "{\"courseId\":\" 123e4567-e89b-12d3-a456-426655440001\"}",
+            "{\"courseId\":123e4567-e89b-12d3-a456-426655440001}"
     })
     void readCourseId_noValidCourseId_empty(String json) {
         assertThat(IntegrationEventJson.readCourseId(json)).isEmpty();
