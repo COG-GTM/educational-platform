@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import time
 
 import jwt
@@ -10,19 +9,38 @@ import pytest
 
 from courses_py.infrastructure.security.jwt import InvalidJwtTokenException, JwtTokenProvider, java_signing_key
 
+# Produced by the real ``JwtTokenProvider`` code path (jjwt 0.9.1, ``signWith(HS256, Base64.encode("secret-key"))``):
+# sub=teacher, auth=[{"authority": "ROLE_TEACHER"}], iat=1789572658, exp=1789576258.
+JAVA_ISSUED_TOKEN = (
+    "eyJhbGciOiJIUzI1NiJ9."
+    "eyJzdWIiOiJ0ZWFjaGVyIiwiYXV0aCI6W3siYXV0aG9yaXR5IjoiUk9MRV9URUFDSEVSIn1dLCJpYXQiOjE3ODk1NzI2NTgsImV4cCI6MTc4OTU3NjI1OH0."
+    "FDaEyiHOnShpRIZTSZytfPk3pcQre5vSLMBz4zrOMns"
+)
+JAVA_ISSUED_TOKEN_EXP = 1789576258
+
 
 def _java_style_token(secret: str, exp_offset: int = 3600) -> str:
-    """What ``Jwts.builder()...signWith(HS256, Base64.encode(secret))`` produces."""
+    """What ``Jwts.builder()...signWith(HS256, Base64.encode(secret))`` produces: jjwt decodes the Base64 again."""
     now = int(time.time())
     return jwt.encode(
         {"sub": "teacher", "auth": [{"authority": "ROLE_TEACHER"}], "iat": now, "exp": now + exp_offset},
-        base64.b64encode(secret.encode()),
+        secret.encode(),
         algorithm="HS256",
     )
 
 
-def test_java_signing_key_isBase64OfSecret() -> None:
-    assert java_signing_key("secret-key") == b"c2VjcmV0LWtleQ=="
+def test_java_signing_key_isRawSecret() -> None:
+    assert java_signing_key("secret-key") == b"secret-key"
+
+
+def test_javaSigningKey_verifiesTokenIssuedByJjwt() -> None:
+    claims = jwt.decode(
+        JAVA_ISSUED_TOKEN, java_signing_key("secret-key"), algorithms=["HS256"], options={"verify_exp": False}
+    )
+
+    assert claims["sub"] == "teacher" and claims["exp"] == JAVA_ISSUED_TOKEN_EXP
+    with pytest.raises(jwt.InvalidSignatureError):
+        jwt.decode(JAVA_ISSUED_TOKEN, b"c2VjcmV0LWtleQ==", algorithms=["HS256"], options={"verify_exp": False})
 
 
 def test_validate_javaToken_principalWithAuthorities() -> None:

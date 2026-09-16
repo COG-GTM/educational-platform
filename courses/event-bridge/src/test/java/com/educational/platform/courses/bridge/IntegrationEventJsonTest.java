@@ -89,6 +89,33 @@ class IntegrationEventJsonTest {
         assertThat(IntegrationEventJson.readCourseId(json)).isEmpty();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"",
+            "courseId: 123e4567-e89b-12d3-a456-426655440001 \"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"} trailing",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\" \"x\":1}",
+            "{\"nested\":{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"}}",
+            "{\"ids\":[\"courseId\",\"123e4567-e89b-12d3-a456-426655440001\"]}",
+            "{\"note\":\"\\\"courseId\\\":\\\"123e4567-e89b-12d3-a456-426655440001\\\"\"}",
+            "[{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"}]",
+            "{courseId:\"123e4567-e89b-12d3-a456-426655440001\"}",
+            "{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\",\"x\":\"\n\"}"
+    })
+    void readCourseId_notAFlatJsonObject_empty(String json) {
+        assertThat(IntegrationEventJson.readCourseId(json)).isEmpty();
+    }
+
+    @Test
+    void readCourseId_flatObjectWithExtraScalarMembers_courseId() {
+        assertThat(IntegrationEventJson.readCourseId(
+                "{\"eventId\":\"e1\",\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\","
+                        + "\"rating\":-1.5e3,\"flag\":true,\"email\":null,\"text\":\"a\\\"b\\\\c\\u00e9\"}"))
+                .contains(COURSE_ID);
+    }
+
     @Test
     void readCourseId_nullJson_nullPointerException() {
         assertThatThrownBy(() -> IntegrationEventJson.readCourseId(null)).isInstanceOf(NullPointerException.class);

@@ -2,8 +2,9 @@
 
 Compatibility notes (taken from ``users/application/.../security/JwtTokenProvider.java``):
 
-* algorithm ``HS256``; the signing key is ``Base64.encode(secret-key)`` where ``secret-key`` is the raw value of
-  ``security.jwt.token.secret-key`` (default ``secret-key``). jjwt 0.9 treats that Base64 *string* as the key bytes.
+* algorithm ``HS256``; the effective HMAC key is the raw bytes of ``security.jwt.token.secret-key`` (default
+  ``secret-key``): the Java provider Base64-encodes the secret and hands it to jjwt 0.9's ``signWith(alg, String)`` /
+  ``setSigningKey(String)``, which Base64-*decode* it again before signing/verifying.
 * ``sub`` = username, ``iat``/``exp`` set by Java (``exp`` is enforced here as in Java).
 * ``auth`` = list of ``SimpleGrantedAuthority`` objects, serialised as ``[{"authority": "ROLE_TEACHER"}, ...]``.
   Java re-loads authorities from the ``users`` table instead of trusting the claim; the Python service cannot reach that
@@ -12,7 +13,6 @@ Compatibility notes (taken from ``users/application/.../security/JwtTokenProvide
 
 from __future__ import annotations
 
-import base64
 import time
 from collections.abc import Iterable
 
@@ -32,7 +32,7 @@ class InvalidJwtTokenException(Exception):
 
 
 def java_signing_key(secret_key: str) -> bytes:
-    return base64.b64encode(secret_key.encode("utf-8"))
+    return secret_key.encode("utf-8")
 
 
 def _authorities(raw: object) -> Iterable[str]:

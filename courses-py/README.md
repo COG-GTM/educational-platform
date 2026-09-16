@@ -133,8 +133,9 @@ event would be applied twice to the shared tables (e.g. `number_of_students` dou
 ## Authentication & authorization
 
 `courses_py/infrastructure/security/jwt.py` validates the tokens issued by the Java `users` module
-(`users/application/.../security/JwtTokenProvider.java`): HS256, signing key = **Base64 of the raw**
-`security.jwt.token.secret-key` value (the Java provider Base64-encodes the configured secret before use),
+(`users/application/.../security/JwtTokenProvider.java`): HS256, HMAC key = the **raw bytes** of
+`security.jwt.token.secret-key` (the Java provider Base64-encodes the secret, but jjwt 0.9's `String` key overloads
+Base64-decode it again before use),
 `sub` = username, `auth` = `[{"authority": "ROLE_TEACHER"}, ...]`, `exp`. Configure the same raw secret through
 `COURSES_JWT_SECRET_KEY`. The FastAPI dependency `get_principal` reads `Authorization: Bearer <token>`; an invalid
 token maps to 400 `Expired or invalid JWT token` like the Java `JwtTokenFilter`, a missing token to 403 `Access Denied`.
