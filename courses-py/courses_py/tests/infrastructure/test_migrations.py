@@ -81,3 +81,29 @@ def test_downgrade_standalone_dropsTables(db_url: str) -> None:
     command.downgrade(config, "base")
 
     assert not LIQUIBASE_TABLES & set(inspect(create_engine(db_url)).get_table_names())
+
+
+def test_upgrade_coursesDatabaseUrlSet_targetsThatDatabaseInsteadOfIniUrl(
+    db_url: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # given
+    env_url = f"sqlite:///{tmp_path / 'from-env.db'}"
+    monkeypatch.setenv("COURSES_DATABASE_URL", env_url)
+
+    # when
+    command.upgrade(_alembic_config(db_url), "head")
+
+    # then
+    assert LIQUIBASE_TABLES <= set(inspect(create_engine(env_url)).get_table_names())
+    assert not (tmp_path / "courses.db").exists()
+
+
+def test_upgrade_coursesDatabaseUrlEmpty_fallsBackToIniUrl(db_url: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    # given
+    monkeypatch.setenv("COURSES_DATABASE_URL", "")
+
+    # when
+    command.upgrade(_alembic_config(db_url), "head")
+
+    # then
+    assert LIQUIBASE_TABLES <= set(inspect(create_engine(db_url)).get_table_names())
