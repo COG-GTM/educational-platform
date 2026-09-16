@@ -106,7 +106,8 @@ def test_validate_missingSubject_invalidJwtTokenException() -> None:
 
 @pytest.mark.parametrize("sub", [42, None, ["teacher"], {"name": "teacher"}])
 def test_validate_nonStringSubject_invalidJwtTokenException(sub: object) -> None:
-    token = jwt.encode({"sub": sub}, java_signing_key("secret-key"), algorithm="HS256")
+    claims = {"sub": sub, "auth": [{"authority": "ROLE_TEACHER"}], "exp": int(time.time()) + 3600}
+    token = jwt.encode(claims, java_signing_key("secret-key"), algorithm="HS256")
 
     with pytest.raises(InvalidJwtTokenException):
         JwtTokenProvider("secret-key").validate_token(token)
