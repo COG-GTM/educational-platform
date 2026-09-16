@@ -167,3 +167,151 @@ def test_update_unknown_review_forbidden(client: TestClient) -> None:
 
     # The ownership check runs first, exactly as @PreAuthorize does in the Java module.
     assert response.status_code == 403
+
+
+def test_review_x_username_header_authenticates(client: TestClient) -> None:
+    response = client.post(f"/courses/{COURSE_UUID}/reviews", json={"rating": 2}, headers={"X-Username": "username"})
+
+    assert response.status_code == 201
+    listed = client.get(f"/courses/{COURSE_UUID}/reviews").json()
+    assert [r["username"] for r in listed] == ["username"]
+
+
+def test_review_unknown_reviewer_bad_request(client: TestClient) -> None:
+    response = client.post(f"/courses/{COURSE_UUID}/reviews", json={"rating": 3}, headers=student_auth("ghost"))
+
+    assert response.status_code == 400
+    assert response.json() == {"errors": ["Reviewer cannot be found by username = ghost"]}
+    assert client.get(f"/courses/{COURSE_UUID}/reviews").json() == []
+
+
+def test_review_non_bearer_authorization_unauthorized(client: TestClient) -> None:
+    response = client.post(
+        f"/courses/{COURSE_UUID}/reviews", json={"rating": 3}, headers={"Authorization": "Basic dXNlcjpwYXNz"}
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"errors": ["Not authenticated"]}
+
+
+@pytest.mark.parametrize("rating", [0, 5])
+def test_review_boundary_rating_created_and_listed(client: TestClient, rating: float) -> None:
+    review_uuid = create_review(client, {"rating": rating, "comment": "edge"})
+
+    listed = client.get(f"/courses/{COURSE_UUID}/reviews").json()
+    assert listed == [
+        {
+            "uuid": str(review_uuid),
+            "course": str(COURSE_UUID),
+            "username": "username",
+            "comment": "edge",
+            "rating": rating,
+        }
+    ]
+
+
+def test_review_negative_rating_bad_request_with_field_error(client: TestClient) -> None:
+    response = client.post(f"/courses/{COURSE_UUID}/reviews", json={"rating": -0.5}, headers=student_auth())
+
+    assert response.status_code == 400
+    errors = response.json()["errors"]
+    assert len(errors) == 1
+    assert errors[0].startswith("rating: ")
+
+
+def test_review_malformed_course_uuid_bad_request(client: TestClient) -> None:
+    response = client.post("/courses/not-a-uuid/reviews", json={"rating": 3}, headers=student_auth())
+
+    assert response.status_code == 400
+    assert response.json()["errors"][0].startswith("path.uuid: ")
+
+
+def test_reviews_unknown_course_empty_list(client: TestClient) -> None:
+    unknown = UUID("123e4567-e89b-12d3-a456-426655440099")
+
+    response = client.get(f"/courses/{unknown}/reviews")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_reviews_multiple_reviews_listed_in_insertion_order(client: TestClient) -> None:
+    first = create_review(client, {"rating": 1.0})
+    second = create_review(client, {"rating": 5.0, "comment": "second"}, username="another-user")
+
+    listed = client.get(f"/courses/{COURSE_UUID}/reviews").json()
+
+    assert [(r["uuid"], r["username"], r["rating"], r["comment"]) for r in listed] == [
+        (str(first), "username", 1.0, None),
+        (str(second), "another-user", 5.0, "second"),
+    ]
+
+
+def test_update_unauthenticated_unauthorized(client: TestClient) -> None:
+    review_uuid = create_review(client, {"rating": 3.2})
+
+    response = client.put(f"/courses/{COURSE_UUID}/reviews/{review_uuid}", json={"rating": 1.0})
+
+    assert response.status_code == 401
+    assert client.get(f"/courses/{COURSE_UUID}/reviews").json()[0]["rating"] == 3.2
+
+
+def test_update_invalid_rating_bad_request_and_review_unchanged(
+    client: TestClient, published: list[CourseRatingRecalculatedIntegrationEvent]
+) -> None:
+    review_uuid = create_review(client, {"rating": 3.2, "comment": "original"})
+
+    response = client.put(f"/courses/{COURSE_UUID}/reviews/{review_uuid}", json={"rating": 5.5}, headers=student_auth())
+
+    assert response.status_code == 400
+    assert response.json()["errors"]
+    listed = client.get(f"/courses/{COURSE_UUID}/reviews").json()
+    assert listed[0]["rating"] == 3.2
+    assert listed[0]["comment"] == "original"
+    assert published == []
+
+
+def test_update_missing_rating_bad_request(client: TestClient) -> None:
+    review_uuid = create_review(client, {"rating": 3.2})
+
+    response = client.put(
+        f"/courses/{COURSE_UUID}/reviews/{review_uuid}", json={"comment": "only"}, headers=student_auth()
+    )
+
+    assert response.status_code == 400
+
+
+def test_update_comment_cleared_when_omitted(
+    client: TestClient, published: list[CourseRatingRecalculatedIntegrationEvent]
+) -> None:
+    review_uuid = create_review(client, {"rating": 3.0, "comment": "to be cleared"})
+
+    response = client.put(f"/courses/{COURSE_UUID}/reviews/{review_uuid}", json={"rating": 2.0}, headers=student_auth())
+
+    assert response.status_code == 204
+    listed = client.get(f"/courses/{COURSE_UUID}/reviews").json()
+    assert listed[0]["comment"] is None
+    assert listed[0]["rating"] == 2.0
+    assert published == [CourseRatingRecalculatedIntegrationEvent(course_id=COURSE_UUID, rating=2.0)]
+
+
+def test_update_event_rating_is_average_over_all_course_reviews(
+    client: TestClient, published: list[CourseRatingRecalculatedIntegrationEvent]
+) -> None:
+    own = create_review(client, {"rating": 1.0})
+    create_review(client, {"rating": 5.0}, username="another-user")
+
+    response = client.put(f"/courses/{COURSE_UUID}/reviews/{own}", json={"rating": 3.0}, headers=student_auth())
+
+    assert response.status_code == 204
+    assert published == [CourseRatingRecalculatedIntegrationEvent(course_id=COURSE_UUID, rating=4.0)]
+
+
+def test_update_x_username_header_authenticates_owner(client: TestClient) -> None:
+    review_uuid = create_review(client, {"rating": 3.2})
+
+    response = client.put(
+        f"/courses/{COURSE_UUID}/reviews/{review_uuid}", json={"rating": 4.0}, headers={"X-Username": "username"}
+    )
+
+    assert response.status_code == 204
