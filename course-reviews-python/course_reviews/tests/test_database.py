@@ -13,6 +13,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import String, create_engine, inspect, select
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -58,6 +59,20 @@ def test_build_engine_in_memory_sqlite_shares_schema_across_connections() -> Non
     # when / then: a second connection sees tables created through the first one
     with engine.connect() as connection:
         assert set(inspect(connection).get_table_names()) >= {"course_review", "reviewable_course", "reviewer"}
+    engine.dispose()
+
+
+@pytest.mark.parametrize("url", ["sqlite://", "sqlite:///{tmp}/reviews.db"])
+def test_build_engine_sqlite_enforces_foreign_keys(url: str, tmp_path: Path) -> None:
+    # given
+    engine = build_engine(url.format(tmp=tmp_path))
+    metadata.create_all(engine)
+
+    # when / then: a review pointing at non-existent projections is rejected on flush
+    with Session(engine) as session:
+        session.add(CourseReview.create(course=999, reviewer=999, rating=3.0, comment=None))
+        with pytest.raises(IntegrityError, match="FOREIGN KEY constraint failed"):
+            session.flush()
     engine.dispose()
 
 
