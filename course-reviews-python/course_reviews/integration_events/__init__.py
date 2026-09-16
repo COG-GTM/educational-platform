@@ -1,0 +1,3 @@
+from course_reviews.integration_events.events import CourseRatingRecalculatedIntegrationEvent
+
+__all__ = ["CourseRatingRecalculatedIntegrationEvent"]
