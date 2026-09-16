@@ -38,6 +38,13 @@ def test_validate_expiredToken_invalidJwtTokenException() -> None:
         JwtTokenProvider("secret-key").validate_token(_java_style_token("secret-key", exp_offset=-10))
 
 
+def test_validate_tokenWithoutExp_invalidJwtTokenException() -> None:
+    token = jwt.encode({"sub": "teacher", "auth": []}, java_signing_key("secret-key"), algorithm="HS256")
+
+    with pytest.raises(InvalidJwtTokenException):
+        JwtTokenProvider("secret-key").validate_token(token)
+
+
 def test_validate_wrongSecret_invalidJwtTokenException() -> None:
     with pytest.raises(InvalidJwtTokenException):
         JwtTokenProvider("secret-key").validate_token(_java_style_token("other"))

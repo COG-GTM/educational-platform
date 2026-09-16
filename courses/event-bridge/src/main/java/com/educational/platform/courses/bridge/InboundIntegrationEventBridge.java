@@ -1,8 +1,7 @@
 package com.educational.platform.courses.bridge;
 
 import com.educational.platform.courses.integration.event.SendCourseToApproveIntegrationEvent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -13,8 +12,6 @@ import org.springframework.context.ApplicationEventPublisher;
  */
 public class InboundIntegrationEventBridge {
 
-    private static final Logger log = LoggerFactory.getLogger(InboundIntegrationEventBridge.class);
-
     private final ApplicationEventPublisher eventPublisher;
 
     public InboundIntegrationEventBridge(ApplicationEventPublisher eventPublisher) {
@@ -23,8 +20,8 @@ public class InboundIntegrationEventBridge {
 
     @RabbitListener(queues = IntegrationEventTopics.MONOLITH_SEND_COURSE_TO_APPROVE_QUEUE)
     public void onSendCourseToApprove(String json) {
-        IntegrationEventJson.readCourseId(json).ifPresentOrElse(
-                courseId -> eventPublisher.publishEvent(new SendCourseToApproveIntegrationEvent(courseId)),
-                () -> log.warn("Ignoring {} message without courseId: {}", IntegrationEventTopics.SEND_COURSE_TO_APPROVE, json));
+        var courseId = IntegrationEventJson.readCourseId(json).orElseThrow(() -> new AmqpRejectAndDontRequeueException(
+                IntegrationEventTopics.SEND_COURSE_TO_APPROVE + " message without courseId: " + json));
+        eventPublisher.publishEvent(new SendCourseToApproveIntegrationEvent(courseId));
     }
 }

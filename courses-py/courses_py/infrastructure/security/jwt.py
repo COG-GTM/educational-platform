@@ -13,6 +13,7 @@ Compatibility notes (taken from ``users/application/.../security/JwtTokenProvide
 from __future__ import annotations
 
 import base64
+import time
 from collections.abc import Iterable
 
 import jwt
@@ -53,7 +54,7 @@ class JwtTokenProvider:
 
     def validate_token(self, token: str) -> Principal:
         try:
-            claims = jwt.decode(token, self._key, algorithms=[ALGORITHM], options={"require": ["sub"]})
+            claims = jwt.decode(token, self._key, algorithms=[ALGORITHM], options={"require": ["sub", "exp"]})
         except jwt.PyJWTError as e:
             raise InvalidJwtTokenException() from e
         username = claims["sub"]
@@ -63,8 +64,6 @@ class JwtTokenProvider:
 
     def create_token(self, username: str, roles: Iterable[str]) -> str:
         """Test helper mirroring ``JwtTokenProvider.createToken`` (same claim layout Java produces)."""
-        import time
-
         now = int(time.time())
         payload = {
             "sub": username,
