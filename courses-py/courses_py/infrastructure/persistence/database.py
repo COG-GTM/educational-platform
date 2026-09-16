@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
 from sqlalchemy import Engine, create_engine
@@ -27,12 +27,16 @@ def build_session_factory(engine: Engine) -> sessionmaker[Session]:
 
 
 @contextmanager
-def transactional(session_factory: sessionmaker[Session]) -> Iterator[Session]:
-    """One session per unit of work: commit on success, rollback on error."""
+def transactional(
+    session_factory: sessionmaker[Session], after_commit: Callable[[Session], None] | None = None
+) -> Iterator[Session]:
+    """One session per unit of work: commit on success, rollback on error; ``after_commit`` runs only after a commit."""
     session = session_factory()
     try:
         yield session
         session.commit()
+        if after_commit is not None:
+            after_commit(session)
     except Exception:
         session.rollback()
         raise

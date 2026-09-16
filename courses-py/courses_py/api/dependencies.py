@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from functools import partial
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -17,7 +18,7 @@ from courses_py.application.course.query import CourseByUUIDQueryHandler, ListCo
 from courses_py.application.exceptions import AccessDeniedException
 from courses_py.application.security import Principal, StaticCurrentUser
 from courses_py.infrastructure.messaging.broker import MessageBroker
-from courses_py.infrastructure.messaging.publisher import BrokerIntegrationEventPublisher
+from courses_py.infrastructure.messaging.publisher import AfterCommitIntegrationEventPublisher, publish_pending_events
 from courses_py.infrastructure.persistence.database import transactional
 from courses_py.infrastructure.persistence.repositories import SqlAlchemyCourseRepository, SqlAlchemyTeacherRepository
 from courses_py.infrastructure.security.jwt import JwtTokenProvider
@@ -41,8 +42,11 @@ Context = Annotated[AppContext, Depends(get_context)]
 
 
 def get_session(context: Context) -> Iterator[Session]:
-    """``@Transactional`` per request: commit on success, rollback when the handler raises."""
-    with transactional(context.session_factory) as session:
+    """``@Transactional`` per request: commit on success, rollback when the handler raises.
+
+    Integration events raised by the handler are buffered on the session and published only after the commit.
+    """
+    with transactional(context.session_factory, partial(publish_pending_events, broker=context.broker)) as session:
         yield session
 
 
@@ -76,12 +80,12 @@ def publish_course_handler(session: DbSession, principal: CurrentPrincipal) -> P
 
 
 def send_course_to_approve_handler(
-    session: DbSession, principal: CurrentPrincipal, context: Context
+    session: DbSession, principal: CurrentPrincipal
 ) -> SendCourseToApproveCommandHandler:
     repository = SqlAlchemyCourseRepository(session)
     return SendCourseToApproveCommandHandler(
         repository,
-        BrokerIntegrationEventPublisher(context.broker),
+        AfterCommitIntegrationEventPublisher(session),
         CourseTeacherChecker(repository),
         StaticCurrentUser(principal),
     )

@@ -102,6 +102,13 @@ payload keys are shared between the two sides and must stay in sync:
   `MessageBroker` (`broker.py`) has an `InMemoryMessageBroker` (default; API process dispatches synchronously, used
   by tests) and a `RabbitMQMessageBroker` (`rabbitmq.py`, one durable queue `courses-py.<routing key>` per event,
   manual acks). The consumer process is `courses-py-consumer`.
+* Delivery semantics (same as the Java side, whose in-JVM events are fire-and-forget `@Async` listeners): at-least-once.
+  Outbound events are buffered on the request's SQLAlchemy session and published only after the transaction commits
+  (`AfterCommitIntegrationEventPublisher`), so a rolled-back request publishes nothing. Inbound messages that are
+  malformed or fail validation are rejected without requeue; messages whose handler fails for another reason (e.g.
+  database outage) are requeued once and rejected on the second failure. Queues have no dead-letter exchange and
+  handlers are not idempotent (a crash between commit and ack redelivers the event); add a processed-event table /
+  dead-letter queue before relying on the broker for production traffic — see the cutover checklist.
 * Java: sub-project `courses/event-bridge` (`courses-event-bridge`, package `com.educational.platform.courses.bridge`),
   wired into `configuration`. `OutboundIntegrationEventBridge` listens to the four in-JVM events and forwards them to
   the exchange; `InboundIntegrationEventBridge` consumes `courses.send-course-to-approve` from queue
@@ -133,7 +140,9 @@ event would be applied twice to the shared tables (e.g. `number_of_students` dou
 token maps to 400 `Expired or invalid JWT token` like the Java `JwtTokenFilter`, a missing token to 403 `Access Denied`.
 
 Differences from Java worth knowing: the Java filter reloads authorities from the users table on every request,
-whereas `courses-py` trusts the signed `auth` claim (it does not own the users table). Role and ownership rules are
+whereas `courses-py` trusts the signed `auth` claim (it does not own the users table), so a revoked role stays valid
+until the token expires (1 h by default in Java). The `secret-key` default exists only for parity with the Java
+default and local development; always set `COURSES_JWT_SECRET_KEY` in any shared environment. Role and ownership rules are
 enforced in the application layer (`require_role`, `CourseTeacherChecker.check_access` backed by
 `CourseRepository.is_teacher`), mirroring `@PreAuthorize("hasRole('TEACHER') and @courseTeacherChecker.hasAccess(...)")`.
 
@@ -146,6 +155,8 @@ Parity gates:
 - [ ] Contract tests for `POST /courses` and `PUT /courses/{uuid}/publish-status` pass against both implementations
       (status codes, error bodies, DB rows).
 - [ ] Event flow verified end to end with the bridge enabled (steps 2–3 above), no double processing.
+- [ ] Idempotent consumers (event id + processed-events table in the same transaction) and a dead-letter exchange on
+      the `courses-py.*` / `java-monolith.*` queues, before the broker carries production traffic.
 - [ ] Ingress/gateway routes `/courses/**` to `courses-py`; Java `courses-web` receives no traffic.
 
 Cutover (Java side):

@@ -53,6 +53,23 @@ def test_create_withCurriculumItems_createdAndReadable(
     assert course["curriculumItems"][1]["questions"] == [{"content": "why?"}]
 
 
+def test_create_curriculumItemWithoutSerialNumber_badRequest(
+    client: TestClient, teacher_token: str, insert_data: UUID, session_factory: sessionmaker[Session]
+) -> None:
+    body = {
+        "name": "name",
+        "description": "description",
+        "curriculumItems": [{"type": "Lecture", "title": "l", "description": "d", "text": "hello"}],
+    }
+
+    response = client.post("/courses", json=body, headers=_auth(teacher_token))
+
+    assert response.status_code == 400
+    assert response.json() == {"errors": ["Field required"]}
+    with session_factory() as session:
+        assert count(session, "course") == 1
+
+
 def test_create_blankName_badRequest(client: TestClient, teacher_token: str, insert_data: UUID) -> None:
     response = client.post("/courses", json={"name": " ", "description": "description"}, headers=_auth(teacher_token))
 

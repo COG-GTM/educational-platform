@@ -27,7 +27,7 @@ class CreateLectureCommand(BaseModel):
     type: Literal["Lecture"] = "Lecture"
     title: str
     description: str
-    serial_number: int | None = None
+    serial_number: int
     text: str | None = None
 
 
@@ -37,7 +37,7 @@ class CreateQuizCommand(BaseModel):
     type: Literal["Quiz"] = "Quiz"
     title: str
     description: str
-    serial_number: int | None = None
+    serial_number: int
     text: str | None = None
     questions: list[CreateQuestionCommand] = Field(default_factory=list)
 
