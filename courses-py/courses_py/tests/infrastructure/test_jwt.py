@@ -57,9 +57,91 @@ def test_validate_noneAlgorithm_rejected() -> None:
         JwtTokenProvider("secret-key").validate_token(token)
 
 
+def test_validate_otherHmacAlgorithm_rejected() -> None:
+    token = jwt.encode({"sub": "teacher"}, java_signing_key("secret-key"), algorithm="HS512")
+
+    with pytest.raises(InvalidJwtTokenException):
+        JwtTokenProvider("secret-key").validate_token(token)
+
+
+def test_validate_missingSubject_invalidJwtTokenException() -> None:
+    token = jwt.encode({"auth": [{"authority": "ROLE_TEACHER"}]}, java_signing_key("secret-key"), algorithm="HS256")
+
+    with pytest.raises(InvalidJwtTokenException):
+        JwtTokenProvider("secret-key").validate_token(token)
+
+
+@pytest.mark.parametrize("sub", [42, None, ["teacher"], {"name": "teacher"}])
+def test_validate_nonStringSubject_invalidJwtTokenException(sub: object) -> None:
+    token = jwt.encode({"sub": sub}, java_signing_key("secret-key"), algorithm="HS256")
+
+    with pytest.raises(InvalidJwtTokenException):
+        JwtTokenProvider("secret-key").validate_token(token)
+
+
+@pytest.mark.parametrize(
+    "auth",
+    [
+        None,
+        [],
+        "ROLE_TEACHER",
+        {"authority": "ROLE_TEACHER"},
+        [{"role": "ROLE_TEACHER"}, {"authority": 1}, 7, None],
+    ],
+)
+def test_validate_missingOrMalformedAuthClaim_principalWithoutAuthorities(auth: object) -> None:
+    claims: dict[str, object] = {"sub": "teacher"}
+    if auth is not None:
+        claims["auth"] = auth
+    token = jwt.encode(claims, java_signing_key("secret-key"), algorithm="HS256")
+
+    principal = JwtTokenProvider("secret-key").validate_token(token)
+
+    assert principal.username == "teacher"
+    assert principal.authorities == frozenset()
+    assert not principal.has_role("TEACHER")
+
+
+def test_validate_mixedAuthClaimEntries_onlyValidAuthoritiesKept() -> None:
+    claims = {"sub": "teacher", "auth": ["ROLE_ADMIN", {"authority": "ROLE_TEACHER"}, {"authority": 1}, 7]}
+    token = jwt.encode(claims, java_signing_key("secret-key"), algorithm="HS256")
+
+    principal = JwtTokenProvider("secret-key").validate_token(token)
+
+    assert principal.authorities == frozenset({"ROLE_ADMIN", "ROLE_TEACHER"})
+
+
+def test_validate_tokenWithoutExpiry_accepted() -> None:
+    token = jwt.encode({"sub": "teacher"}, java_signing_key("secret-key"), algorithm="HS256")
+
+    assert JwtTokenProvider("secret-key").validate_token(token).username == "teacher"
+
+
 def test_createToken_roundTrip() -> None:
     provider = JwtTokenProvider("secret-key")
 
     principal = provider.validate_token(provider.create_token("teacher", ["TEACHER", "ROLE_ADMIN"]))
 
     assert principal.authorities == frozenset({"ROLE_TEACHER", "ROLE_ADMIN"})
+
+
+def test_createToken_javaClaimLayoutAndValidity() -> None:
+    provider = JwtTokenProvider("secret-key", validity_ms=120_000)
+    before = int(time.time())
+
+    claims = jwt.decode(
+        provider.create_token("teacher", ["TEACHER"]), java_signing_key("secret-key"), algorithms=["HS256"]
+    )
+
+    assert claims["sub"] == "teacher"
+    assert claims["auth"] == [{"authority": "ROLE_TEACHER"}]
+    assert before <= claims["iat"] <= before + 5
+    assert claims["exp"] - claims["iat"] == 120
+
+
+def test_createToken_noRoles_emptyAuthorities() -> None:
+    provider = JwtTokenProvider("secret-key")
+
+    principal = provider.validate_token(provider.create_token("teacher", []))
+
+    assert principal.authorities == frozenset()
