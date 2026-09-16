@@ -1,16 +1,22 @@
-"""``InMemoryMessageBroker``, ``build_broker`` and ``BrokerIntegrationEventPublisher``."""
+"""``InMemoryMessageBroker``, ``build_broker`` and the ``IntegrationEventPublisher`` adapters."""
 
 from __future__ import annotations
 
 from uuid import UUID
 
 import pytest
+from sqlalchemy.orm import Session, sessionmaker
 
 from courses_py.config import Settings
 from courses_py.infrastructure.messaging import topics
 from courses_py.infrastructure.messaging.broker import InMemoryMessageBroker, Payload
 from courses_py.infrastructure.messaging.factory import build_broker
-from courses_py.infrastructure.messaging.publisher import BrokerIntegrationEventPublisher
+from courses_py.infrastructure.messaging.publisher import (
+    PENDING_EVENTS_KEY,
+    AfterCommitIntegrationEventPublisher,
+    BrokerIntegrationEventPublisher,
+    publish_pending_events,
+)
 from courses_py.infrastructure.messaging.rabbitmq import RabbitMQMessageBroker
 from courses_py.integration_events.events import (
     CourseRatingRecalculatedIntegrationEvent,
@@ -112,3 +118,70 @@ class TestBrokerIntegrationEventPublisher:
             BrokerIntegrationEventPublisher(broker).publish(event)
 
         assert broker.published == []
+
+
+class TestAfterCommitIntegrationEventPublisher:
+    def test_publish_bufferedOnSessionInOrder_nothingSentUntilFlushed(
+        self, session_factory: sessionmaker[Session]
+    ) -> None:
+        broker = InMemoryMessageBroker()
+        first = SendCourseToApproveIntegrationEvent(course_id=COURSE_ID)
+        second = CourseRatingRecalculatedIntegrationEvent(course_id=COURSE_ID, rating=1.0)
+
+        with session_factory() as session:
+            sut = AfterCommitIntegrationEventPublisher(session)
+            sut.publish(first)
+            sut.publish(second)
+
+            assert session.info[PENDING_EVENTS_KEY] == [first, second]
+            assert broker.published == []
+
+            publish_pending_events(session, broker)
+
+        assert broker.published == [
+            (topics.SEND_COURSE_TO_APPROVE, {"courseId": str(COURSE_ID)}),
+            (topics.COURSE_RATING_RECALCULATED, {"courseId": str(COURSE_ID), "rating": 1.0}),
+        ]
+
+    def test_publishPendingEvents_drainsBuffer_secondFlushSendsNothing(
+        self, session_factory: sessionmaker[Session]
+    ) -> None:
+        broker = InMemoryMessageBroker()
+
+        with session_factory() as session:
+            AfterCommitIntegrationEventPublisher(session).publish(
+                SendCourseToApproveIntegrationEvent(course_id=COURSE_ID)
+            )
+            publish_pending_events(session, broker)
+            publish_pending_events(session, broker)
+
+            assert PENDING_EVENTS_KEY not in session.info
+        assert len(broker.published) == 1
+
+    def test_publishPendingEvents_nothingPending_noop(self, session_factory: sessionmaker[Session]) -> None:
+        broker = InMemoryMessageBroker()
+
+        with session_factory() as session:
+            publish_pending_events(session, broker)
+
+        assert broker.published == []
+
+    def test_publish_notAnIntegrationEvent_typeErrorAndNothingBuffered(
+        self, session_factory: sessionmaker[Session]
+    ) -> None:
+        with session_factory() as session:
+            with pytest.raises(TypeError, match="is not an IntegrationEvent"):
+                AfterCommitIntegrationEventPublisher(session).publish({"courseId": str(COURSE_ID)})
+
+            assert session.info.get(PENDING_EVENTS_KEY, []) == []
+
+    def test_publish_separateSessions_independentBuffers(self, session_factory: sessionmaker[Session]) -> None:
+        broker = InMemoryMessageBroker()
+
+        with session_factory() as one, session_factory() as other:
+            AfterCommitIntegrationEventPublisher(one).publish(SendCourseToApproveIntegrationEvent(course_id=COURSE_ID))
+            publish_pending_events(other, broker)
+            assert broker.published == []
+
+            publish_pending_events(one, broker)
+        assert len(broker.published) == 1

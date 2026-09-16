@@ -7,12 +7,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -63,12 +66,26 @@ class InboundIntegrationEventBridgeTest {
             "{\"courseId\":\"123e4567-e89b-12d3-a456-42665544000\"}",
             "{\"course_id\":\"123e4567-e89b-12d3-a456-426655440001\"}"
     })
-    void onSendCourseToApprove_payloadWithoutValidCourseId_ignored(String json) {
+    void onSendCourseToApprove_payloadWithoutValidCourseId_rejectedWithoutRequeue(String json) {
         var bridge = new InboundIntegrationEventBridge(eventPublisher);
 
-        bridge.onSendCourseToApprove(json);
+        assertThatThrownBy(() -> bridge.onSendCourseToApprove(json))
+                .isInstanceOf(AmqpRejectAndDontRequeueException.class)
+                .hasMessageContaining("courses.send-course-to-approve message without courseId")
+                .hasMessageContaining(json);
 
         verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void onSendCourseToApprove_publisherFails_exceptionPropagatesForBrokerRetry() {
+        var bridge = new InboundIntegrationEventBridge(eventPublisher);
+        var event = new SendCourseToApproveIntegrationEvent(COURSE_ID);
+        doThrow(new IllegalStateException("context closed")).when(eventPublisher).publishEvent(event);
+
+        assertThatThrownBy(() -> bridge.onSendCourseToApprove("{\"courseId\":\"123e4567-e89b-12d3-a456-426655440001\"}"))
+                .isInstanceOf(IllegalStateException.class)
+                .isNotInstanceOf(AmqpRejectAndDontRequeueException.class);
     }
 
     @Test

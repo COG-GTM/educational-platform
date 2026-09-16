@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import BaseModel, ValidationError
 
 from courses_py.application.course.create import CreateCourseCommand, CreateLectureCommand, CreateQuizCommand
 from courses_py.application.teacher.create import CreateTeacherCommand
@@ -132,15 +133,21 @@ def test_create_withCurriculumItems_createdCourse() -> None:
     assert isinstance(quiz, Quiz) and [q.content for q in quiz.questions] == ["q"]
 
 
-def test_createCurriculumItem_lectureWithoutTextAndSerial_noneContent() -> None:
+def test_createCurriculumItem_lectureWithoutText_noneContent() -> None:
     course = _course()
 
-    lecture = create_curriculum_item(CreateLectureCommand(title="t", description="d"), course)
+    lecture = create_curriculum_item(CreateLectureCommand(title="t", description="d", serial_number=1), course)
 
     assert isinstance(lecture, Lecture)
-    assert lecture.content is None and lecture.serial_number is None
+    assert lecture.content is None and lecture.serial_number == 1
     assert lecture.title == "t" and lecture.description == "d"
     assert lecture.course is course and lecture.id is None and lecture.uuid is not None
+
+
+@pytest.mark.parametrize("command_type", [CreateLectureCommand, CreateQuizCommand])
+def test_createCurriculumItemCommand_serialNumberRequired(command_type: type[BaseModel]) -> None:
+    with pytest.raises(ValidationError, match="serial_number"):
+        command_type.model_validate({"title": "t", "description": "d"})
 
 
 def test_createCurriculumItem_quizWithoutQuestions_emptyQuestions() -> None:
@@ -152,7 +159,7 @@ def test_createCurriculumItem_quizWithoutQuestions_emptyQuestions() -> None:
 
 def test_createCurriculumItem_quizQuestionsLinkedBackToQuiz() -> None:
     command = CreateQuizCommand.model_validate(
-        {"title": "t", "description": "d", "questions": [{"content": "a"}, {"content": "b"}]}
+        {"title": "t", "description": "d", "serial_number": 2, "questions": [{"content": "a"}, {"content": "b"}]}
     )
 
     quiz = create_curriculum_item(command, _course())
@@ -163,7 +170,7 @@ def test_createCurriculumItem_quizQuestionsLinkedBackToQuiz() -> None:
 
 
 def test_createCurriculumItem_unsupportedType_typeError() -> None:
-    command = CreateLectureCommand.model_construct(type="Video", title="t", description="d")
+    command = CreateLectureCommand.model_construct(type="Video", title="t", description="d", serial_number=1)
 
     with pytest.raises(TypeError, match="Unsupported curriculum item type: 'Video'"):
         create_curriculum_item(command, _course())

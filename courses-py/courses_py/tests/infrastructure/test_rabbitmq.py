@@ -13,7 +13,12 @@ from pika.spec import Basic, BasicProperties
 
 from courses_py.infrastructure.messaging import rabbitmq, topics
 from courses_py.infrastructure.messaging.broker import Payload
-from courses_py.infrastructure.messaging.rabbitmq import RabbitMQMessageBroker
+from courses_py.infrastructure.messaging.rabbitmq import (
+    MAX_BODY_BYTES,
+    InvalidMessageError,
+    RabbitMQMessageBroker,
+    decode_payload,
+)
 
 URL = "amqp://guest:guest@rabbit.local:5672/%2F"
 
@@ -22,6 +27,45 @@ URL = "amqp://guest:guest@rabbit.local:5672/%2F"
 def enable_module_logger() -> None:
     # alembic's fileConfig() (test_migrations) disables loggers that already exist when it runs
     logging.getLogger(rabbitmq.__name__).disabled = False
+
+
+class TestDecodePayload:
+    def test_jsonObject_dict(self) -> None:
+        assert decode_payload(b'{"courseId": "x", "rating": 4.5, "email": null}') == {
+            "courseId": "x",
+            "rating": 4.5,
+            "email": None,
+        }
+
+    def test_emptyObject_emptyDict(self) -> None:
+        assert decode_payload(b"{}") == {}
+
+    def test_bodyAtSizeLimit_accepted(self) -> None:
+        body = b'{"k": "' + b"a" * (MAX_BODY_BYTES - len(b'{"k": ""}')) + b'"}'
+        assert len(body) == MAX_BODY_BYTES
+
+        assert decode_payload(body) == {"k": "a" * (MAX_BODY_BYTES - 9)}
+
+    def test_bodyOverSizeLimit_rejectedBeforeParsing(self) -> None:
+        body = b"{" + b" " * MAX_BODY_BYTES + b"}"
+
+        with pytest.raises(InvalidMessageError, match=f"exceeds {MAX_BODY_BYTES}"):
+            decode_payload(body)
+
+    @pytest.mark.parametrize("body", [b"", b"not json", b"{", b"\xff\xfe"])
+    def test_notJson_invalidMessageError(self, body: bytes) -> None:
+        with pytest.raises(InvalidMessageError, match="not valid JSON"):
+            decode_payload(body)
+
+    @pytest.mark.parametrize(
+        ("body", "type_name"), [(b"[1]", "list"), (b'"s"', "str"), (b"1", "int"), (b"null", "NoneType")]
+    )
+    def test_jsonButNotObject_invalidMessageError(self, body: bytes, type_name: str) -> None:
+        with pytest.raises(InvalidMessageError, match=f"expected a JSON object, got {type_name}"):
+            decode_payload(body)
+
+    def test_invalidMessageError_isValueError(self) -> None:
+        assert issubclass(InvalidMessageError, ValueError)
 
 
 class FakeChannel:
@@ -68,8 +112,9 @@ class FakeChannel:
     def stop_consuming(self) -> None:
         self.consuming_stopped += 1
 
-    def deliver(self, queue: str, body: bytes, delivery_tag: int = 1) -> None:
-        self.consumers[queue](self, Basic.Deliver(delivery_tag=delivery_tag), BasicProperties(), body)
+    def deliver(self, queue: str, body: bytes, delivery_tag: int = 1, redelivered: bool = False) -> None:
+        method = Basic.Deliver(delivery_tag=delivery_tag, redelivered=redelivered)
+        self.consumers[queue](self, method, BasicProperties(), body)
 
 
 class FakeConnection:
@@ -194,7 +239,7 @@ def test_onMessage_validJson_handlerCalledAndAcked(sut: RabbitMQMessageBroker, f
     assert factory.channel.nacked == []
 
 
-def test_onMessage_handlerRaises_nackedWithoutRequeue(
+def test_onMessage_handlerRaises_firstDeliveryRequeued(
     sut: RabbitMQMessageBroker, factory: FakeConnectionFactory, caplog: pytest.LogCaptureFixture
 ) -> None:
     def failing(payload: Payload) -> None:
@@ -205,9 +250,39 @@ def test_onMessage_handlerRaises_nackedWithoutRequeue(
     with caplog.at_level("ERROR"):
         factory.channel.deliver("courses-py." + topics.USER_CREATED, b'{"username": "u"}', delivery_tag=3)
 
-    assert factory.channel.nacked == [(3, False)]
+    assert factory.channel.nacked == [(3, True)]
     assert factory.channel.acked == []
-    assert "Failed to handle message on users.user-created" in caplog.text
+    assert "Failed to handle message on users.user-created, requeueing once" in caplog.text
+
+
+def test_onMessage_handlerRaisesOnRedelivery_nackedWithoutRequeue(
+    sut: RabbitMQMessageBroker, factory: FakeConnectionFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    def failing(payload: Payload) -> None:
+        raise RuntimeError("boom")
+
+    sut.subscribe(topics.USER_CREATED, failing)
+
+    with caplog.at_level("ERROR"):
+        factory.channel.deliver("courses-py." + topics.USER_CREATED, b'{"username": "u"}', 3, redelivered=True)
+
+    assert factory.channel.nacked == [(3, False)]
+    assert "Failed to handle message on users.user-created, rejecting" in caplog.text
+
+
+def test_onMessage_handlerRaisesValueError_nackedWithoutRequeueEvenOnFirstDelivery(
+    sut: RabbitMQMessageBroker, factory: FakeConnectionFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    def rejecting(payload: Payload) -> None:
+        raise ValueError("bad event")
+
+    sut.subscribe(topics.USER_CREATED, rejecting)
+
+    with caplog.at_level("ERROR"):
+        factory.channel.deliver("courses-py." + topics.USER_CREATED, b'{"username": "u"}', delivery_tag=4)
+
+    assert factory.channel.nacked == [(4, False)]
+    assert "Invalid message on users.user-created, rejecting" in caplog.text
 
 
 @pytest.mark.parametrize("body", [b"not json", b"[1, 2]", b'"string"', b"42"])

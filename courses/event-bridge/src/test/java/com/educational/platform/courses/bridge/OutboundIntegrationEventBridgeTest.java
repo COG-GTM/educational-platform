@@ -13,6 +13,7 @@ import org.springframework.amqp.core.AmqpTemplate;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -124,13 +125,15 @@ class OutboundIntegrationEventBridgeTest {
     }
 
     @Test
-    void sendCourseToApprove_notBridgedOutbound() {
-        var listenedEventTypes = Arrays.stream(OutboundIntegrationEventBridge.class.getMethods())
+    void listeners_asyncAndOnlyTheFourCoursesInboundEvents() {
+        var listeners = Arrays.stream(OutboundIntegrationEventBridge.class.getMethods())
                 .filter(method -> method.isAnnotationPresent(EventListener.class))
-                .map(method -> method.getParameterTypes()[0])
                 .toList();
 
-        assertThat(listenedEventTypes).containsExactlyInAnyOrder(
+        assertThat(listeners).allSatisfy(method -> assertThat(method.isAnnotationPresent(Async.class))
+                .as("%s must be @Async so a broker outage does not fail the publishing request", method.getName())
+                .isTrue());
+        assertThat(listeners).map(method -> method.getParameterTypes()[0]).containsExactlyInAnyOrder(
                 CourseApprovedByAdminIntegrationEvent.class,
                 StudentEnrolledToCourseIntegrationEvent.class,
                 UserCreatedIntegrationEvent.class,

@@ -66,8 +66,8 @@ class FakeDeliver:
 
 def _deliver(handler: object, body: bytes, redelivered: bool = False) -> FakeChannel:
     channel = FakeChannel()
-    on_message = RabbitMQMessageBroker._on_message(topics.COURSE_APPROVED_BY_ADMIN, handler)  # type: ignore[arg-type]
-    on_message(channel, FakeDeliver(redelivered=redelivered), None, body)  # type: ignore[arg-type]
+    on_message = RabbitMQMessageBroker._on_message(topics.COURSE_APPROVED_BY_ADMIN, handler)
+    on_message(channel, FakeDeliver(redelivered=redelivered), None, body)
     return channel
 
 

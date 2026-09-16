@@ -90,7 +90,7 @@ def test_validate_nonStringSubject_invalidJwtTokenException(sub: object) -> None
     ],
 )
 def test_validate_missingOrMalformedAuthClaim_principalWithoutAuthorities(auth: object) -> None:
-    claims: dict[str, object] = {"sub": "teacher"}
+    claims: dict[str, object] = {"sub": "teacher", "exp": int(time.time()) + 3600}
     if auth is not None:
         claims["auth"] = auth
     token = jwt.encode(claims, java_signing_key("secret-key"), algorithm="HS256")
@@ -103,7 +103,11 @@ def test_validate_missingOrMalformedAuthClaim_principalWithoutAuthorities(auth: 
 
 
 def test_validate_mixedAuthClaimEntries_onlyValidAuthoritiesKept() -> None:
-    claims = {"sub": "teacher", "auth": ["ROLE_ADMIN", {"authority": "ROLE_TEACHER"}, {"authority": 1}, 7]}
+    claims = {
+        "sub": "teacher",
+        "exp": int(time.time()) + 3600,
+        "auth": ["ROLE_ADMIN", {"authority": "ROLE_TEACHER"}, {"authority": 1}, 7],
+    }
     token = jwt.encode(claims, java_signing_key("secret-key"), algorithm="HS256")
 
     principal = JwtTokenProvider("secret-key").validate_token(token)
@@ -111,10 +115,18 @@ def test_validate_mixedAuthClaimEntries_onlyValidAuthoritiesKept() -> None:
     assert principal.authorities == frozenset({"ROLE_ADMIN", "ROLE_TEACHER"})
 
 
-def test_validate_tokenWithoutExpiry_accepted() -> None:
-    token = jwt.encode({"sub": "teacher"}, java_signing_key("secret-key"), algorithm="HS256")
+def test_validate_tokenWithoutIssuedAt_accepted() -> None:
+    claims = {"sub": "teacher", "exp": int(time.time()) + 3600}
+    token = jwt.encode(claims, java_signing_key("secret-key"), algorithm="HS256")
 
     assert JwtTokenProvider("secret-key").validate_token(token).username == "teacher"
+
+
+def test_validate_nonNumericExp_invalidJwtTokenException() -> None:
+    token = jwt.encode({"sub": "teacher", "exp": "never"}, java_signing_key("secret-key"), algorithm="HS256")
+
+    with pytest.raises(InvalidJwtTokenException):
+        JwtTokenProvider("secret-key").validate_token(token)
 
 
 def test_createToken_roundTrip() -> None:
