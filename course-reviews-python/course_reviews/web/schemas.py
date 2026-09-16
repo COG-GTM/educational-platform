@@ -11,14 +11,14 @@ class ReviewCourseRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     rating: float = Field(ge=0, le=5)
-    comment: str | None = None
+    comment: str | None = Field(default=None, max_length=100)
 
 
 class UpdateCourseReviewRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     rating: float = Field(ge=0, le=5)
-    comment: str | None = None
+    comment: str | None = Field(default=None, max_length=100)
 
 
 class CourseReviewCreatedResponse(BaseModel):

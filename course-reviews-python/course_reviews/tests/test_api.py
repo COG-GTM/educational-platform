@@ -129,6 +129,35 @@ def test_review_invalid_rating_bad_request(client: TestClient) -> None:
     assert response.json()["errors"]
 
 
+def test_review_comment_too_long_bad_request(client: TestClient) -> None:
+    body = {"rating": 3.0, "comment": "x" * 101}
+    response = client.post(f"/courses/{COURSE_UUID}/reviews", json=body, headers=student_auth())
+
+    assert response.status_code == 400
+    assert response.json()["errors"] == ["comment: String should have at most 100 characters"]
+
+
+def test_update_comment_too_long_bad_request(client: TestClient) -> None:
+    review_uuid = create_review(client, {"rating": 3.2})
+
+    body = {"rating": 3.0, "comment": "x" * 101}
+    response = client.put(f"/courses/{COURSE_UUID}/reviews/{review_uuid}", json=body, headers=student_auth())
+
+    assert response.status_code == 400
+
+
+def test_openapi_documents_400_error_response_and_auth_schemes(client: TestClient) -> None:
+    schema = client.get("/openapi.json").json()
+
+    post = schema["paths"]["/courses/{uuid}/reviews"]["post"]
+    assert "422" not in post["responses"]
+    assert post["responses"]["400"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ErrorResponse"
+    }
+    assert "HTTPValidationError" not in schema["components"]["schemas"]
+    assert set(schema["components"]["securitySchemes"]) == {"BearerUsername", "XUsername"}
+
+
 def test_review_missing_rating_bad_request(client: TestClient) -> None:
     response = client.post(f"/courses/{COURSE_UUID}/reviews", json={"comment": "x"}, headers=student_auth())
 

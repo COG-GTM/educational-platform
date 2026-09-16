@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, status
+from fastapi.security import APIKeyHeader
 from sqlalchemy.orm import Session
 
 from course_reviews.application.checker import CourseReviewChecker
@@ -42,9 +43,17 @@ def get_validator() -> Validator:
     return validator
 
 
+# Declared as security schemes so Swagger UI's "Authorize" dialog sends them (plain header params
+# named ``Authorization`` are dropped by Swagger).
+authorization_header = APIKeyHeader(
+    name="Authorization", scheme_name="BearerUsername", description="Bearer <username>", auto_error=False
+)
+x_username_header = APIKeyHeader(name="X-Username", scheme_name="XUsername", auto_error=False)
+
+
 def get_current_username(
-    authorization: Annotated[str | None, Header()] = None,
-    x_username: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Depends(authorization_header)] = None,
+    x_username: Annotated[str | None, Depends(x_username_header)] = None,
 ) -> str:
     if authorization:
         scheme, _, token = authorization.partition(" ")

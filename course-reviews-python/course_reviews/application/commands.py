@@ -17,7 +17,7 @@ class ReviewCourseCommand(BaseModel):
 
     course_id: UUID
     rating: float = Field(ge=0, le=5)
-    comment: str | None = None
+    comment: str | None = Field(default=None, max_length=100)
 
 
 class UpdateCourseReviewCommand(BaseModel):
@@ -25,4 +25,4 @@ class UpdateCourseReviewCommand(BaseModel):
 
     uuid: UUID
     rating: float = Field(ge=0, le=5)
-    comment: str | None = None
+    comment: str | None = Field(default=None, max_length=100)

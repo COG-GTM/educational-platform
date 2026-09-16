@@ -65,7 +65,9 @@ alembic upgrade head
 uvicorn course_reviews.web.main:app --reload
 ```
 
-OpenAPI docs are served at `http://127.0.0.1:8000/docs`.
+OpenAPI docs are served at `http://127.0.0.1:8000/docs`. In Swagger UI use the **Authorize** button and enter
+either `Bearer <username>` (BearerUsername) or a bare username (XUsername); a value typed into an ordinary
+`Authorization` header parameter is dropped by Swagger.
 
 Example (the referenced course must exist in `reviewable_course`, and the user in `reviewer` — these are
 replicated from the Course and User contexts in the monolith):

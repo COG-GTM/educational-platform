@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
 from course_reviews.exceptions import (
@@ -21,11 +24,39 @@ def _error(status_code: int, errors: list[str]) -> JSONResponse:
     return JSONResponse(status_code=status_code, content=ErrorResponse(errors=errors).model_dump())
 
 
+def _document_400_instead_of_422(app: FastAPI) -> None:
+    """Validation failures are returned as 400 ``ErrorResponse`` bodies, not FastAPI's default 422."""
+
+    def custom_openapi() -> dict[str, Any]:
+        if app.openapi_schema:
+            return app.openapi_schema
+        schema = get_openapi(title=app.title, version=app.version, description=app.description, routes=app.routes)
+        schema.setdefault("components", {}).setdefault("schemas", {})["ErrorResponse"] = (
+            ErrorResponse.model_json_schema()
+        )
+        bad_request = {
+            "description": "Bad Request",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+        }
+        for path in schema["paths"].values():
+            for operation in path.values():
+                responses = operation.get("responses", {})
+                if responses.pop("422", None) is not None:
+                    responses["400"] = bad_request
+        schema["components"]["schemas"].pop("HTTPValidationError", None)
+        schema["components"]["schemas"].pop("ValidationError", None)
+        app.openapi_schema = schema
+        return schema
+
+    app.openapi = custom_openapi  # type: ignore[method-assign]
+
+
 def create_app() -> FastAPI:
     start_mappers()
 
     app = FastAPI(title="Course Reviews", description="Course Reviews API", version="0.0.1")
     app.include_router(router)
+    _document_400_instead_of_422(app)
 
     # Status mapping mirrors the platform's GlobalExceptionHandler.
     @app.exception_handler(RequestValidationError)
