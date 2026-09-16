@@ -38,6 +38,21 @@ def test_validate_rating_above_max_violation_names_field(sut: Validator) -> None
     assert violations[0].startswith("rating: ")
 
 
+@pytest.mark.parametrize("command_type", [ReviewCourseCommand, UpdateCourseReviewCommand])
+def test_validate_comment_too_long_violation_names_field(
+    sut: Validator, command_type: type[ReviewCourseCommand] | type[UpdateCourseReviewCommand]
+) -> None:
+    # given
+    identifier = {"course_id": uuid4()} if command_type is ReviewCourseCommand else {"uuid": uuid4()}
+    command = command_type.model_construct(**identifier, rating=3.0, comment="x" * 101)
+
+    # when
+    violations = sut.validate(command)
+
+    # then
+    assert violations == ["comment: String should have at most 100 characters"]
+
+
 def test_validate_multiple_invalid_fields_all_violations_reported(sut: Validator) -> None:
     # given
     command = ReviewCourseCommand.model_construct(course_id=None, rating=-1, comment=None)
@@ -73,6 +88,19 @@ def test_update_course_review_command_rating_within_bounds_accepted(rating: floa
 
     assert command.rating == rating
     assert command.comment is None
+
+
+@pytest.mark.parametrize("comment", ["", "x" * 100, None])
+def test_commands_comment_within_limit_accepted(comment: str | None) -> None:
+    assert ReviewCourseCommand(course_id=uuid4(), rating=1.0, comment=comment).comment == comment
+    assert UpdateCourseReviewCommand(uuid=uuid4(), rating=1.0, comment=comment).comment == comment
+
+
+def test_commands_comment_over_limit_rejected_at_construction() -> None:
+    with pytest.raises(ValidationError):
+        ReviewCourseCommand(course_id=uuid4(), rating=1.0, comment="x" * 101)
+    with pytest.raises(ValidationError):
+        UpdateCourseReviewCommand(uuid=uuid4(), rating=1.0, comment="x" * 101)
 
 
 def test_commands_are_immutable() -> None:

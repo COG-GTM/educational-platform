@@ -398,3 +398,70 @@ def test_review_comment_at_column_limit_round_trips(client: TestClient) -> None:
 
     listed = client.get(f"/courses/{COURSE_UUID}/reviews").json()
     assert [(r["uuid"], r["comment"], r["rating"]) for r in listed] == [(str(review_uuid), comment, 3.0)]
+
+
+def test_update_comment_too_long_bad_request_names_field_and_review_unchanged(client: TestClient) -> None:
+    review_uuid = create_review(client, {"rating": 3.2, "comment": "before"})
+
+    response = client.put(
+        f"/courses/{COURSE_UUID}/reviews/{review_uuid}",
+        json={"rating": 1.0, "comment": "x" * 101},
+        headers=student_auth(),
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"errors": ["comment: String should have at most 100 characters"]}
+    listed = client.get(f"/courses/{COURSE_UUID}/reviews").json()
+    assert [(r["comment"], r["rating"]) for r in listed] == [("before", 3.2)]
+
+
+def test_review_non_bearer_authorization_falls_back_to_x_username(client: TestClient) -> None:
+    headers = {"Authorization": "Basic dXNlcjpwYXNz", "X-Username": "username"}
+
+    response = client.post(f"/courses/{COURSE_UUID}/reviews", json={"rating": 2}, headers=headers)
+
+    assert response.status_code == 201
+    assert [r["username"] for r in client.get(f"/courses/{COURSE_UUID}/reviews").json()] == ["username"]
+
+
+def test_openapi_every_operation_documents_400_and_drops_fastapi_validation_schemas(client: TestClient) -> None:
+    schema = client.get("/openapi.json").json()
+
+    bad_request = {
+        "description": "Bad Request",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}},
+    }
+    operations = [op for path in schema["paths"].values() for op in path.values()]
+    assert len(operations) == 3
+    for operation in operations:
+        assert "422" not in operation["responses"]
+        assert operation["responses"]["400"] == bad_request
+    assert schema["components"]["schemas"]["ErrorResponse"]["properties"]["errors"]["type"] == "array"
+    assert {"HTTPValidationError", "ValidationError"}.isdisjoint(schema["components"]["schemas"])
+
+
+def test_openapi_security_schemes_are_header_api_keys_required_only_on_write_operations(client: TestClient) -> None:
+    schema = client.get("/openapi.json").json()
+
+    assert schema["components"]["securitySchemes"]["BearerUsername"] == {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Bearer <username>",
+    }
+    assert schema["components"]["securitySchemes"]["XUsername"] == {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Username",
+    }
+    either_scheme: list[dict[str, list[str]]] = [{"BearerUsername": []}, {"XUsername": []}]
+    assert schema["paths"]["/courses/{uuid}/reviews"]["post"]["security"] == either_scheme
+    assert schema["paths"]["/courses/{courseUuid}/reviews/{reviewUuid}"]["put"]["security"] == either_scheme
+    assert "security" not in schema["paths"]["/courses/{uuid}/reviews"]["get"]
+
+
+def test_openapi_schema_is_generated_once_and_cached(client: TestClient) -> None:
+    first = app.openapi()
+
+    assert app.openapi() is first
+    assert client.get("/openapi.json").json() == first

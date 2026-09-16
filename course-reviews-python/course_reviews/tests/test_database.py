@@ -174,6 +174,22 @@ def test_alembic_migrated_schema_accepts_orm_writes(migrated_database_url: str) 
     engine.dispose()
 
 
+def test_alembic_upgrade_head_accepts_database_url_containing_percent_sign(tmp_path: Path) -> None:
+    # given: a literal '%' would be read as configparser interpolation unless env.py escapes it
+    database_file = tmp_path / "100%25done.db"
+    url = f"sqlite:///{database_file}"
+
+    # when
+    result = _alembic(url, "upgrade", "head")
+
+    # then
+    assert result.returncode == 0, result.stderr
+    assert database_file.exists()
+    engine = create_engine(url)
+    assert set(inspect(engine).get_table_names()) == set(metadata.tables) | {"alembic_version"}
+    engine.dispose()
+
+
 def test_alembic_downgrade_base_drops_all_tables(migrated_database_url: str) -> None:
     result = _alembic(migrated_database_url, "downgrade", "base")
     assert result.returncode == 0, result.stderr
