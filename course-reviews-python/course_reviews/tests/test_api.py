@@ -179,16 +179,22 @@ def test_review_unauthenticated_unauthorized(client: TestClient) -> None:
     assert response.json() == {"errors": ["Not authenticated"]}
 
 
-def test_update_another_reviewer_forbidden(client: TestClient) -> None:
-    review_uuid = create_review(client, {"rating": 3.2})
+def test_update_another_reviewer_forbidden(
+    client: TestClient, published: list[CourseRatingRecalculatedIntegrationEvent]
+) -> None:
+    review_uuid = create_review(client, {"rating": 3.2, "comment": "original"})
 
     response = client.put(
         f"/courses/{COURSE_UUID}/reviews/{review_uuid}",
-        json={"rating": 1.0},
+        json={"rating": 1.0, "comment": "hijacked"},
         headers=student_auth("another-user"),
     )
 
     assert response.status_code == 403
+    assert response.json() == {"errors": ["Access Denied"]}
+    listed = client.get(f"/courses/{COURSE_UUID}/reviews").json()
+    assert (listed[0]["rating"], listed[0]["comment"]) == (3.2, "original")
+    assert published == []
 
 
 def test_update_unknown_review_forbidden(client: TestClient) -> None:
@@ -247,6 +253,17 @@ def test_review_negative_rating_bad_request_with_field_error(client: TestClient)
     errors = response.json()["errors"]
     assert len(errors) == 1
     assert errors[0].startswith("rating: ")
+
+
+@pytest.mark.parametrize("rating", ["four", None, [4], {"value": 4}])
+def test_review_non_numeric_rating_bad_request_names_field(client: TestClient, rating: object) -> None:
+    response = client.post(f"/courses/{COURSE_UUID}/reviews", json={"rating": rating}, headers=student_auth())
+
+    assert response.status_code == 400
+    errors = response.json()["errors"]
+    assert len(errors) == 1
+    assert errors[0].startswith("rating: ")
+    assert client.get(f"/courses/{COURSE_UUID}/reviews").json() == []
 
 
 def test_review_malformed_course_uuid_bad_request(client: TestClient) -> None:

@@ -11,7 +11,7 @@ from typing import cast
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, inspect, select
+from sqlalchemy import String, create_engine, inspect, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -155,6 +155,39 @@ def test_alembic_upgrade_head_creates_schema_matching_orm_metadata(migrated_data
     fks = {fk["name"] for fk in inspector.get_foreign_keys("course_review")}
     assert fks == {"reviewer_fkey", "reviewable_course_fkey"}
     engine.dispose()
+
+
+def test_alembic_migrated_columns_match_orm_nullability_and_string_lengths(migrated_database_url: str) -> None:
+    engine = create_engine(migrated_database_url)
+    inspector = inspect(engine)
+
+    for table in metadata.tables.values():
+        migrated = {c["name"]: c for c in inspector.get_columns(table.name)}
+        for column in table.columns:
+            assert migrated[column.name]["nullable"] is column.nullable, f"{table.name}.{column.name}"
+            if isinstance(column.type, String):
+                migrated_type = migrated[column.name]["type"]
+                assert isinstance(migrated_type, String), f"{table.name}.{column.name}"
+                assert migrated_type.length == column.type.length, f"{table.name}.{column.name}"
+
+    comment = {c["name"]: c for c in inspector.get_columns("course_review")}["comment"]
+    assert comment["nullable"] is True
+    assert isinstance(comment["type"], String)
+    assert comment["type"].length == 100
+    engine.dispose()
+
+
+def test_alembic_offline_mode_emits_ddl_without_touching_database(tmp_path: Path) -> None:
+    database_file = tmp_path / "never-created.db"
+
+    result = _alembic(f"sqlite:///{database_file}", "upgrade", "head", "--sql")
+
+    assert result.returncode == 0, result.stderr
+    assert not database_file.exists()
+    for table in ("reviewable_course", "reviewer", "course_review"):
+        assert f"CREATE TABLE {table} (" in result.stdout
+    assert "CONSTRAINT reviewer_fkey FOREIGN KEY(reviewer) REFERENCES reviewer (id)" in result.stdout
+    assert "CONSTRAINT reviewable_course_fkey FOREIGN KEY(course) REFERENCES reviewable_course (id)" in result.stdout
 
 
 def test_alembic_migrated_schema_accepts_orm_writes(migrated_database_url: str) -> None:
