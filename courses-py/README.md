@@ -141,14 +141,27 @@ event would be applied twice to the shared tables (e.g. `number_of_students` dou
 
 1. Bridge disabled, Java handlers on — today's behaviour, Python can be deployed read-only for comparison.
 2. Bridge enabled, Java handlers on, Python consumer **not** running — verify messages arrive on the exchange with a
-   throwaway queue (e.g. `rabbitmqadmin declare queue name=bridge-check auto_delete=true` bound to the exchange), not
-   with `courses-py-consumer`: the `courses-py.*` queues are durable and declared by the consumer on first start, so
-   once they exist they retain a copy of every event the Java handlers already applied, and a consumer started later
-   would apply that backlog a second time.
-3. Set `courses.in-process-handlers.enabled=false`, and — if `courses-py.*` queues exist from an earlier run —
-   purge them (`rabbitmqctl purge_queue courses-py.<topic>`) **before** starting
-   `courses-py-consumer`. Python then owns event handling; Java `courses` REST endpoints still work for writes not
-   driven by events. Going back from 3 to 2 requires the same purge before the consumer is started again.
+   throwaway queue, not with `courses-py-consumer`: the `courses-py.*` queues are durable and declared by the
+   consumer on first start, so once they exist they retain a copy of every event the Java handlers already applied,
+   and a consumer started later would apply that backlog a second time.
+   ```bash
+   rabbitmqadmin declare queue name=bridge-check durable=false
+   rabbitmqadmin declare binding source=educational-platform.integration-events destination=bridge-check routing_key='#'
+   # ... enrol a student / approve a course in the monolith, then:
+   rabbitmqadmin get queue=bridge-check count=10
+   rabbitmqadmin delete queue name=bridge-check
+   ```
+3. Handoff. The monolith is the only producer of the four Java → Python events, so do the switch while it is down —
+   nothing can be published into the `courses-py.*` queues between the purge and the consumer start:
+   1. stop the monolith;
+   2. if `courses-py.*` queues exist from an earlier run, purge them (`rabbitmqctl purge_queue courses-py.<topic>`)
+      — everything in them was already applied by the Java handlers;
+   3. start `courses-py-consumer` (declares and binds the queues, so nothing published afterwards is dropped);
+   4. start the monolith with `courses.in-process-handlers.enabled=false`.
+   Python then owns event handling; Java `courses` REST endpoints still work for writes not driven by events. Rolling
+   back (3 → 2) is the mirror image: stop the monolith, stop the consumer, start the monolith with the handlers on.
+   Do **not** purge while the monolith is running with the handlers off: at that point the queues hold live events
+   that only Python will apply.
 
 ## Authentication & authorization
 
