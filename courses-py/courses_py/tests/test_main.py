@@ -162,6 +162,24 @@ def test_main_runMigrationsFail_serverNotStarted(
     assert run.calls == []
 
 
+def test_main_runMigrationsDefaultDir_resolvedRelativeToWorkingDirectory(
+    run: _RecordedRun, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # given: the Docker CMD runs from the project root, where ./migrations is the Alembic script location
+    monkeypatch.chdir(PROJECT_ROOT)
+    monkeypatch.delenv("COURSES_MIGRATIONS_DIR", raising=False)
+    db_url = f"sqlite:///{tmp_path / 'standalone.db'}"
+    monkeypatch.setenv("COURSES_DATABASE_URL", db_url)
+    monkeypatch.setenv("COURSES_RUN_MIGRATIONS", "true")
+
+    # when
+    main.main()
+
+    # then
+    assert "course" in inspect(create_engine(db_url)).get_table_names()
+    assert len(run.calls) == 1
+
+
 def test_main_nonNumericPort_valueErrorBeforeServerStarts(run: _RecordedRun, monkeypatch: pytest.MonkeyPatch) -> None:
     # given
     monkeypatch.setenv("COURSES_PORT", "eight-thousand")
