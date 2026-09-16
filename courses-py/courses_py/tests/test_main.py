@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from configparser import ConfigParser
 from pathlib import Path
 
 import pytest
@@ -10,9 +11,11 @@ from alembic.util.exc import CommandError
 from sqlalchemy import create_engine, inspect
 
 from courses_py import main
+from courses_py.config import Settings
 from courses_py.infrastructure.persistence.orm import metadata
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+LIQUIBASE_TABLES = {"teacher", "course", "curriculum_item", "question"}
 
 
 class _RecordedRun:
@@ -25,7 +28,14 @@ class _RecordedRun:
 
 @pytest.fixture
 def run(monkeypatch: pytest.MonkeyPatch) -> _RecordedRun:
-    for name in ("COURSES_HOST", "COURSES_PORT", "COURSES_RELOAD", "COURSES_RUN_MIGRATIONS", "COURSES_DATABASE_URL"):
+    for name in (
+        "COURSES_HOST",
+        "COURSES_PORT",
+        "COURSES_RELOAD",
+        "COURSES_RUN_MIGRATIONS",
+        "COURSES_DATABASE_URL",
+        "COURSES_MIGRATIONS_DIR",
+    ):
         monkeypatch.delenv(name, raising=False)
     recorded = _RecordedRun()
     monkeypatch.setattr(uvicorn, "run", recorded)
@@ -188,3 +198,74 @@ def test_main_nonNumericPort_valueErrorBeforeServerStarts(run: _RecordedRun, mon
     with pytest.raises(ValueError):
         main.main()
     assert run.calls == []
+
+
+def test_upgradeDatabase_settingsUrl_migratedWithoutDatabaseUrlVariable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # given: Settings built in code, not from the environment (env.py only reads COURSES_DATABASE_URL when set)
+    monkeypatch.delenv("COURSES_DATABASE_URL", raising=False)
+    db_file = tmp_path / "from-settings.db"
+    config = Settings(
+        database_url=f"sqlite:///{db_file}",
+        jwt_secret_key="secret-key",
+        broker="memory",
+        rabbitmq_url="amqp://guest:guest@localhost:5672/%2F",
+        migrations_dir=str(PROJECT_ROOT / "migrations"),
+    )
+
+    # when
+    main.upgrade_database(config)
+
+    # then
+    assert db_file.exists()
+    assert LIQUIBASE_TABLES | {"alembic_version"} <= set(inspect(create_engine(config.database_url)).get_table_names())
+
+
+def test_main_defaultMigrationsDir_resolvesRelativeToWorkingDirectoryLikeDockerImage(
+    run: _RecordedRun, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # given: Dockerfile runs `python -m courses_py.main` from WORKDIR /app with ./migrations copied next to the package
+    monkeypatch.chdir(PROJECT_ROOT)
+    db_url = f"sqlite:///{tmp_path / 'docker-like.db'}"
+    monkeypatch.setenv("COURSES_DATABASE_URL", db_url)
+    monkeypatch.setenv("COURSES_RUN_MIGRATIONS", "true")
+
+    # when
+    main.main()
+
+    # then
+    assert LIQUIBASE_TABLES <= set(inspect(create_engine(db_url)).get_table_names())
+    assert len(run.calls) == 1
+
+
+def test_defaultMigrationsDir_matchesAlembicIniScriptLocation(monkeypatch: pytest.MonkeyPatch) -> None:
+    # given
+    monkeypatch.delenv("COURSES_MIGRATIONS_DIR", raising=False)
+    alembic_ini = ConfigParser()
+    alembic_ini.read(PROJECT_ROOT / "alembic.ini")
+
+    # when
+    settings = Settings.from_env()
+
+    # then: `alembic upgrade head` and COURSES_RUN_MIGRATIONS=true use the same revisions
+    assert settings.migrations_dir == alembic_ini.get("alembic", "script_location") == "migrations"
+    assert (PROJECT_ROOT / settings.migrations_dir / "versions").is_dir()
+
+
+def test_main_defaultDatabaseUrl_createsCoursesDbInWorkingDirectory(
+    run: _RecordedRun, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # given: README's standalone default `sqlite:///./courses.db` + COURSES_RUN_MIGRATIONS=true
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("COURSES_RUN_MIGRATIONS", "true")
+    monkeypatch.setenv("COURSES_MIGRATIONS_DIR", str(PROJECT_ROOT / "migrations"))
+
+    # when
+    main.main()
+
+    # then
+    db_file = tmp_path / "courses.db"
+    assert db_file.exists()
+    assert LIQUIBASE_TABLES <= set(inspect(create_engine(f"sqlite:///{db_file}")).get_table_names())
+    assert len(run.calls) == 1
