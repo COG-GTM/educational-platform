@@ -11,11 +11,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from courses_py.application.course.create import CreateCourseCommand
 from courses_py.domain.course import Course
-from courses_py.domain.curriculum_item import Lecture, Quiz
+from courses_py.domain.curriculum_item import CurriculumItem, Lecture, Quiz
 from courses_py.domain.enums import ApprovalStatus, LectureType, PublishStatus
 from courses_py.domain.value_objects import CourseRating, NumberOfStudents
 from courses_py.infrastructure.persistence.orm import EnumByName, IntAsString, mapper_registry, start_mappers
-from courses_py.infrastructure.persistence.repositories import SqlAlchemyCourseRepository
+from courses_py.infrastructure.persistence.repositories import SqlAlchemyCourseRepository, _to_item_dto
 from courses_py.tests.conftest import insert_teacher
 
 DIALECT = sqlite.dialect()
@@ -126,3 +126,12 @@ def test_course_roundTrip_liquibaseColumnLayout(session_factory: sessionmaker[Se
         assert isinstance(by_title["q"], Quiz)
         assert by_title["q"].serial_number == 2 and [q.content for q in by_title["q"].questions] == ["?"]
         assert all(item.course is loaded for item in loaded.curriculum_items)
+
+
+def test_toItemDto_baseCurriculumItem_raisesTypeError() -> None:
+    # given: a mapped-but-unhandled curriculum item type must not be silently dropped from the projection
+    item = CurriculumItem("title", "description", None, 1)
+
+    # when / then
+    with pytest.raises(TypeError, match="Unsupported curriculum item: CurriculumItem"):
+        _to_item_dto(item)
