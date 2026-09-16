@@ -6,10 +6,11 @@ import threading
 from pathlib import Path
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from courses_py.infrastructure.persistence import database
 from courses_py.infrastructure.persistence.database import build_engine, build_session_factory, transactional
 from courses_py.tests.conftest import count, insert_teacher
 
@@ -40,6 +41,26 @@ class TestBuildEngine:
         assert not isinstance(engine.pool, StaticPool)
         assert engine.url.database == str(tmp_path / "courses.db")
         engine.dispose()
+
+    def test_postgresUrl_noSqliteOnlyConnectArgsOrPool(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # given: the Docker image targets PostgreSQL; psycopg rejects sqlite's check_same_thread argument
+        recorded: list[tuple[str, dict[str, object]]] = []
+        sentinel = build_engine("sqlite://")
+
+        def fake_create_engine(url: str, **kwargs: object) -> Engine:
+            recorded.append((url, kwargs))
+            return sentinel
+
+        monkeypatch.setattr(database, "create_engine", fake_create_engine)
+        url = "postgresql+psycopg://user:pw@db/courses"
+
+        # when
+        engine = build_engine(url)
+
+        # then
+        assert engine is sentinel
+        assert recorded == [(url, {"connect_args": {}})]
+        sentinel.dispose()
 
     @pytest.mark.parametrize("url", ["sqlite://", "sqlite:///{tmp}/courses.db"])
     def test_sqlite_connectionUsableFromAnotherThread(self, url: str, tmp_path: Path) -> None:
