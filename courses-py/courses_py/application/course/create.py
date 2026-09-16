@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
 
 from courses_py.application.exceptions import RelatedResourceIsNotResolvedException
 from courses_py.application.ports import CourseRepository, TeacherRepository
@@ -21,8 +22,12 @@ class CreateQuestionCommand(BaseModel):
     content: NotBlank
 
 
+_CURRICULUM_ITEM_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True, frozen=True)
+"""Curriculum items are posted as-is inside ``CreateCourseRequest``, so they must read camelCase JSON like Jackson."""
+
+
 class CreateLectureCommand(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = _CURRICULUM_ITEM_CONFIG
 
     type: Literal["Lecture"] = "Lecture"
     title: str
@@ -32,7 +37,7 @@ class CreateLectureCommand(BaseModel):
 
 
 class CreateQuizCommand(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = _CURRICULUM_ITEM_CONFIG
 
     type: Literal["Quiz"] = "Quiz"
     title: str

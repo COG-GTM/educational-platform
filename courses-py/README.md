@@ -113,11 +113,16 @@ payload keys are shared between the two sides and must stay in sync:
   manual acks). The consumer process is `courses-py-consumer`.
 * Delivery semantics (same as the Java side, whose in-JVM events are fire-and-forget `@Async` listeners): at-least-once.
   Outbound events are buffered on the request's SQLAlchemy session and published only after the transaction commits
-  (`AfterCommitIntegrationEventPublisher`), so a rolled-back request publishes nothing. Inbound messages that are
-  malformed or fail validation are rejected without requeue; messages whose handler fails for another reason (e.g.
-  database outage) are requeued once and rejected on the second failure. Queues have no dead-letter exchange and
-  handlers are not idempotent (a crash between commit and ack redelivers the event); add a processed-event table /
-  dead-letter queue before relying on the broker for production traffic — see the cutover checklist.
+  (`AfterCommitIntegrationEventPublisher`), so a rolled-back request publishes nothing; `RabbitMQMessageBroker`
+  publishes with publisher confirms and `mandatory` routing, so a message the broker cannot route (no queue bound to
+  the topic, e.g. the Java bridge is down) or refuses raises instead of vanishing — the request then fails with 500
+  after its state change has committed (the commit is not rolled back; re-send the course for approval). Inbound
+  messages that are malformed or fail validation are rejected without requeue; messages whose handler fails for
+  another reason (e.g. database outage) are requeued once and rejected on the second failure ("once" is approximated
+  by RabbitMQ's `redelivered` flag, which is also set when a message is redelivered for other reasons, e.g. a consumer
+  restart, so such a message gets no retry). Queues have no dead-letter exchange and handlers are not idempotent (a
+  crash between commit and ack redelivers the event); add a processed-event table / dead-letter queue before relying
+  on the broker for production traffic — see the cutover checklist.
 * Java: sub-project `courses/event-bridge` (`courses-event-bridge`, package `com.educational.platform.courses.bridge`),
   wired into `configuration`. `OutboundIntegrationEventBridge` listens to the four in-JVM events and forwards them to
   the exchange; `InboundIntegrationEventBridge` consumes `courses.send-course-to-approve` from queue
@@ -135,9 +140,15 @@ Monolith properties (`configuration/src/main/resources/application.properties`):
 event would be applied twice to the shared tables (e.g. `number_of_students` double increments). Sequence:
 
 1. Bridge disabled, Java handlers on — today's behaviour, Python can be deployed read-only for comparison.
-2. Bridge enabled, Java handlers on, Python consumer **not** running — verify messages arrive on the exchange.
-3. Set `courses.in-process-handlers.enabled=false`, start `courses-py-consumer` — Python owns event handling;
-   Java `courses` REST endpoints still work for writes not driven by events.
+2. Bridge enabled, Java handlers on, Python consumer **not** running — verify messages arrive on the exchange with a
+   throwaway queue (e.g. `rabbitmqadmin declare queue name=bridge-check auto_delete=true` bound to the exchange), not
+   with `courses-py-consumer`: the `courses-py.*` queues are durable and declared by the consumer on first start, so
+   once they exist they retain a copy of every event the Java handlers already applied, and a consumer started later
+   would apply that backlog a second time.
+3. Set `courses.in-process-handlers.enabled=false`, and — if `courses-py.*` queues exist from an earlier run —
+   purge them (`rabbitmqctl purge_queue courses-py.<topic>`) **before** starting
+   `courses-py-consumer`. Python then owns event handling; Java `courses` REST endpoints still work for writes not
+   driven by events. Going back from 3 to 2 requires the same purge before the consumer is started again.
 
 ## Authentication & authorization
 
@@ -164,7 +175,8 @@ Parity gates:
       data as the Java endpoints for existing rows.
 - [ ] Contract tests for `POST /courses` and `PUT /courses/{uuid}/publish-status` pass against both implementations
       (status codes, error bodies, DB rows).
-- [ ] Event flow verified end to end with the bridge enabled (steps 2–3 above), no double processing.
+- [ ] Event flow verified end to end with the bridge enabled (steps 2–3 above), no double processing; `courses-py.*`
+      queues empty (purged) at the moment the Java handlers are switched off and the Python consumer starts.
 - [ ] Idempotent consumers (event id + processed-events table in the same transaction) and a dead-letter exchange on
       the `courses-py.*` / `java-monolith.*` queues, before the broker carries production traffic.
 - [ ] Ingress/gateway routes `/courses/**` to `courses-py`; Java `courses-web` receives no traffic.

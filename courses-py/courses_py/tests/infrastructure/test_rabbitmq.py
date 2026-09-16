@@ -8,6 +8,7 @@ from typing import Any
 
 import pika
 import pytest
+from pika.exceptions import NackError, UnroutableError
 from pika.exchange_type import ExchangeType
 from pika.spec import Basic, BasicProperties
 
@@ -80,6 +81,8 @@ class FakeChannel:
         self.nacked: list[tuple[int, bool]] = []
         self.consuming_started = 0
         self.consuming_stopped = 0
+        self.confirms_enabled = False
+        self.publish_error: Exception | None = None
 
     @property
     def is_open(self) -> bool:
@@ -88,6 +91,9 @@ class FakeChannel:
     def exchange_declare(self, **kwargs: Any) -> None:
         self.exchanges.append(kwargs)
 
+    def confirm_delivery(self) -> None:
+        self.confirms_enabled = True
+
     def queue_declare(self, **kwargs: Any) -> None:
         self.queues.append(kwargs)
 
@@ -95,6 +101,8 @@ class FakeChannel:
         self.bindings.append(kwargs)
 
     def basic_publish(self, **kwargs: Any) -> None:
+        if self.publish_error is not None:
+            raise self.publish_error
         self.published.append(kwargs)
 
     def basic_consume(self, queue: str, on_message_callback: Any) -> None:
@@ -183,6 +191,36 @@ def test_publish_persistentJsonMessageOnRoutingKey(sut: RabbitMQMessageBroker, f
     assert json.loads(message["body"].decode("utf-8")) == {"courseId": "abc", "rating": 4.5}
     assert message["properties"].content_type == "application/json"
     assert message["properties"].delivery_mode == 2
+
+
+def test_publish_publisherConfirmsAndMandatoryRouting(
+    sut: RabbitMQMessageBroker, factory: FakeConnectionFactory
+) -> None:
+    sut.publish(topics.SEND_COURSE_TO_APPROVE, {"courseId": "abc"})
+
+    channel = factory.channel
+    assert channel.confirms_enabled
+    assert channel.exchanges, "confirm mode is selected on the channel that declared the exchange"
+    (message,) = channel.published
+    assert message["mandatory"] is True
+
+
+def test_publish_unroutable_raisesToCaller(sut: RabbitMQMessageBroker, factory: FakeConnectionFactory) -> None:
+    sut.publish("warm-up", {})
+    factory.channel.publish_error = UnroutableError([])
+
+    with pytest.raises(UnroutableError):
+        sut.publish(topics.SEND_COURSE_TO_APPROVE, {"courseId": "abc"})
+
+    assert [m["routing_key"] for m in factory.channel.published] == ["warm-up"]
+
+
+def test_publish_nacked_raisesToCaller(sut: RabbitMQMessageBroker, factory: FakeConnectionFactory) -> None:
+    sut.publish("warm-up", {})
+    factory.channel.publish_error = NackError([])
+
+    with pytest.raises(NackError):
+        sut.publish(topics.SEND_COURSE_TO_APPROVE, {"courseId": "abc"})
 
 
 def test_publish_twice_reusesOpenChannel(sut: RabbitMQMessageBroker, factory: FakeConnectionFactory) -> None:

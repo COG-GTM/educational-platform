@@ -5,6 +5,11 @@ rejected without requeue; a message whose handler fails for another reason (e.g.
 once (RabbitMQ's ``redelivered`` flag) and rejected on the second failure. Queues declare no dead-letter exchange;
 configure one on the broker side if rejected messages must be kept.
 
+Publishing uses publisher confirms with mandatory routing: ``publish`` returns only once the broker has confirmed the
+message was routed to at least one queue, and raises ``pika.exceptions.UnroutableError`` (no queue bound to the topic,
+e.g. the Java bridge is not running) or ``NackError`` otherwise. The caller decides how to surface that; the API
+publishes after commit, so the request fails with 500 while the committed state change stands.
+
 The blocking Pika connection is not thread-safe; all channel operations are serialised with a lock, since FastAPI
 runs the synchronous routes that publish events on a worker thread pool.
 """
@@ -72,6 +77,7 @@ class RabbitMQMessageBroker(MessageBroker):
                 exchange_type=ExchangeType.topic,  # type: ignore[arg-type]  # types-pika declares members as str
                 durable=True,
             )
+            self._channel.confirm_delivery()
         return self._channel
 
     def publish(self, topic: str, payload: Payload) -> None:
@@ -82,6 +88,7 @@ class RabbitMQMessageBroker(MessageBroker):
                 routing_key=topic,
                 body=json.dumps(payload).encode("utf-8"),
                 properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
+                mandatory=True,
             )
 
     def subscribe(self, topic: str, handler: MessageHandler) -> None:

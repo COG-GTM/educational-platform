@@ -146,8 +146,17 @@ def test_createCurriculumItem_lectureWithoutText_noneContent() -> None:
 
 @pytest.mark.parametrize("command_type", [CreateLectureCommand, CreateQuizCommand])
 def test_createCurriculumItemCommand_serialNumberRequired(command_type: type[BaseModel]) -> None:
-    with pytest.raises(ValidationError, match="serial_number"):
+    with pytest.raises(ValidationError, match="serialNumber"):
         command_type.model_validate({"title": "t", "description": "d"})
+
+
+@pytest.mark.parametrize("command_type", [CreateLectureCommand, CreateQuizCommand])
+def test_createCurriculumItemCommand_camelCaseAndSnakeCaseSerialNumber(command_type: type[BaseModel]) -> None:
+    camel = command_type.model_validate({"title": "t", "description": "d", "serialNumber": 7})
+    snake = command_type.model_validate({"title": "t", "description": "d", "serial_number": 7})
+
+    assert camel == snake
+    assert camel.model_dump(by_alias=True)["serialNumber"] == 7
 
 
 def test_createCurriculumItem_quizWithoutQuestions_emptyQuestions() -> None:

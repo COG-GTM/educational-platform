@@ -47,8 +47,8 @@ def test_create_withCurriculumItems_createdAndReadable(
         "name": "name",
         "description": "description",
         "curriculumItems": [
-            {"type": "Lecture", "title": "l", "description": "d", "serial_number": 1, "text": "hello"},
-            {"type": "Quiz", "title": "q", "description": "d", "serial_number": 2, "questions": [{"content": "why?"}]},
+            {"type": "Lecture", "title": "l", "description": "d", "serialNumber": 1, "text": "hello"},
+            {"type": "Quiz", "title": "q", "description": "d", "serialNumber": 2, "questions": [{"content": "why?"}]},
         ],
     }
 
@@ -57,6 +57,7 @@ def test_create_withCurriculumItems_createdAndReadable(
     assert response.status_code == 201
     course = client.get(f"/courses/{response.json()['uuid']}", headers=_auth(teacher_token)).json()
     assert [item["type"] for item in course["curriculumItems"]] == ["Lecture", "Quiz"]
+    assert [item["serialNumber"] for item in course["curriculumItems"]] == [1, 2]
     assert course["curriculumItems"][0]["text"] == "hello"
     assert course["curriculumItems"][1]["questions"] == [{"content": "why?"}]
 
@@ -503,7 +504,7 @@ def test_get_courseWithItems_camelCaseDtoShape(client: TestClient, teacher_token
         "name": "name",
         "description": "description",
         "curriculumItems": [
-            {"type": "Quiz", "title": "q", "description": "d", "serial_number": 1, "questions": []},
+            {"type": "Quiz", "title": "q", "description": "d", "serialNumber": 1, "questions": []},
         ],
     }
     uuid = client.post("/courses", json=body, headers=_auth(teacher_token)).json()["uuid"]
