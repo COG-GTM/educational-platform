@@ -156,6 +156,49 @@ def test_review_course_handle_factory_raises_nothing_saved_and_no_event_publishe
     assert published == []
 
 
+def test_review_course_handle_course_projection_missing_review_saved_but_no_event_published(
+    course_review_repository: Mock,
+    reviewable_course_repository: Mock,
+    recalculated_events: tuple[EventBus, list[CourseRatingRecalculatedIntegrationEvent]],
+) -> None:
+    # given
+    bus, published = recalculated_events
+    factory = create_autospec(CourseReviewFactory, instance=True)
+    review = CourseReview.create(course=11, reviewer=2, rating=4.0, comment=None)
+    factory.create_from.return_value = review
+    reviewable_course_repository.find_by_id.return_value = None
+    sut = ReviewCourseCommandHandler(course_review_repository, factory, reviewable_course_repository, bus)
+
+    # when
+    result = sut.handle(ReviewCourseCommand(course_id=COURSE_UUID, rating=4.0))
+
+    # then
+    assert result == review.uuid
+    course_review_repository.save.assert_called_once_with(review)
+    reviewable_course_repository.find_by_id.assert_called_once_with(11)
+    course_review_repository.average_rating.assert_not_called()
+    assert published == []
+
+
+def test_review_course_handle_save_raises_no_event_published(
+    course_review_repository: Mock,
+    reviewable_course_repository: Mock,
+    recalculated_events: tuple[EventBus, list[CourseRatingRecalculatedIntegrationEvent]],
+) -> None:
+    # given
+    bus, published = recalculated_events
+    factory = create_autospec(CourseReviewFactory, instance=True)
+    factory.create_from.return_value = CourseReview.create(course=11, reviewer=2, rating=4.0, comment=None)
+    course_review_repository.save.side_effect = RuntimeError("db down")
+    sut = ReviewCourseCommandHandler(course_review_repository, factory, reviewable_course_repository, bus)
+
+    # when / then
+    with pytest.raises(RuntimeError, match="db down"):
+        sut.handle(ReviewCourseCommand(course_id=COURSE_UUID, rating=4.0))
+    reviewable_course_repository.find_by_id.assert_not_called()
+    assert published == []
+
+
 # --- UpdateCourseReviewCommandHandler (edge cases beyond the Java test port) -----------------------------------------
 
 
