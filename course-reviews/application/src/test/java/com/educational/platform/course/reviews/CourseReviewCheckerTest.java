@@ -85,4 +85,18 @@ public class CourseReviewCheckerTest {
         assertThat(result).isTrue();
     }
 
+    @Test
+    void hasAccess_notReviewerOfReview_false() {
+        // given
+        final UUID reviewId = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+        when(authentication.getName()).thenReturn("another-username");
+        when(courseReviewRepository.isReviewer(reviewId, "another-username")).thenReturn(false);
+
+        // when
+        final boolean result = sut.hasAccess(authentication, reviewId);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
 }

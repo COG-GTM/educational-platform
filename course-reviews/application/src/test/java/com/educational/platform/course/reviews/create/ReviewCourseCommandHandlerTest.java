@@ -1,5 +1,6 @@
 package com.educational.platform.course.reviews.create;
 
+import com.educational.platform.common.exception.RelatedResourceIsNotResolvedException;
 import com.educational.platform.common.exception.UnprocessableEntityException;
 import com.educational.platform.course.reviews.CourseReview;
 import com.educational.platform.course.reviews.CourseReviewFactory;
@@ -20,6 +21,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -101,6 +104,36 @@ public class ReviewCourseCommandHandlerTest {
 
         // then
         assertThatThrownBy(handleAction).isSameAs(original);
+    }
+
+    @Test
+    void handle_reviewerCourseUniqueViolationLowerCaseConstraintName_unprocessableEntityException() {
+        // given
+        final SQLException cause = new SQLException("ERROR: duplicate key value violates unique constraint \"course_review_reviewer_course_uk\"");
+        when(courseReviewRepository.saveAndFlush(courseReview))
+                .thenThrow(new DataIntegrityViolationException("could not execute statement", cause));
+
+        // when
+        final ThrowingCallable handleAction = () -> sut.handle(command);
+
+        // then
+        assertThatThrownBy(handleAction)
+                .isInstanceOf(UnprocessableEntityException.class)
+                .hasMessageContaining(courseId.toString());
+    }
+
+    @Test
+    void handle_factoryRejectsCommand_nothingSavedAndExceptionPropagated() {
+        // given
+        final RelatedResourceIsNotResolvedException factoryException = new RelatedResourceIsNotResolvedException("Course cannot be found");
+        when(courseReviewFactory.createFrom(command)).thenThrow(factoryException);
+
+        // when
+        final ThrowingCallable handleAction = () -> sut.handle(command);
+
+        // then
+        assertThatThrownBy(handleAction).isSameAs(factoryException);
+        verify(courseReviewRepository, never()).saveAndFlush(any());
     }
 
 }
