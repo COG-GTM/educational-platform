@@ -149,4 +149,72 @@ public class CourseReviewApiTest {
 				.statusCode(HttpStatus.NO_CONTENT.value());
 	}
 
+	@Test
+	void review_userIsTeacher_forbidden() {
+		var token = signUp("ROLE_TEACHER", "teacher-username", "teacher@gmail.com");
+
+		given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + token)
+				.body("{\n" + "  \"rating\": 3.2\n" + "}")
+
+				.when()
+				.post("/courses/{uuid}/reviews", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+
+				.then()
+				.statusCode(HttpStatus.FORBIDDEN.value());
+	}
+
+	@Test
+	void update_anotherUsersReview_forbidden() {
+		var reviewerToken = SignUpHelper.signUpStudent();
+
+		final UUID reviewUuid = UUID.fromString(given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + reviewerToken)
+				.body("{\n" + "  \"rating\": 3.2\n" + "}")
+
+				.when()
+				.post("/courses/{uuid}/reviews", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+				.path("uuid"));
+
+		var anotherStudentToken = signUp("ROLE_STUDENT", "another-username", "another@gmail.com");
+
+		given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + anotherStudentToken)
+				.body("{\n" + "  \"comment\": \"comment2\",\n" + "  \"rating\": 3.5\n" + "}")
+
+				.when()
+				.put("/courses/{courseUuid}/reviews/{reviewUuid}", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"), reviewUuid)
+
+				.then()
+				.statusCode(HttpStatus.FORBIDDEN.value());
+	}
+
+	private static String signUp(String role, String username, String email) {
+		var response = given()
+				.contentType(ContentType.JSON)
+				.body("{\n" + "  \"role\": \"" + role + "\",\n" + "  \"username\": \"" + username + "\",\n"
+						+ "  \"email\": \"" + email + "\",\n" + "  \"password\": \"password\"\n" + "}")
+
+				.when()
+				.post("/users/sign-up")
+				.then()
+				.extract()
+				.response();
+
+		if (response.statusCode() == HttpStatus.UNPROCESSABLE_ENTITY.value()) {
+			return given()
+					.contentType(ContentType.JSON)
+					.body("{\n" + "  \"username\": \"" + username + "\",\n" + "  \"password\": \"password\"\n" + "}")
+
+					.when()
+					.post("/users/sign-in")
+					.asString();
+		}
+
+		return response.body().asString();
+	}
+
 }
