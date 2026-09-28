@@ -69,6 +69,7 @@ public class ReviewCourseCommandHandlerSecurityTest {
     void handle_studentNotEnrolled_accessDeniedException() {
         // given
         var command = new ReviewCourseCommand(notReviewedCourseUuid, 4.0, "comment");
+        final long reviewsBefore = repository.count();
 
         // when
         final ThrowingCallable reviewAction = () -> sut.handle(command);
@@ -76,6 +77,34 @@ public class ReviewCourseCommandHandlerSecurityTest {
         // then
         assertThatThrownBy(reviewAction)
                 .isInstanceOf(AccessDeniedException.class);
+        assertThat(repository.count()).isEqualTo(reviewsBefore);
+    }
+
+    @Test
+    @WithMockUser(username = "reviewer", roles = "STUDENT")
+    void handle_courseIdIsNull_accessDeniedException() {
+        // given
+        var command = new ReviewCourseCommand(null, 4.0, "comment");
+
+        // when
+        final ThrowingCallable reviewAction = () -> sut.handle(command);
+
+        // then
+        assertThatThrownBy(reviewAction)
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithMockUser(username = "reviewer", roles = {"STUDENT", "TEACHER"})
+    void handle_enrolledStudentWithAdditionalRole_courseReviewCreated() {
+        // given
+        var command = new ReviewCourseCommand(notReviewedCourseUuid, 4.0, "comment");
+
+        // when
+        final UUID uuid = sut.handle(command);
+
+        // then
+        assertThat(repository.findByUuid(uuid)).isNotEmpty();
     }
 
     @Test

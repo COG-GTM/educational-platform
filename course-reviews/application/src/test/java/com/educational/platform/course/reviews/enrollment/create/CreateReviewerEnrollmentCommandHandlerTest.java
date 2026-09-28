@@ -70,6 +70,32 @@ public class CreateReviewerEnrollmentCommandHandlerTest {
     }
 
     @Test
+    void handle_courseIdIsNull_constraintViolationException() {
+        // given
+        final CreateReviewerEnrollmentCommand command = new CreateReviewerEnrollmentCommand(null, "username");
+
+        // when
+        final Executable handleAction = () -> sut.handle(command);
+
+        // then
+        assertThrows(ConstraintViolationException.class, handleAction);
+        verify(reviewerEnrollmentRepository, never()).save(any());
+    }
+
+    @Test
+    void handle_usernameIsNull_constraintViolationException() {
+        // given
+        final CreateReviewerEnrollmentCommand command = new CreateReviewerEnrollmentCommand(courseId, null);
+
+        // when
+        final Executable handleAction = () -> sut.handle(command);
+
+        // then
+        assertThrows(ConstraintViolationException.class, handleAction);
+        verify(reviewerEnrollmentRepository, never()).save(any());
+    }
+
+    @Test
     void handle_usernameIsBlank_constraintViolationException() {
         // given
         final CreateReviewerEnrollmentCommand command = new CreateReviewerEnrollmentCommand(courseId, " ");
