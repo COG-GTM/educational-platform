@@ -4,6 +4,7 @@ import com.educational.platform.course.reviews.enrollment.ReviewerEnrollment;
 import com.educational.platform.course.reviews.enrollment.ReviewerEnrollmentRepository;
 
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.validation.ConstraintViolation;
@@ -12,10 +13,11 @@ import jakarta.validation.Validator;
 import java.util.Set;
 
 /**
- * Command handler for {@link CreateReviewerEnrollmentCommand} creates a reviewer enrollment.
+ * Command handler for {@link CreateReviewerEnrollmentCommand} creates a reviewer enrollment. Runs in its own transaction
+ * because it is invoked from an after-commit listener of the publishing enrollment transaction.
  */
 @Component
-@Transactional
+@Transactional(propagation = Propagation.REQUIRES_NEW)
 public class CreateReviewerEnrollmentCommandHandler {
 
     private final Validator validator;
