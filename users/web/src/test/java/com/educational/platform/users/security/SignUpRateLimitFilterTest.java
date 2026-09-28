@@ -226,4 +226,52 @@ public class SignUpRateLimitFilterTest {
         assertThat(responses).hasSize(attempts);
         assertThat(responses).filteredOn(r -> r.getStatus() == HttpStatus.TOO_MANY_REQUESTS.value()).hasSize(attempts - 2);
     }
+
+    @Test
+    void doFilter_percentEncodedSignUpPath_throttled() throws Exception {
+        sut.doFilter(post("/users/sign%2Dup", "10.0.0.1"), new MockHttpServletResponse(), chain);
+        sut.doFilter(post("/users/sign%2Dup", "10.0.0.1"), new MockHttpServletResponse(), chain);
+
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        sut.doFilter(post("/users/sign-up", "10.0.0.1"), response, chain);
+
+        assertThat(passed.get()).isEqualTo(2);
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+    }
+
+    @Test
+    void doFilter_limitExceededWithFractionalSecondRemaining_retryAfterRoundedUp() throws Exception {
+        sut.doFilter(post("/users/sign-up", "10.0.0.1"), new MockHttpServletResponse(), chain);
+        sut.doFilter(post("/users/sign-up", "10.0.0.1"), new MockHttpServletResponse(), chain);
+        clock.advance(Duration.ofSeconds(58).plusMillis(500));
+
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        sut.doFilter(post("/users/sign-up", "10.0.0.1"), response, chain);
+
+        assertThat(response.getHeader("Retry-After")).isEqualTo("2");
+    }
+
+    @Test
+    void doFilter_trackedClientsExhausted_newClientRejectedUntilWindowsExpire() throws Exception {
+        final SignUpRateLimitFilter bounded = new SignUpRateLimitFilter(2, Duration.ofMinutes(1), 2, clock, new ObjectMapper());
+        bounded.doFilter(post("/users/sign-up", "10.0.0.1"), new MockHttpServletResponse(), chain);
+        bounded.doFilter(post("/users/sign-up", "10.0.0.2"), new MockHttpServletResponse(), chain);
+
+        final MockHttpServletResponse rejected = new MockHttpServletResponse();
+        bounded.doFilter(post("/users/sign-up", "10.0.0.3"), rejected, chain);
+        final MockHttpServletResponse knownClient = new MockHttpServletResponse();
+        bounded.doFilter(post("/users/sign-up", "10.0.0.1"), knownClient, chain);
+
+        assertThat(rejected.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+        assertThat(rejected.getHeader("Retry-After")).isEqualTo("60");
+        assertThat(knownClient.getStatus()).isEqualTo(HttpStatus.OK.value());
+        assertThat(passed.get()).isEqualTo(3);
+
+        clock.advance(Duration.ofMinutes(1));
+        final MockHttpServletResponse admitted = new MockHttpServletResponse();
+        bounded.doFilter(post("/users/sign-up", "10.0.0.3"), admitted, chain);
+
+        assertThat(admitted.getStatus()).isEqualTo(HttpStatus.OK.value());
+        assertThat(passed.get()).isEqualTo(4);
+    }
 }
