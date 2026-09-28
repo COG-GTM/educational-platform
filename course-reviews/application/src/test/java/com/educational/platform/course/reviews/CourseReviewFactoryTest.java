@@ -26,6 +26,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -70,10 +73,12 @@ public class CourseReviewFactoryTest {
         final CourseReview courseReview = sut.createFrom(command);
 
         // then
-        // todo recheck course and reviewer references
         assertThat(courseReview)
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(4.0))
-                .hasFieldOrPropertyWithValue("comment", new Comment("comment"));
+                .hasFieldOrPropertyWithValue("comment", new Comment("comment"))
+                .hasFieldOrPropertyWithValue("course", 11)
+                .hasFieldOrPropertyWithValue("reviewer", 22);
+        verify(courseReviewRepository).existsByCourseAndReviewer(11, 22);
     }
 
     @Test
@@ -111,6 +116,8 @@ public class CourseReviewFactoryTest {
 
         // then
         assertThrows(RelatedResourceIsNotResolvedException.class, createAction);
+        verify(currentUserAsReviewer, never()).userAsReviewer();
+        verify(courseReviewRepository, never()).existsByCourseAndReviewer(anyInt(), anyInt());
     }
 
     @Test
@@ -130,6 +137,7 @@ public class CourseReviewFactoryTest {
 
         // then
         assertThrows(RelatedResourceIsNotResolvedException.class, createAction);
+        verify(courseReviewRepository, never()).existsByCourseAndReviewer(anyInt(), anyInt());
     }
 
     @Test

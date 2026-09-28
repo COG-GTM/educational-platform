@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -30,6 +31,9 @@ public class StudentEnrolledToCourseIntegrationEventHandlerIntegrationTest {
 
     @Autowired
     private ReviewerEnrollmentRepository repository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void handle_eventPublishedInCommittedTransaction_reviewerEnrollmentCreated() {
@@ -56,6 +60,21 @@ public class StudentEnrolledToCourseIntegrationEventHandlerIntegrationTest {
     }
 
     @Test
+    void handle_sameEventPublishedTwiceInOneTransaction_singleReviewerEnrollmentCreated() throws InterruptedException {
+        // when
+        transactionTemplate.executeWithoutResult(status -> {
+            eventPublisher.publishEvent(new StudentEnrolledToCourseIntegrationEvent(courseId, "twice-enrolled-student"));
+            eventPublisher.publishEvent(new StudentEnrolledToCourseIntegrationEvent(courseId, "twice-enrolled-student"));
+        });
+
+        // then
+        await().atMost(Duration.ofSeconds(5))
+                .untilAsserted(() -> assertThat(enrollmentCount("twice-enrolled-student")).isEqualTo(1));
+        Thread.sleep(500);
+        assertThat(enrollmentCount("twice-enrolled-student")).isEqualTo(1);
+    }
+
+    @Test
     void handle_eventPublishedWithoutTransaction_reviewerEnrollmentCreated() {
         // when
         eventPublisher.publishEvent(new StudentEnrolledToCourseIntegrationEvent(courseId, "no-tx-student"));
@@ -63,5 +82,10 @@ public class StudentEnrolledToCourseIntegrationEventHandlerIntegrationTest {
         // then
         await().atMost(Duration.ofSeconds(5))
                 .untilAsserted(() -> assertThat(repository.existsByCourseIdAndUsername(courseId, "no-tx-student")).isTrue());
+    }
+
+    private Integer enrollmentCount(String username) {
+        return jdbcTemplate.queryForObject("SELECT count(*) FROM reviewer_enrollment WHERE course_id = ? AND username = ?",
+                Integer.class, courseId, username);
     }
 }
