@@ -274,4 +274,68 @@ public class SignUpRateLimitFilterTest {
         assertThat(admitted.getStatus()).isEqualTo(HttpStatus.OK.value());
         assertThat(passed.get()).isEqualTo(4);
     }
+
+    @Test
+    void doFilter_signUpPathWithPathParameter_throttled() throws Exception {
+        sut.doFilter(post("/users/sign-up;jsessionid=abc", "10.0.0.1"), new MockHttpServletResponse(), chain);
+        sut.doFilter(post("/users/sign-up;jsessionid=abc", "10.0.0.1"), new MockHttpServletResponse(), chain);
+
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        sut.doFilter(post("/users/sign-up", "10.0.0.1"), response, chain);
+
+        assertThat(passed.get()).isEqualTo(2);
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+    }
+
+    @Test
+    void doFilter_signUpSubPath_notThrottled() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            sut.doFilter(post("/users/sign-up/extra", "10.0.0.1"), new MockHttpServletResponse(), chain);
+        }
+
+        assertThat(passed.get()).isEqualTo(5);
+    }
+
+    @Test
+    void doFilter_trackedClientsExhausted_expiredWindowEvictedOnDemandBeforeScheduledSweep() throws Exception {
+        final SignUpRateLimitFilter bounded = new SignUpRateLimitFilter(2, Duration.ofMinutes(1), 2, clock, new ObjectMapper());
+        bounded.doFilter(post("/users/sign-up", "10.0.0.1"), new MockHttpServletResponse(), chain);
+        clock.advance(Duration.ofSeconds(30));
+        bounded.doFilter(post("/users/sign-up", "10.0.0.2"), new MockHttpServletResponse(), chain);
+        clock.advance(Duration.ofSeconds(30));
+        bounded.doFilter(post("/users/sign-up", "10.0.0.1"), new MockHttpServletResponse(), chain);
+        clock.advance(Duration.ofSeconds(30));
+
+        final MockHttpServletResponse admitted = new MockHttpServletResponse();
+        bounded.doFilter(post("/users/sign-up", "10.0.0.3"), admitted, chain);
+        final MockHttpServletResponse rejected = new MockHttpServletResponse();
+        bounded.doFilter(post("/users/sign-up", "10.0.0.4"), rejected, chain);
+
+        assertThat(admitted.getStatus()).isEqualTo(HttpStatus.OK.value());
+        assertThat(rejected.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+        assertThat(passed.get()).isEqualTo(4);
+    }
+
+    @Test
+    void doFilter_trackedClientsExhausted_rejectedClientKeepsFullBudgetOnceAdmitted() throws Exception {
+        final SignUpRateLimitFilter bounded = new SignUpRateLimitFilter(2, Duration.ofMinutes(1), 1, clock, new ObjectMapper());
+        bounded.doFilter(post("/users/sign-up", "10.0.0.1"), new MockHttpServletResponse(), chain);
+        for (int i = 0; i < 3; i++) {
+            bounded.doFilter(post("/users/sign-up", "10.0.0.2"), new MockHttpServletResponse(), chain);
+        }
+        clock.advance(Duration.ofMinutes(1));
+
+        final MockHttpServletResponse first = new MockHttpServletResponse();
+        final MockHttpServletResponse second = new MockHttpServletResponse();
+        final MockHttpServletResponse third = new MockHttpServletResponse();
+        bounded.doFilter(post("/users/sign-up", "10.0.0.2"), first, chain);
+        bounded.doFilter(post("/users/sign-up", "10.0.0.2"), second, chain);
+        bounded.doFilter(post("/users/sign-up", "10.0.0.2"), third, chain);
+
+        assertThat(passed.get()).isEqualTo(3);
+        assertThat(first.getStatus()).isEqualTo(HttpStatus.OK.value());
+        assertThat(second.getStatus()).isEqualTo(HttpStatus.OK.value());
+        assertThat(third.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+        assertThat(third.getHeader("Retry-After")).isEqualTo("60");
+    }
 }
