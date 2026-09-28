@@ -266,6 +266,49 @@ public class UserRegistrationCommandHandlerTest {
     }
 
     @Test
+    void handle_emailLongerThanColumn_constraintViolationException() {
+        // given
+        final String email = "e".repeat(56) + "@" + "d".repeat(40) + ".com";
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email(email)
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThat(email).hasSize(101);
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verify(repository, never()).existsByUsername(any());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void handle_emailAtMaxLength_userCreated() {
+        // given
+        final String email = "e".repeat(55) + "@" + "d".repeat(40) + ".com";
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email(email)
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        assertThat(email).hasSize(100);
+        final ArgumentCaptor<User> argument = ArgumentCaptor.forClass(User.class);
+        verify(repository).save(argument.capture());
+        assertThat(argument.getValue()).hasFieldOrPropertyWithValue("email", email);
+    }
+
+    @Test
     void handle_roleIsEmpty_constraintViolationException() {
         // given
         final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
