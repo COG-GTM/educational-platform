@@ -2,7 +2,7 @@ package com.educational.platform.course.reviews.reviewer;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import com.educational.platform.course.reviews.reviewer.Reviewer;
+import java.util.Optional;
 
 /**
  * Represents reviewer repository.
@@ -13,10 +13,9 @@ public interface ReviewerRepository extends JpaRepository<Reviewer, Integer> {
      * Retrieves a reviewer by its username.
      *
      * @param username must not be {@literal null}.
-     * @return the reviewer with the given username.
+     * @return the reviewer with the given username or {@literal Optional#empty()} if none found.
      * @throws IllegalArgumentException if {@literal username} is {@literal null}.
      */
-    Reviewer findByUsername(String username);
-
+    Optional<Reviewer> findByUsername(String username);
 
 }

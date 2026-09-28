@@ -82,6 +82,49 @@ public class CourseReviewApiTest {
 	}
 
 	@Test
+	void review_alreadyReviewed_unprocessableEntity() {
+		var token = SignUpHelper.signUpStudent();
+
+		given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + token)
+				.body("{\n" + "  \"rating\": 3.2\n" + "}")
+
+				.when()
+				.post("/courses/{uuid}/reviews", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+
+				.then()
+				.statusCode(HttpStatus.CREATED.value());
+
+		given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + token)
+				.body("{\n" + "  \"rating\": 4.2\n" + "}")
+
+				.when()
+				.post("/courses/{uuid}/reviews", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+
+				.then()
+				.statusCode(HttpStatus.UNPROCESSABLE_ENTITY.value());
+	}
+
+	@Test
+	void review_notEnrolledCourse_forbidden() {
+		var token = SignUpHelper.signUpStudent();
+
+		given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + token)
+				.body("{\n" + "  \"rating\": 3.2\n" + "}")
+
+				.when()
+				.post("/courses/{uuid}/reviews", UUID.fromString("123e4567-e89b-12d3-a456-426655440002"))
+
+				.then()
+				.statusCode(HttpStatus.FORBIDDEN.value());
+	}
+
+	@Test
 	void update_validRequest_noContent() {
 		var token = SignUpHelper.signUpStudent();
 
