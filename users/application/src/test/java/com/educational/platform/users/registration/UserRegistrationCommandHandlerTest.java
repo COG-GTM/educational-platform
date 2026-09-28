@@ -24,6 +24,8 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 
+import java.util.Collections;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
@@ -157,6 +159,111 @@ public class UserRegistrationCommandHandlerTest {
                 .isThrownBy(handle)
                 .isSameAs(cause);
         verify(eventPublisher, never()).publishEvent(any(UserCreatedIntegrationEvent.class));
+    }
+
+    @Test
+||||||| parent of a091f8aa (test(users): cover DB-enforced username uniqueness, rollback on race loser, rate-limit boundaries and servlet wiring)
+    void handle_usernameInsertedConcurrently_transactionRolledBack() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false, true);
+        when(repository.save(any(User.class))).thenThrow(new DataIntegrityViolationException("custom_user_username_uk"));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(UnprocessableEntityException.class).isThrownBy(handle);
+        verify(transactionManager).rollback(any());
+        verify(transactionManager, never()).commit(any());
+        verify(jwtTokenProvider, never()).createToken(any(), any());
+    }
+
+    @Test
+    void handle_saveFailsWithUnexpectedException_exceptionPropagated() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        final IllegalStateException failure = new IllegalStateException("datasource unavailable");
+        when(repository.save(any(User.class))).thenThrow(failure);
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(IllegalStateException.class)
+                .isThrownBy(handle)
+                .isSameAs(failure);
+        verify(transactionManager).rollback(any());
+        verify(eventPublisher, never()).publishEvent(any(UserCreatedIntegrationEvent.class));
+    }
+
+    @Test
+    void handle_validCommand_tokenReturnedAfterCommit() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        when(jwtTokenProvider.createToken("username", Collections.singletonList(Role.ROLE_STUDENT))).thenReturn("token");
+
+        // when
+        final String result = sut.handle(userRegistrationCommand);
+
+        // then
+        assertThat(result).isEqualTo("token");
+        verify(transactionManager).commit(any());
+        verify(transactionManager, never()).rollback(any());
+    }
+
+    @Test
+    void handle_usernameLongerThanColumn_constraintViolationException() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("u".repeat(101))
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void handle_usernameAtMaxLength_userCreated() {
+        // given
+        final String username = "u".repeat(100);
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username(username)
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername(username)).thenReturn(false);
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        verify(repository).save(any(User.class));
     }
 
     @Test
