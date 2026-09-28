@@ -121,3 +121,46 @@ databaseChangeLog:
             referencedColumnNames: id
             referencedTableName: reviewer
             validate: true
+  - changeSet:
+      id: 2026_09_28-1
+      author: devin
+      changes:
+        - addUniqueConstraint:
+            tableName: course_review
+            columnNames: reviewer, course
+            constraintName: course_review_reviewer_course_uk
+  - changeSet:
+      id: 2026_09_28-2
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          tableExists:
+            tableName: reviewer_enrollment
+      changes:
+        - createTable:
+            tableName: reviewer_enrollment
+            columns:
+              - column:
+                  name: id
+                  type: int
+                  autoIncrement: true
+                  startWith: 1
+                  incrementBy: 1
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: reviewer_enrollment_pk
+              - column:
+                  constraints:
+                    nullable: false
+                  name: course_id
+                  type: uuid
+              - column:
+                  constraints:
+                    nullable: false
+                  name: username
+                  type: VARCHAR(100)
+        - addUniqueConstraint:
+            tableName: reviewer_enrollment
+            columnNames: course_id, username
+            constraintName: reviewer_enrollment_course_id_username_uk
