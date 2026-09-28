@@ -123,7 +123,7 @@ public class UserRegistrationCommandHandlerTest {
                 .password("password")
                 .role(RoleDTO.ROLE_STUDENT)
                 .build();
-        when(repository.existsByUsername("username")).thenReturn(false);
+        when(repository.existsByUsername("username")).thenReturn(false, true);
         when(repository.save(any(User.class))).thenThrow(new DataIntegrityViolationException("custom_user_username_uk"));
 
         // when
@@ -133,6 +133,29 @@ public class UserRegistrationCommandHandlerTest {
         assertThatExceptionOfType(UnprocessableEntityException.class)
                 .isThrownBy(handle)
                 .withMessage(UserRegistrationCommandHandler.REGISTRATION_REJECTED_MESSAGE);
+        verify(eventPublisher, never()).publishEvent(any(UserCreatedIntegrationEvent.class));
+    }
+
+    @Test
+    void handle_unrelatedIntegrityViolation_dataIntegrityViolationException() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        final DataIntegrityViolationException cause = new DataIntegrityViolationException("value too long for column email");
+        when(repository.existsByUsername("username")).thenReturn(false);
+        when(repository.save(any(User.class))).thenThrow(cause);
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(DataIntegrityViolationException.class)
+                .isThrownBy(handle)
+                .isSameAs(cause);
         verify(eventPublisher, never()).publishEvent(any(UserCreatedIntegrationEvent.class));
     }
 

@@ -73,7 +73,10 @@ public class UserRegistrationCommandHandler {
                 return newUser;
             });
         } catch (DataIntegrityViolationException e) {
-            throw new UnprocessableEntityException(REGISTRATION_REJECTED_MESSAGE);
+            if (repository.existsByUsername(command.username())) {
+                throw new UnprocessableEntityException(REGISTRATION_REJECTED_MESSAGE);
+            }
+            throw e;
         }
 
         final UserDTO dto = Objects.requireNonNull(user).toDTO();
