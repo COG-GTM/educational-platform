@@ -15,6 +15,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -26,6 +27,7 @@ import jakarta.validation.Validator;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -105,7 +107,33 @@ public class UserRegistrationCommandHandlerTest {
         final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
 
         // then
-        assertThatExceptionOfType(UnprocessableEntityException.class).isThrownBy(handle);
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(handle)
+                .withMessage(UserRegistrationCommandHandler.REGISTRATION_REJECTED_MESSAGE);
+        verify(repository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any(UserCreatedIntegrationEvent.class));
+    }
+
+    @Test
+    void handle_usernameInsertedConcurrently_unprocessableEntityException() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+        when(repository.save(any(User.class))).thenThrow(new DataIntegrityViolationException("custom_user_username_uk"));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(handle)
+                .withMessage(UserRegistrationCommandHandler.REGISTRATION_REJECTED_MESSAGE);
+        verify(eventPublisher, never()).publishEvent(any(UserCreatedIntegrationEvent.class));
     }
 
     @Test

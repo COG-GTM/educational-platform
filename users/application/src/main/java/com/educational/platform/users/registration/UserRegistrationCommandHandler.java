@@ -10,6 +10,7 @@ import com.educational.platform.users.security.JwtTokenProvider;
 
 import org.springframework.context.ApplicationEventPublisher;
 import jakarta.annotation.Nonnull;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -26,6 +27,8 @@ import java.util.Set;
  */
 @Component
 public class UserRegistrationCommandHandler {
+
+    static final String REGISTRATION_REJECTED_MESSAGE = "Registration could not be completed with the provided details";
 
     private final TransactionTemplate transactionTemplate;
     private final PasswordEncoder passwordEncoder;
@@ -49,24 +52,29 @@ public class UserRegistrationCommandHandler {
      * @param command command
      * @return token
      * @throws ConstraintViolationException validation errors
-     * @throws UnprocessableEntityException if username is already in use
+     * @throws UnprocessableEntityException if registration cannot be completed (e.g. username is already in use)
      */
     @Nonnull
     public String handle(UserRegistrationCommand command) {
-        final User user = transactionTemplate.execute(transactionStatus -> {
-            final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
-            if (!violations.isEmpty()) {
-                throw new ConstraintViolationException(violations);
-            }
+        final User user;
+        try {
+            user = transactionTemplate.execute(transactionStatus -> {
+                final Set<ConstraintViolation<UserRegistrationCommand>> violations = validator.validate(command);
+                if (!violations.isEmpty()) {
+                    throw new ConstraintViolationException(violations);
+                }
 
-            if (repository.existsByUsername(command.username())) {
-                throw new UnprocessableEntityException(String.format("Username: [%s] is already in use", command.username()));
-            }
+                if (repository.existsByUsername(command.username())) {
+                    throw new UnprocessableEntityException(REGISTRATION_REJECTED_MESSAGE);
+                }
 
-            final User newUser = new User(command, passwordEncoder);
-            repository.save(newUser);
-            return newUser;
-        });
+                final User newUser = new User(command, passwordEncoder);
+                repository.save(newUser);
+                return newUser;
+            });
+        } catch (DataIntegrityViolationException e) {
+            throw new UnprocessableEntityException(REGISTRATION_REJECTED_MESSAGE);
+        }
 
         final UserDTO dto = Objects.requireNonNull(user).toDTO();
         eventPublisher.publishEvent(new UserCreatedIntegrationEvent(dto.username(), dto.email()));
