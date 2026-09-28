@@ -10,6 +10,8 @@ import org.junit.jupiter.api.function.Executable;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
@@ -105,6 +107,16 @@ public class CreateReviewerEnrollmentCommandHandlerTest {
 
         // then
         assertThrows(ConstraintViolationException.class, handleAction);
+    }
+
+    @Test
+    void handler_runsInNewTransaction() {
+        // given/when
+        final Transactional transactional = CreateReviewerEnrollmentCommandHandler.class.getAnnotation(Transactional.class);
+
+        // then
+        assertThat(transactional).isNotNull();
+        assertThat(transactional.propagation()).isEqualTo(Propagation.REQUIRES_NEW);
     }
 
 }

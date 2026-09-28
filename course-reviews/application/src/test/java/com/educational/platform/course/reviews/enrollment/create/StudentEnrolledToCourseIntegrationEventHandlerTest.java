@@ -8,7 +8,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,6 +42,22 @@ public class StudentEnrolledToCourseIntegrationEventHandlerTest {
         assertThat(argument.getValue())
                 .hasFieldOrPropertyWithValue("courseId", uuid)
                 .hasFieldOrPropertyWithValue("username", "username");
+    }
+
+    @Test
+    void handleStudentEnrolledToCourseEvent_isAsyncAfterCommitListenerWithFallback() throws NoSuchMethodException {
+        // given
+        final Method method = StudentEnrolledToCourseIntegrationEventHandler.class
+                .getMethod("handleStudentEnrolledToCourseEvent", StudentEnrolledToCourseIntegrationEvent.class);
+
+        // when
+        final TransactionalEventListener listener = method.getAnnotation(TransactionalEventListener.class);
+
+        // then
+        assertThat(method.isAnnotationPresent(Async.class)).isTrue();
+        assertThat(listener).isNotNull();
+        assertThat(listener.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
+        assertThat(listener.fallbackExecution()).isTrue();
     }
 
 }

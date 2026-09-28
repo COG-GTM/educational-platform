@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.sql.SQLException;
@@ -134,6 +135,51 @@ public class ReviewCourseCommandHandlerTest {
         // then
         assertThatThrownBy(handleAction).isSameAs(factoryException);
         verify(courseReviewRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void handle_reviewerCourseUniqueViolationNestedInHibernateException_unprocessableEntityException() {
+        // given
+        final SQLException root = new SQLException("Unique index or primary key violation: \"PUBLIC.COURSE_REVIEW_REVIEWER_COURSE_UK\"");
+        final ConstraintViolationException hibernateCause = new ConstraintViolationException("could not execute statement", root, "course_review_reviewer_course_uk");
+        when(courseReviewRepository.saveAndFlush(courseReview))
+                .thenThrow(new DataIntegrityViolationException("could not execute statement", hibernateCause));
+
+        // when
+        final ThrowingCallable handleAction = () -> sut.handle(command);
+
+        // then
+        assertThatThrownBy(handleAction)
+                .isInstanceOf(UnprocessableEntityException.class)
+                .hasMessageContaining(courseId.toString());
+    }
+
+    @Test
+    void handle_constraintNameOnlyInIntermediateCause_originalExceptionRethrown() {
+        // given
+        final SQLException root = new SQLException("NULL not allowed for column \"RATING\"");
+        final ConstraintViolationException hibernateCause = new ConstraintViolationException("violates course_review_reviewer_course_uk", root, "course_review_reviewer_course_uk");
+        final DataIntegrityViolationException original = new DataIntegrityViolationException("could not execute statement", hibernateCause);
+        when(courseReviewRepository.saveAndFlush(courseReview)).thenThrow(original);
+
+        // when
+        final ThrowingCallable handleAction = () -> sut.handle(command);
+
+        // then
+        assertThatThrownBy(handleAction).isSameAs(original);
+    }
+
+    @Test
+    void handle_reviewerCourseUniqueViolationWithoutCause_unprocessableEntityException() {
+        // given
+        when(courseReviewRepository.saveAndFlush(courseReview))
+                .thenThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint \"course_review_reviewer_course_uk\""));
+
+        // when
+        final ThrowingCallable handleAction = () -> sut.handle(command);
+
+        // then
+        assertThatThrownBy(handleAction).isInstanceOf(UnprocessableEntityException.class);
     }
 
 }
