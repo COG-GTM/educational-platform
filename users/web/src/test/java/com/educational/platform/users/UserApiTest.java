@@ -10,6 +10,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.context.TestPropertySource;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.containsString;
 
 /**
  * Represents API tests for user functionality.
@@ -37,6 +40,30 @@ public class UserApiTest {
 
                 .then()
                 .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void signUp_usernameAlreadyInUse_genericUnprocessableEntity() {
+        final String body = "{\n" + "    \"role\": \"ROLE_STUDENT\",\n" + "    \"username\": \"taken_username\",\n" + "    \"email\": \"taken@gmail.com\",\n" + "    \"password\": \"password\"\n" + "}";
+
+        given()
+                .contentType(ContentType.JSON)
+                .body(body)
+
+                .when()
+                .post("/users/sign-up");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body(body)
+
+                .when()
+                .post("/users/sign-up")
+
+                .then()
+                .statusCode(HttpStatus.UNPROCESSABLE_ENTITY.value())
+                .body("errors", contains("Registration could not be completed with the provided details"))
+                .body("errors[0]", not(containsString("taken_username")));
     }
 
     @Test
