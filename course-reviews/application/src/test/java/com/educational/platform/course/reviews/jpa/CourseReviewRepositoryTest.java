@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.test.context.jdbc.Sql;
 
+import com.educational.platform.course.reviews.CourseReviewDTO;
 import com.educational.platform.course.reviews.CourseReviewRepository;
 
 @Sql(scripts = "classpath:course_review.sql")
@@ -45,6 +46,42 @@ public class CourseReviewRepositoryTest {
 		assertThat(result).hasSize(1);
 		assertThat(result.get(0).uuid()).isEqualTo(ANOTHER_COURSE_REVIEW_UUID);
 		assertThat(result.get(0).course()).isEqualTo(ANOTHER_COURSE_UUID);
+	}
+
+	@Test
+	void listCourseReviews_knownCourse_projectsReviewerCommentAndRating() {
+		// given/when
+		var result = sut.listCourseReviews(COURSE_UUID);
+
+		// then
+		assertThat(result).containsExactly(new CourseReviewDTO(COURSE_REVIEW_UUID, COURSE_UUID, REVIEWER_USERNAME, "comment", 4.0));
+	}
+
+	@Test
+	void listCourseReviews_anotherCourse_projectsItsOwnReviewerCommentAndRating() {
+		// given/when
+		var result = sut.listCourseReviews(ANOTHER_COURSE_UUID);
+
+		// then
+		assertThat(result).containsExactly(new CourseReviewDTO(ANOTHER_COURSE_REVIEW_UUID, ANOTHER_COURSE_UUID, "another-reviewer", "another comment", 5.0));
+	}
+
+	@Test
+	void listCourseReviews_courseReviewUuidInsteadOfCourseUuid_empty() {
+		// given/when
+		var result = sut.listCourseReviews(COURSE_REVIEW_UUID);
+
+		// then
+		assertThat(result).isEmpty();
+	}
+
+	@Test
+	void listCourseReviews_nullUuid_empty() {
+		// given/when
+		var result = sut.listCourseReviews(null);
+
+		// then
+		assertThat(result).isEmpty();
 	}
 
 	@Test
