@@ -162,7 +162,6 @@ public class UserRegistrationCommandHandlerTest {
     }
 
     @Test
-||||||| parent of a091f8aa (test(users): cover DB-enforced username uniqueness, rollback on race loser, rate-limit boundaries and servlet wiring)
     void handle_usernameInsertedConcurrently_transactionRolledBack() {
         // given
         final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
