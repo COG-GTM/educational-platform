@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -29,6 +30,7 @@ import java.util.Collections;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -226,6 +228,28 @@ public class UserRegistrationCommandHandlerTest {
         assertThat(result).isEqualTo("token");
         verify(transactionManager).commit(any());
         verify(transactionManager, never()).rollback(any());
+    }
+
+    @Test
+    void handle_validCommand_eventPublishedAndTokenIssuedOnlyAfterCommit() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false);
+
+        // when
+        sut.handle(userRegistrationCommand);
+
+        // then
+        final InOrder inOrder = inOrder(repository, transactionManager, eventPublisher, jwtTokenProvider);
+        inOrder.verify(repository).save(any(User.class));
+        inOrder.verify(transactionManager).commit(any());
+        inOrder.verify(eventPublisher).publishEvent(any(UserCreatedIntegrationEvent.class));
+        inOrder.verify(jwtTokenProvider).createToken(any(), any());
     }
 
     @Test
