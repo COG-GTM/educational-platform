@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -32,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -138,6 +140,55 @@ public class UserRegistrationCommandHandlerTest {
                 .isThrownBy(handle)
                 .withMessage(UserRegistrationCommandHandler.REGISTRATION_REJECTED_MESSAGE);
         verify(eventPublisher, never()).publishEvent(any(UserCreatedIntegrationEvent.class));
+    }
+
+    @Test
+    void handle_usernameInsertedConcurrentlyWithDuplicateKeyException_unprocessableEntityException() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false, true);
+        when(repository.save(any(User.class))).thenThrow(new DuplicateKeyException("custom_user_username_uk"));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(UnprocessableEntityException.class)
+                .isThrownBy(handle)
+                .withMessage(UserRegistrationCommandHandler.REGISTRATION_REJECTED_MESSAGE);
+        verify(eventPublisher, never()).publishEvent(any(UserCreatedIntegrationEvent.class));
+        verify(jwtTokenProvider, never()).createToken(any(), any());
+    }
+
+    @Test
+    void handle_usernameInsertedConcurrently_recheckPerformedAfterRollback() {
+        // given
+        final UserRegistrationCommand userRegistrationCommand = UserRegistrationCommand.builder()
+                .email("email@gmail.com")
+                .username("username")
+                .password("password")
+                .role(RoleDTO.ROLE_STUDENT)
+                .build();
+        when(repository.existsByUsername("username")).thenReturn(false, true);
+        when(repository.save(any(User.class))).thenThrow(new DataIntegrityViolationException("custom_user_username_uk"));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(userRegistrationCommand);
+
+        // then
+        assertThatExceptionOfType(UnprocessableEntityException.class).isThrownBy(handle);
+        final InOrder inOrder = inOrder(repository, transactionManager);
+        inOrder.verify(repository).existsByUsername("username");
+        inOrder.verify(repository).save(any(User.class));
+        inOrder.verify(transactionManager).rollback(any());
+        inOrder.verify(repository).existsByUsername("username");
+        verify(repository, times(2)).existsByUsername("username");
+        verify(repository, times(1)).save(any(User.class));
     }
 
     @Test
