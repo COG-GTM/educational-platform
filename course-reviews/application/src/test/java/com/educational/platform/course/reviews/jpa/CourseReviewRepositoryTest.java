@@ -18,6 +18,9 @@ public class CourseReviewRepositoryTest {
 	public static final UUID COURSE_UUID = UUID.fromString("123e4567-e89b-12d3-a456-426655440000");
 	public static final UUID COURSE_REVIEW_UUID = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
 	public static final String REVIEWER_USERNAME = "reviewer";
+	public static final UUID ANOTHER_COURSE_UUID = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+	public static final UUID ANOTHER_COURSE_REVIEW_UUID = UUID.fromString("123e4567-e89b-12d3-a456-426655440003");
+	public static final UUID UNKNOWN_COURSE_UUID = UUID.fromString("123e4567-e89b-12d3-a456-426655440099");
 
 	@Autowired
 	private CourseReviewRepository sut;
@@ -29,6 +32,28 @@ public class CourseReviewRepositoryTest {
 
 		// then
 		assertThat(result).hasSize(1);
+		assertThat(result.get(0).uuid()).isEqualTo(COURSE_REVIEW_UUID);
+		assertThat(result.get(0).course()).isEqualTo(COURSE_UUID);
+	}
+
+	@Test
+	void listCourseReviews_anotherCourse_excludesOtherCoursesReviews() {
+		// given/when
+		var result = sut.listCourseReviews(ANOTHER_COURSE_UUID);
+
+		// then
+		assertThat(result).hasSize(1);
+		assertThat(result.get(0).uuid()).isEqualTo(ANOTHER_COURSE_REVIEW_UUID);
+		assertThat(result.get(0).course()).isEqualTo(ANOTHER_COURSE_UUID);
+	}
+
+	@Test
+	void listCourseReviews_unknownCourse_empty() {
+		// given/when
+		var result = sut.listCourseReviews(UNKNOWN_COURSE_UUID);
+
+		// then
+		assertThat(result).isEmpty();
 	}
 
 	@Test
