@@ -114,7 +114,10 @@ public class CourseEnrollment implements AggregateRoot {
      */
     public void resetLecture(UUID lectureUuid) {
         requireActive();
-        completedLectures.remove(lecture(lectureUuid).toReference());
+        final boolean removed = completedLectures.remove(lecture(lectureUuid).toReference());
+        if (!removed) {
+            return;
+        }
         this.lastActivityAt = LocalDateTime.now();
         if (completionStatus == CompletionStatus.COMPLETED) {
             this.completionStatus = CompletionStatus.IN_PROGRESS;
@@ -142,6 +145,14 @@ public class CourseEnrollment implements AggregateRoot {
             this.archivedAt = null;
             this.lastActivityAt = LocalDateTime.now();
         }
+    }
+
+    public EnrollCourse getCourse() {
+        return course;
+    }
+
+    public Student getStudent() {
+        return student;
     }
 
     public UUID getUuid() {

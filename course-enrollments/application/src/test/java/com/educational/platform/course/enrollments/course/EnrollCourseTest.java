@@ -51,6 +51,26 @@ public class EnrollCourseTest {
 	}
 
 	@Test
+	void refresh_republishedLectureKeepsUuid_titleAndSerialNumberUpdated() {
+		// given
+		final EnrollCourse course = new EnrollCourse(new CreateCourseCommand(COURSE, "Java Basics", List.of(
+				new CreateCourseCommand.CreateLectureCommand(FIRST_LECTURE, "Intro", 1),
+				new CreateCourseCommand.CreateLectureCommand(SECOND_LECTURE, "Variables", 2))));
+		final EnrollLecture first = course.lectureByUuid(FIRST_LECTURE).orElseThrow();
+
+		// when
+		course.refresh(new CreateCourseCommand(COURSE, "Java Basics", List.of(
+				new CreateCourseCommand.CreateLectureCommand(SECOND_LECTURE, "Variables", 1),
+				new CreateCourseCommand.CreateLectureCommand(FIRST_LECTURE, "Welcome", 2))));
+
+		// then
+		assertThat(course.lectureByUuid(FIRST_LECTURE)).containsSame(first);
+		assertThat(first.getTitle()).isEqualTo("Welcome");
+		assertThat(first.getSerialNumber()).isEqualTo(2);
+		assertThat(course.lectureByUuid(SECOND_LECTURE).orElseThrow().getSerialNumber()).isEqualTo(1);
+	}
+
+	@Test
 	void create_uuidOnlyCommand_noNameAndNoLectures() {
 		// when
 		final EnrollCourse course = new EnrollCourse(new CreateCourseCommand(COURSE));

@@ -95,7 +95,7 @@ C4Container
 - **Runbook:** N/A — no new runtime component; Liquibase changesets `2026_10_06-1..4` in `course-enrollments.yml`.
 - **Dashboards / alarms:** existing application metrics.
 - **Rollback plan:** revert the PR; changesets are additive (new nullable columns / new tables) so the previous version still runs against the migrated schema.
-- **Migration / cut-over plan:** Liquibase runs on startup. Courses published before this change have no replicated lectures until re-published; a one-off republish (or backfill script) is a follow-up.
+- **Migration / cut-over plan:** The changesets are additive and were verified to apply on an empty database. Note that in the current Boot 4 build the Liquibase auto-configuration is not active (only `liquibase-core` is on the classpath) and the schema is created by Hibernate DDL; enabling Liquibase is a separate follow-up because the existing changelog has drifted from the entities. Courses published before this change have no replicated lectures until re-published; a one-off republish (or backfill script) is a follow-up.
 
 ## Policy exceptions requested
 

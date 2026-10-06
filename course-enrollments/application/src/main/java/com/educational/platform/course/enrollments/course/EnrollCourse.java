@@ -59,9 +59,10 @@ public class EnrollCourse implements AggregateRoot {
         final List<CreateCourseCommand.CreateLectureCommand> published = command.lectures() == null ? List.of() : command.lectures();
         lectures.removeIf(lecture -> published.stream().noneMatch(p -> p.uuid().equals(lecture.toReference())));
         for (CreateCourseCommand.CreateLectureCommand lecture : published) {
-            if (lectures.stream().noneMatch(existing -> existing.toReference().equals(lecture.uuid()))) {
-                lectures.add(new EnrollLecture(lecture, this));
-            }
+            lectures.stream()
+                    .filter(existing -> existing.toReference().equals(lecture.uuid()))
+                    .findFirst()
+                    .ifPresentOrElse(existing -> existing.update(lecture), () -> lectures.add(new EnrollLecture(lecture, this)));
         }
         return this;
     }

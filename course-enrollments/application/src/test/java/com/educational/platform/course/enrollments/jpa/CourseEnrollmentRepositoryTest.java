@@ -98,8 +98,8 @@ public class CourseEnrollmentRepositoryTest {
 		createEnrollment(FIRST_COURSE);
 
 		// when / then
-		assertThat(courseEnrollmentRepository.findByCourseAndStudent(enrollCourseRepository.findByUuid(FIRST_COURSE).orElseThrow(), student())).isPresent();
-		assertThat(courseEnrollmentRepository.findByCourseAndStudent(enrollCourseRepository.findByUuid(SECOND_COURSE).orElseThrow(), student())).isEmpty();
+		assertThat(courseEnrollmentRepository.findFirstByCourseAndStudentOrderByIdAsc(enrollCourseRepository.findByUuid(FIRST_COURSE).orElseThrow(), student())).isPresent();
+		assertThat(courseEnrollmentRepository.findFirstByCourseAndStudentOrderByIdAsc(enrollCourseRepository.findByUuid(SECOND_COURSE).orElseThrow(), student())).isEmpty();
 	}
 
 	private Student student() {

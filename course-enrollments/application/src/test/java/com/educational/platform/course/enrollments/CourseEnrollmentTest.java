@@ -235,6 +235,31 @@ public class CourseEnrollmentTest {
 	}
 
 	@Test
+	void resetLecture_completedEnrollmentUncheckedLecture_completionKept() {
+		// given
+		enrollment.completeLecture(FIRST_LECTURE);
+		enrollment.completeLecture(SECOND_LECTURE);
+		enrollment.resetLecture(FIRST_LECTURE);
+		final CourseEnrollmentDTO reopened = enrollment.toDTO();
+		enrollment.completeLecture(FIRST_LECTURE);
+		final CourseEnrollmentDTO completed = enrollment.toDTO();
+
+		// when: FIRST_LECTURE is already un-checked and re-checked; resetting a lecture that is not completed is a no-op
+		enrollment.resetLecture(FIRST_LECTURE);
+		enrollment.completeLecture(FIRST_LECTURE);
+		enrollment.resetLecture(SECOND_LECTURE);
+		enrollment.completeLecture(SECOND_LECTURE);
+		final CourseEnrollmentDTO afterRoundTrip = enrollment.toDTO();
+
+		// then
+		assertThat(reopened.completionStatus()).isEqualTo(CompletionStatusDTO.IN_PROGRESS);
+		assertThat(reopened.completedAt()).isNull();
+		assertThat(completed.completionStatus()).isEqualTo(CompletionStatusDTO.COMPLETED);
+		assertThat(afterRoundTrip.completionStatus()).isEqualTo(CompletionStatusDTO.COMPLETED);
+		assertThat(afterRoundTrip.completedAt()).isNotNull();
+	}
+
+	@Test
 	void resetLecture_notCompletedLecture_noOpOnProgress() {
 		// given
 		enrollment.completeLecture(FIRST_LECTURE);

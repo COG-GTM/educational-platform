@@ -38,7 +38,7 @@ public class CourseEnrollmentByCourseQueryHandler {
     @PreAuthorize("hasRole('STUDENT')")
     public Optional<CourseEnrollmentDTO> handle(CourseEnrollmentByCourseQuery query) {
         return courseRepository.findByUuid(query.courseUuid())
-                .flatMap(course -> repository.findByCourseAndStudent(course, currentUserAsStudent.userAsStudent()))
+                .flatMap(course -> repository.findFirstByCourseAndStudentOrderByIdAsc(course, currentUserAsStudent.userAsStudent()))
                 .map(CourseEnrollment::toDTO);
     }
 }

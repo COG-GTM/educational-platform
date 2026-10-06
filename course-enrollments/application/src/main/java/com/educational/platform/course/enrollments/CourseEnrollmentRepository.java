@@ -43,7 +43,7 @@ public interface CourseEnrollmentRepository extends JpaRepository<CourseEnrollme
      * @return the enrollment or {@literal Optional#empty()} if the student is not enrolled.
      */
     @EntityGraph(attributePaths = "course")
-    Optional<CourseEnrollment> findByCourseAndStudent(EnrollCourse course, Student student);
+    Optional<CourseEnrollment> findFirstByCourseAndStudentOrderByIdAsc(EnrollCourse course, Student student);
 
     @EntityGraph(attributePaths = "course")
     Page<CourseEnrollment> findByStudent(Student student, Pageable pageable);

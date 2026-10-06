@@ -25,10 +25,17 @@ public class CurrentUserAsStudent {
      * @return teacher.
      */
     public Student userAsStudent() {
-        var principal = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        var username = principal.getUsername();
+        return studentRepository.findByUsername(username());
+    }
 
-        return studentRepository.findByUsername(username);
+    /**
+     * Represents the username of the current user.
+     *
+     * @return username.
+     */
+    public String username() {
+        var principal = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        return principal.getUsername();
     }
 
 }

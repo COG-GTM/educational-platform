@@ -55,7 +55,7 @@ public class CourseEnrollmentByCourseQueryHandlerTest {
         final CourseEnrollment enrollment = new CourseEnrollment(course, student);
         when(courseRepository.findByUuid(COURSE)).thenReturn(Optional.of(course));
         when(currentUserAsStudent.userAsStudent()).thenReturn(student);
-        when(repository.findByCourseAndStudent(course, student)).thenReturn(Optional.of(enrollment));
+        when(repository.findFirstByCourseAndStudentOrderByIdAsc(course, student)).thenReturn(Optional.of(enrollment));
 
         // when
         final Optional<CourseEnrollmentDTO> result = sut.handle(new CourseEnrollmentByCourseQuery(COURSE));
@@ -72,7 +72,7 @@ public class CourseEnrollmentByCourseQueryHandlerTest {
         // given
         when(courseRepository.findByUuid(COURSE)).thenReturn(Optional.of(course));
         when(currentUserAsStudent.userAsStudent()).thenReturn(student);
-        when(repository.findByCourseAndStudent(course, student)).thenReturn(Optional.empty());
+        when(repository.findFirstByCourseAndStudentOrderByIdAsc(course, student)).thenReturn(Optional.empty());
 
         // when
         final Optional<CourseEnrollmentDTO> result = sut.handle(new CourseEnrollmentByCourseQuery(COURSE));

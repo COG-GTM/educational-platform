@@ -42,6 +42,11 @@ public class EnrollLecture {
         this.course = course;
     }
 
+    void update(CreateCourseCommand.CreateLectureCommand command) {
+        this.title = command.title();
+        this.serialNumber = command.serialNumber();
+    }
+
     public Integer getId() {
         return id;
     }

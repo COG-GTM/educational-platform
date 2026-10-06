@@ -6,6 +6,7 @@ import com.educational.platform.course.enrollments.course.EnrollCourseRepository
 import com.educational.platform.course.enrollments.course.create.CreateCourseCommand;
 import com.educational.platform.course.enrollments.register.RegisterStudentToCourseCommand;
 import com.educational.platform.course.enrollments.student.Student;
+import com.educational.platform.course.enrollments.student.StudentRepository;
 import com.educational.platform.course.enrollments.student.create.CreateStudentCommand;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,6 +34,9 @@ public class CourseEnrollmentFactoryTest {
     private EnrollCourseRepository courseRepository;
 
     @Mock
+    private StudentRepository studentRepository;
+
+    @Mock
     private CurrentUserAsStudent currentUserAsStudent;
 
     private CourseEnrollmentFactory sut;
@@ -38,7 +44,7 @@ public class CourseEnrollmentFactoryTest {
     @BeforeEach
     void setUp() {
         final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
-        sut = new CourseEnrollmentFactory(validator, courseRepository, currentUserAsStudent);
+        sut = new CourseEnrollmentFactory(validator, courseRepository, studentRepository, currentUserAsStudent);
     }
 
     @Test
@@ -62,6 +68,24 @@ public class CourseEnrollmentFactoryTest {
         assertThat(enrollment.toDTO().course()).isEqualTo(courseId);
         assertThat(enrollment.toDTO().student()).isEqualTo("username");
         assertThat(enrollment.toDTO().totalLectures()).isZero();
+    }
+
+    @Test
+    void createFrom_studentNotReplicatedYet_studentProvisionedFromCurrentUser() {
+        // given
+        final UUID courseId = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(courseId);
+        when(courseRepository.findByUuid(courseId)).thenReturn(Optional.of(new EnrollCourse(new CreateCourseCommand(courseId))));
+        when(currentUserAsStudent.userAsStudent()).thenReturn(null);
+        when(currentUserAsStudent.username()).thenReturn("username");
+        when(studentRepository.save(any(Student.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        final CourseEnrollment enrollment = sut.createFrom(command);
+
+        // then
+        assertThat(enrollment.getStudent().toReference()).isEqualTo("username");
+        verify(studentRepository).save(any(Student.class));
     }
 
     @Test
