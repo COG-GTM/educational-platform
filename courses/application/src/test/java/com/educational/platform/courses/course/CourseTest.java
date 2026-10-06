@@ -198,6 +198,28 @@ public class CourseTest {
     }
 
     @Test
+    void publish_republishedAfterArchive_firstPublishedDateKept() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+        course.approve();
+        final LocalDateTime firstPublishedDate = LocalDateTime.of(2024, 1, 15, 10, 30);
+        ReflectionTestUtils.setField(course, "publishedDate", firstPublishedDate);
+        course.archive();
+
+        // when
+        course.publish();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED)
+                .hasFieldOrPropertyWithValue("publishedDate", firstPublishedDate);
+    }
+
+    @Test
     void create_validCommand_publishedDateNull() {
         // given
         final CreateCourseCommand command = CreateCourseCommand.builder()
