@@ -80,6 +80,28 @@ function mockApi(options: MockOptions = {}) {
   return calls;
 }
 
+/** Serves one enrollment per page that exists and an empty page beyond `totalPages`, like the backend does. */
+function mockPagedApi({ totalElements, totalPages }: { totalElements: number; totalPages: number }) {
+  const calls: string[] = [];
+  vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+    const url = String(input);
+    calls.push(url);
+    const params = new URL(url, 'http://localhost').searchParams;
+    const page = Number(params.get('page') ?? '0');
+    return Promise.resolve(
+      response(200, {
+        items: page < totalPages ? [enrollment()] : [],
+        page,
+        size: 12,
+        totalElements,
+        totalPages,
+        counts: { inProgress: totalElements, completed: 0, archived: 0 },
+      }),
+    );
+  });
+  return calls;
+}
+
 function renderPage(path = '/learning') {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -232,5 +254,64 @@ describe('MyLearningPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
 
     await waitFor(() => expect(calls[calls.length - 1]?.url).toBe('/api/course-enrollments?status=IN_PROGRESS&page=1'));
+  });
+
+  it('falls back to the In progress tab when the status parameter is not a known group', async () => {
+    setToken(STUDENT_TOKEN);
+    const calls = mockApi({ pages: { IN_PROGRESS: [enrollment()] }, counts: { inProgress: 1, completed: 0, archived: 0 } });
+    renderPage('/learning?status=BOGUS');
+
+    expect(await screen.findByRole('link', { name: 'Java Basics' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'In progress 1' })).toHaveAttribute('aria-selected', 'true');
+    expect(calls.map((c) => c.url)).toEqual(['/api/course-enrollments?status=IN_PROGRESS']);
+  });
+
+  it.each(['-3', 'abc'])('treats page=%s as the first page', async (page) => {
+    setToken(STUDENT_TOKEN);
+    const calls = mockApi({ pages: { IN_PROGRESS: [enrollment()] }, counts: { inProgress: 1, completed: 0, archived: 0 } });
+    renderPage(`/learning?page=${page}`);
+
+    expect(await screen.findByRole('link', { name: 'Java Basics' })).toBeInTheDocument();
+    expect(calls.map((c) => c.url)).toEqual(['/api/course-enrollments?status=IN_PROGRESS']);
+  });
+
+  it('snaps back to the last page when the requested page is beyond the results', async () => {
+    setToken(STUDENT_TOKEN);
+    const calls = mockPagedApi({ totalElements: 13, totalPages: 2 });
+    renderPage('/learning?page=5');
+
+    expect(await screen.findByRole('link', { name: 'Java Basics' })).toBeInTheDocument();
+    expect(calls).toEqual([
+      '/api/course-enrollments?status=IN_PROGRESS&page=5',
+      '/api/course-enrollments?status=IN_PROGRESS&page=1',
+    ]);
+    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
+  });
+
+  it('drops the page parameter when the only page left is the first one', async () => {
+    setToken(STUDENT_TOKEN);
+    const calls = mockPagedApi({ totalElements: 3, totalPages: 1 });
+    renderPage('/learning?page=2');
+
+    expect(await screen.findByRole('link', { name: 'Java Basics' })).toBeInTheDocument();
+    expect(calls).toEqual(['/api/course-enrollments?status=IN_PROGRESS&page=2', '/api/course-enrollments?status=IN_PROGRESS']);
+    expect(screen.queryByRole('navigation', { name: 'Enrollment pages' })).not.toBeInTheDocument();
+  });
+
+  it('switching tabs starts from the first page of the new group', async () => {
+    setToken(STUDENT_TOKEN);
+    const calls = mockApi({
+      pages: { IN_PROGRESS: [enrollment()], COMPLETED: [enrollment({ uuid: 'e-2', courseName: 'Spring Boot', completionStatus: 'COMPLETED' })] },
+      counts: { inProgress: 30, completed: 1, archived: 0 },
+      totalPages: 3,
+    });
+    renderPage('/learning?page=2');
+
+    await screen.findByRole('link', { name: 'Java Basics' });
+    expect(calls[0]?.url).toBe('/api/course-enrollments?status=IN_PROGRESS&page=2');
+    fireEvent.click(screen.getByRole('tab', { name: 'Completed 1' }));
+
+    expect(await screen.findByRole('link', { name: 'Spring Boot' })).toBeInTheDocument();
+    expect(calls[calls.length - 1]?.url).toBe('/api/course-enrollments?status=COMPLETED');
   });
 });
