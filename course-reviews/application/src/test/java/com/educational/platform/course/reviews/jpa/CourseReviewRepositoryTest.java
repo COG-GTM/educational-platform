@@ -99,6 +99,47 @@ public class CourseReviewRepositoryTest {
 	}
 
 	@Test
+	@Sql(scripts = "classpath:course_reviews_nulls_last.sql")
+	void listCourseReviews_mixedCreatedDates_datedMostRecentFirstThenLegacyByIdDescending() {
+		// given/when
+		var result = sut.listCourseReviews(COURSE_UUID);
+
+		// then
+		assertThat(result).extracting(CourseReviewDTO::comment)
+				.containsExactly("newer dated", "older dated", "legacy, higher id", "legacy, lower id");
+		assertThat(result).extracting(CourseReviewDTO::createdDate)
+				.containsExactly(LocalDateTime.of(2026, 2, 1, 10, 0), LocalDateTime.of(2026, 1, 1, 10, 0), null, null);
+	}
+
+	@Test
+	void findCourseUuid_existingReview_courseUuid() {
+		// given/when
+		var result = sut.findCourseUuid(COURSE_REVIEW_UUID);
+
+		// then
+		assertThat(result).contains(COURSE_UUID);
+	}
+
+	@Test
+	@Sql(scripts = "classpath:course_reviews_listing.sql")
+	void findCourseUuid_reviewOfAnotherCourse_thatCourseUuid() {
+		// given/when
+		var result = sut.findCourseUuid(UUID.fromString("123e4567-e89b-12d3-a456-426655440005"));
+
+		// then
+		assertThat(result).contains(UUID.fromString("123e4567-e89b-12d3-a456-426655440009"));
+	}
+
+	@Test
+	void findCourseUuid_unknownReview_empty() {
+		// given/when
+		var result = sut.findCourseUuid(UUID.fromString("123e4567-e89b-12d3-a456-426655440099"));
+
+		// then
+		assertThat(result).isEmpty();
+	}
+
+	@Test
 	void isReviewer_validReviewer_true() {
 		// given/when
 		var result = sut.isReviewer(COURSE_REVIEW_UUID, REVIEWER_USERNAME);
