@@ -3,6 +3,8 @@ package com.educational.platform.courses.course.publish;
 import com.educational.platform.common.exception.ResourceNotFoundException;
 import com.educational.platform.courses.course.*;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
+import com.educational.platform.courses.course.create.CreateLectureCommand;
+import com.educational.platform.courses.integration.event.CoursePublishedIntegrationEvent;
 import com.educational.platform.courses.teacher.Teacher;
 
 import org.assertj.core.api.ThrowableAssert;
@@ -13,9 +15,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,6 +39,9 @@ public class PublishCourseCommandHandlerTest {
 
     @Mock
     private CourseRepository repository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private PublishCourseCommandHandler sut;
@@ -57,6 +64,9 @@ public class PublishCourseCommandHandlerTest {
         final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
                 .name("name")
                 .description("description")
+                .curriculumItems(List.of(
+                        CreateLectureCommand.builder().title("Intro").serialNumber(1).text("text").build(),
+                        CreateLectureCommand.builder().title("Basics").serialNumber(2).text("text").build()))
                 .build();
         final Course correspondingCourse = courseFactory.createFrom(createCourseCommand);
         correspondingCourse.approve();
@@ -73,6 +83,11 @@ public class PublishCourseCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("name", "name")
                 .hasFieldOrPropertyWithValue("description", "description")
                 .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED);
+
+        final ArgumentCaptor<CoursePublishedIntegrationEvent> event = ArgumentCaptor.forClass(CoursePublishedIntegrationEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertThat(event.getValue().name()).isEqualTo("name");
+        assertThat(event.getValue().lectures()).extracting("title").containsExactly("Intro", "Basics");
     }
 
 

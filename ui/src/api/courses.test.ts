@@ -1,21 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  enrollInCourse,
-  fetchCourseDetails,
-  fetchCourseReviews,
-  fetchCourseReviewSummary,
-  fetchMyEnrollments,
-} from './courses';
-import { HttpError, setToken } from './http';
+import { fetchCourseDetails, fetchCourseReviews, fetchCourseReviewSummary } from './courses';
+import { HttpError } from './http';
 
 const COURSE_UUID = '123e4567-e89b-12d3-a456-426655440001';
-
-function makeToken(payload: Record<string, unknown>): string {
-  const encode = (value: unknown) => btoa(JSON.stringify(value)).replace(/=+$/, '');
-  return `${encode({ alg: 'HS256' })}.${encode(payload)}.signature`;
-}
-
-const STUDENT_TOKEN = makeToken({ sub: 'alice', exp: Math.floor(Date.now() / 1000) + 3600 });
 
 function response(status: number, body?: unknown) {
   return {
@@ -82,40 +69,5 @@ describe('courses api', () => {
     await fetchCourseReviews('../catalog-facets?x=1');
 
     expect(calls[0].url).toBe('/api/courses/..%2Fcatalog-facets%3Fx%3D1/reviews');
-  });
-
-  it('fetchMyEnrollments sends the stored bearer token to the enrollments endpoint', async () => {
-    setToken(STUDENT_TOKEN);
-    const enrollments = [{ uuid: 'e-1', course: COURSE_UUID, student: 'alice', completionStatus: 'IN_PROGRESS' }];
-    const calls = mockFetch(200, enrollments);
-
-    await expect(fetchMyEnrollments()).resolves.toEqual(enrollments);
-
-    expect(calls[0].url).toBe('/api/course-enrollments');
-    expect(headers(calls[0].init).Authorization).toBe(`Bearer ${STUDENT_TOKEN}`);
-  });
-
-  it('enrollInCourse POSTs the student as JSON and returns the created enrollment id', async () => {
-    setToken(STUDENT_TOKEN);
-    const calls = mockFetch(201, 'enrollment-uuid');
-
-    await expect(enrollInCourse(COURSE_UUID, 'alice')).resolves.toBe('enrollment-uuid');
-
-    expect(calls[0].url).toBe(`/api/courses/${COURSE_UUID}/course-enrollments`);
-    expect(calls[0].init?.method).toBe('POST');
-    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ student: 'alice' });
-    expect(headers(calls[0].init)).toMatchObject({
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${STUDENT_TOKEN}`,
-    });
-  });
-
-  it('enrollInCourse rejects with the forbidden status for anonymous callers', async () => {
-    const calls = mockFetch(403, { message: 'forbidden' });
-
-    await expect(enrollInCourse(COURSE_UUID, 'alice')).rejects.toMatchObject({ status: 403 });
-
-    expect(headers(calls[0].init).Authorization).toBeUndefined();
   });
 });

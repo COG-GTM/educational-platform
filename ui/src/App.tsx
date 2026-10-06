@@ -3,7 +3,9 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import CatalogPage from './pages/CatalogPage';
 import CourseDetailPage from './pages/CourseDetailPage';
 import CourseReviewsPage from './pages/CourseReviewsPage';
+import LearningCoursePage from './pages/LearningCoursePage';
 import LoginPage from './pages/LoginPage';
+import MyLearningPage from './pages/MyLearningPage';
 
 function RedirectToCatalog() {
   const location = useLocation();
@@ -11,11 +13,12 @@ function RedirectToCatalog() {
 }
 
 function HeaderNav() {
-  const { user, signOut } = useAuth();
+  const { user, isStudent, signOut } = useAuth();
   const location = useLocation();
   return (
     <nav className="app-nav" aria-label="Main">
       <Link to="/catalog">Catalog</Link>
+      {user && isStudent && <Link to="/learning">My Learning</Link>}
       {user ? (
         <span className="app-nav-user">
           <span>Signed in as {user.username}</span>
@@ -43,6 +46,8 @@ export default function App() {
             <Route path="/catalog" element={<CatalogPage />} />
             <Route path="/courses/:uuid" element={<CourseDetailPage />} />
             <Route path="/courses/:uuid/reviews" element={<CourseReviewsPage />} />
+            <Route path="/learning" element={<MyLearningPage />} />
+            <Route path="/learning/:uuid" element={<LearningCoursePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="*" element={<RedirectToCatalog />} />
           </Routes>

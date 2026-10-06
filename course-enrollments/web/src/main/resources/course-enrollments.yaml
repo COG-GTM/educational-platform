@@ -51,27 +51,175 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RestApiErrorResponse'
+  /courses/{uuid}/course-enrollments/current:
+    get:
+      tags:
+        - Course Enrollments
+      summary: Current student's enrollment to a course
+      description: Returns the enrollment of the authenticated student to the course, 404 when not enrolled.
+      operationId: currentEnrollment
+      parameters:
+        - name: uuid
+          in: path
+          description: Course UUID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Enrollment returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseEnrollmentDTO'
+        '404':
+          description: Student is not enrolled to the course.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiErrorResponse'
   /course-enrollments:
     get:
       tags:
         - Course Enrollments
       summary: List Course Enrollments
-      description: List Course Enrollments
+      description: Paginated list of the authenticated student's enrollments ("My Learning"), most recent activity first.
       operationId: courseEnrollments
+      parameters:
+        - name: status
+          in: query
+          description: Filter by dashboard status. When omitted, every enrollment is returned.
+          required: false
+          schema:
+            type: string
+            enum: [IN_PROGRESS, COMPLETED, ARCHIVED]
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          description: Page size, capped at 50.
+          required: false
+          schema:
+            type: integer
+            default: 12
       responses:
         '200':
-          description: List of course enrollments returned.
+          description: Page of course enrollments returned.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CourseEnrollmentDTO'
+                $ref: '#/components/schemas/CourseEnrollmentPageDTO'
         '500':
           description: Unexpected server error.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RestApiErrorResponse'
+  /course-enrollments/{uuid}:
+    get:
+      tags:
+        - Course Enrollments
+      summary: Course enrollment details
+      description: Enrollment with per-lecture completion state, scoped to the authenticated student.
+      operationId: courseEnrollment
+      parameters:
+        - $ref: '#/components/parameters/EnrollmentUuid'
+      responses:
+        '200':
+          description: Enrollment details returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseEnrollmentDetailsDTO'
+        '404':
+          description: Enrollment not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiErrorResponse'
+  /course-enrollments/{uuid}/lectures/{lectureUuid}/progress:
+    put:
+      tags:
+        - Course Enrollments
+      summary: Mark lecture as completed / not completed
+      description: Updates lecture completion. Completing every lecture completes the enrollment; un-completing a lecture of a completed enrollment moves it back to IN_PROGRESS.
+      operationId: updateLectureProgress
+      parameters:
+        - $ref: '#/components/parameters/EnrollmentUuid'
+        - name: lectureUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LectureProgressRequest'
+      responses:
+        '200':
+          description: Updated enrollment details returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseEnrollmentDetailsDTO'
+        '404':
+          description: Enrollment or lecture not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiErrorResponse'
+        '422':
+          description: Enrollment is archived; restore it first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiErrorResponse'
+  /course-enrollments/{uuid}/archive-status:
+    put:
+      tags:
+        - Course Enrollments
+      summary: Archive or restore an enrollment
+      description: Archived enrollments are hidden from the active list but keep their progress and can be restored.
+      operationId: updateArchiveStatus
+      parameters:
+        - $ref: '#/components/parameters/EnrollmentUuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveStatusRequest'
+      responses:
+        '200':
+          description: Updated enrollment returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseEnrollmentDTO'
+        '404':
+          description: Enrollment not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiErrorResponse'
 components:
+  parameters:
+    EnrollmentUuid:
+      name: uuid
+      in: path
+      description: Course enrollment UUID
+      required: true
+      schema:
+        type: string
+        format: uuid
   schemas:
     CourseEnrollmentRequest:
       description: Course enrollment request
@@ -99,21 +247,103 @@ components:
           type: string
           format: uuid
           description: Course enrollment UUID.
-          example: 123e4567-e89b-12d3-a456-426655440001
         course:
           type: string
           format: uuid
           description: Course UUID.
-          example: 123e4567-e89b-12d3-a456-426655440001
+        courseName:
+          type: string
+          description: Course name snapshot.
         student:
           type: string
           description: Student name.
-          example: name
         completionStatus:
           type: string
           description: Completion status.
-          example: IN_PROGRESS
           enum: [IN_PROGRESS, COMPLETED]
+        archived:
+          type: boolean
+          description: Hidden from the active list.
+        completedLectures:
+          type: integer
+        totalLectures:
+          type: integer
+        progressPercent:
+          type: integer
+          description: Percentage of lectures completed (0-100).
+        enrolledAt:
+          type: string
+          format: date-time
+        lastActivityAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+    LectureProgressDTO:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        title:
+          type: string
+        serialNumber:
+          type: integer
+        completed:
+          type: boolean
+    CourseEnrollmentDetailsDTO:
+      type: object
+      properties:
+        enrollment:
+          $ref: '#/components/schemas/CourseEnrollmentDTO'
+        lectures:
+          type: array
+          items:
+            $ref: '#/components/schemas/LectureProgressDTO'
+    CourseEnrollmentCountsDTO:
+      type: object
+      properties:
+        inProgress:
+          type: integer
+          format: int64
+        completed:
+          type: integer
+          format: int64
+        archived:
+          type: integer
+          format: int64
+    CourseEnrollmentPageDTO:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CourseEnrollmentDTO'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        counts:
+          $ref: '#/components/schemas/CourseEnrollmentCountsDTO'
+    LectureProgressRequest:
+      type: object
+      required: [completed]
+      properties:
+        completed:
+          type: boolean
+    ArchiveStatusRequest:
+      type: object
+      required: [archived]
+      properties:
+        archived:
+          type: boolean
+          description: true to archive, false to restore.
     RestApiError:
       type: object
       required:

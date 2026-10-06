@@ -17,6 +17,7 @@ import jakarta.persistence.OneToMany;
 
 import com.educational.platform.common.domain.AggregateRoot;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
+import com.educational.platform.courses.integration.event.CoursePublishedIntegrationEvent;
 
 /**
  * Represents Course domain model.
@@ -118,5 +119,16 @@ public class Course implements AggregateRoot {
 
 	public UUID toIdentity() {
 		return uuid;
+	}
+
+	public CoursePublishedIntegrationEvent toPublishedEvent() {
+		final List<CoursePublishedIntegrationEvent.Lecture> lectures = curriculumItems == null
+				? List.of()
+				: curriculumItems.stream()
+						.filter(Lecture.class::isInstance)
+						.map(CurriculumItem::toPublishedLecture)
+						.collect(Collectors.toList());
+
+		return new CoursePublishedIntegrationEvent(uuid, name, lectures);
 	}
 }

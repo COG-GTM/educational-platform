@@ -5,6 +5,7 @@ import com.educational.platform.courses.course.Course;
 import com.educational.platform.courses.course.CourseCannotBePublishedException;
 import com.educational.platform.courses.course.CourseRepository;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Component;
@@ -20,13 +21,16 @@ import java.util.Optional;
 public class PublishCourseCommandHandler {
 
     private final CourseRepository repository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public PublishCourseCommandHandler(CourseRepository repository) {
+    public PublishCourseCommandHandler(CourseRepository repository, ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
-     * Handles publish course command. Publishes and save published course
+     * Handles publish course command. Publishes and save published course, then notifies other modules
+     * with {@link com.educational.platform.courses.integration.event.CoursePublishedIntegrationEvent}.
      *
      * @param command command
      * @throws ResourceNotFoundException        if resource not found
@@ -42,5 +46,8 @@ public class PublishCourseCommandHandler {
         final Course course = dbResult.get();
         course.publish();
         repository.save(course);
+
+        // todo integration event outside transaction
+        eventPublisher.publishEvent(course.toPublishedEvent());
     }
 }

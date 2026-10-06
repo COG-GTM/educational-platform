@@ -48,6 +48,6 @@ public class CourseEnrollmentFactory {
 
         final Student student = currentUserAsStudent.userAsStudent();
 
-        return new CourseEnrollment(course.getId(), student.getId());
+        return new CourseEnrollment(course, student);
     }
 }
