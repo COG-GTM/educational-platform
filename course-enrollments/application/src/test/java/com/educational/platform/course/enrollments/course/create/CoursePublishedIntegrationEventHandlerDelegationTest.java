@@ -8,7 +8,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.UUID;
 
@@ -65,5 +69,18 @@ public class CoursePublishedIntegrationEventHandlerDelegationTest {
         assertThat(command.getValue().uuid()).isEqualTo(COURSE);
         assertThat(command.getValue().name()).isEqualTo("Java Basics");
         assertThat(command.getValue().lectures()).isEmpty();
+    }
+
+    @Test
+    void handleCoursePublishedEvent_runsAsyncAfterPublishingTransactionCommits() throws NoSuchMethodException {
+        // when
+        final Method handler = CoursePublishedIntegrationEventHandler.class.getMethod("handleCoursePublishedEvent", CoursePublishedIntegrationEvent.class);
+
+        // then
+        assertThat(handler.isAnnotationPresent(Async.class)).isTrue();
+        final TransactionalEventListener listener = handler.getAnnotation(TransactionalEventListener.class);
+        assertThat(listener).isNotNull();
+        assertThat(listener.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
+        assertThat(listener.fallbackExecution()).isTrue();
     }
 }
