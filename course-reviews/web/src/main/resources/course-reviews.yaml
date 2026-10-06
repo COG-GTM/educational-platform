@@ -138,8 +138,56 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RestApiErrorResponse'
+  /courses/{uuid}/reviews/summary:
+    get:
+      tags:
+        - Course Reviews
+      summary: Course review summary
+      description: Aggregate rating breakdown of a course - average rating, total reviews and number of reviews per star level.
+      operationId: courseReviewSummary
+      parameters:
+        - name: uuid
+          in: path
+          description: Course UUID
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440001
+      responses:
+        '200':
+          description: Course review summary returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseReviewSummaryResponse'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiErrorResponse'
 components:
   schemas:
+    CourseReviewSummaryResponse:
+      description: Aggregate rating breakdown response model
+      type: object
+      properties:
+        averageRating:
+          type: number
+          format: double
+          example: 4.2
+        totalReviews:
+          type: integer
+          format: int64
+          example: 17
+        ratingCounts:
+          type: object
+          description: Number of reviews per star level (keys 1-5)
+          additionalProperties:
+            type: integer
+            format: int64
+          example: { "1": 0, "2": 1, "3": 2, "4": 6, "5": 8 }
     ReviewCourseRequest:
       description: Review Course model
       type: object
@@ -212,6 +260,10 @@ components:
             type: double
             description: rating
             example: 4.2
+          createdDate:
+            type: string
+            format: date-time
+            description: when the review was created, list is ordered most recent first
     RestApiError:
       type: object
       required:

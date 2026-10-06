@@ -42,7 +42,7 @@ public class WebSecurityConfig {
 				"/h2-console/**",
 				"/public"
 		).permitAll()
-				.requestMatchers(HttpMethod.GET, "/courses", "/courses/catalog-facets").permitAll()
+				.requestMatchers(HttpMethod.GET, "/courses", "/courses/catalog-facets", "/courses/{uuid}", "/courses/{uuid}/reviews", "/courses/{uuid}/reviews/summary").permitAll()
 				.anyRequest().authenticated());
 
 		http.addFilterBefore(new JwtTokenFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);

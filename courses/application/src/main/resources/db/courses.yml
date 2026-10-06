@@ -242,3 +242,19 @@ databaseChangeLog:
                   name: created_date
                   type: timestamp
                   defaultValueComputed: CURRENT_TIMESTAMP
+  - changeSet:
+      id: 2026_10_06-1
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          columnExists:
+            tableName: course
+            columnName: published_date
+      changes:
+        - addColumn:
+            tableName: course
+            columns:
+              - column:
+                  name: published_date
+                  type: timestamp

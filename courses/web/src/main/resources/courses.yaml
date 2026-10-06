@@ -178,8 +178,96 @@ paths:
               schema:
                 $ref: '#/components/schemas/RestApiErrorResponse'
 
+  /courses/{uuid}:
+    get:
+      tags:
+        - Courses
+      summary: Course details
+      description: Returns full details of a published course with its ordered curriculum outline. Draft and archived courses are reported as not found.
+      operationId: courseDetails
+      parameters:
+        - name: uuid
+          in: path
+          description: Course UUID
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440001
+      responses:
+        '200':
+          description: Course details returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseDetailsResponse'
+        '404':
+          description: Course with provided identifier not found or not published.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiErrorResponse'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiErrorResponse'
 components:
   schemas:
+    CourseDetailsResponse:
+      description: Published course details response model
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440001
+        name:
+          type: string
+          example: Java Basics
+        description:
+          type: string
+          example: Learn Java from scratch
+        category:
+          type: string
+          nullable: true
+          example: Programming
+        teacherName:
+          type: string
+          example: teacher
+        rating:
+          type: number
+          format: double
+          example: 4.5
+        numberOfStudents:
+          type: integer
+          example: 42
+        publishedDate:
+          type: string
+          format: date-time
+          nullable: true
+        curriculumItems:
+          type: array
+          description: Curriculum outline ordered by serial number
+          items:
+            type: object
+            properties:
+              uuid:
+                type: string
+                format: uuid
+              title:
+                type: string
+                example: Introduction
+              description:
+                type: string
+                nullable: true
+              serialNumber:
+                type: integer
+                example: 1
+              type:
+                type: string
+                enum: [LECTURE, QUIZ]
     CreateCourseRequest:
       description: Course creation model
       type: object

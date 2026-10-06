@@ -121,3 +121,20 @@ databaseChangeLog:
             referencedColumnNames: id
             referencedTableName: reviewer
             validate: true
+  - changeSet:
+      id: 2026_10_06-1
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          columnExists:
+            tableName: course_review
+            columnName: created_date
+      changes:
+        - addColumn:
+            tableName: course_review
+            columns:
+              - column:
+                  name: created_date
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
