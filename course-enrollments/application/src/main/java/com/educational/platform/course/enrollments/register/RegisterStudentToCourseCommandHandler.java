@@ -45,18 +45,26 @@ public class RegisterStudentToCourseCommandHandler {
     @Nonnull
     @PreAuthorize("hasRole('STUDENT')")
     public UUID handle(RegisterStudentToCourseCommand command) {
-        final CourseEnrollment courseEnrollment = transactionTemplate.execute(transactionStatus -> {
+        final Registration registration = Objects.requireNonNull(transactionTemplate.execute(transactionStatus -> {
             final CourseEnrollment enrollment = courseEnrollmentFactory.createFrom(command);
-            courseEnrollmentRepository.save(enrollment);
+            return courseEnrollmentRepository
+                    .findFirstByCourseAndStudentOrderByIdAsc(enrollment.getCourse(), enrollment.getStudent())
+                    .map(existing -> new Registration(existing.getUuid(), false))
+                    .orElseGet(() -> {
+                        courseEnrollmentRepository.save(enrollment);
+                        return new Registration(enrollment.getUuid(), true);
+                    });
+        }));
 
-            return enrollment;
-        });
+        if (registration.created()) {
+            eventPublisher.publishEvent(new StudentEnrolledToCourseIntegrationEvent(command.courseId(),
+                    currentUserAsStudent.userAsStudent().toReference()));
+        }
 
-        final UUID uuid = Objects.requireNonNull(courseEnrollment).getUuid();
-        eventPublisher.publishEvent(new StudentEnrolledToCourseIntegrationEvent(command.courseId(),
-                currentUserAsStudent.userAsStudent().toReference()));
+        return registration.uuid();
+    }
 
-        return uuid;
+    private record Registration(UUID uuid, boolean created) {
     }
 
 }

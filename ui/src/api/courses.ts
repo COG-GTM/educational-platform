@@ -1,4 +1,4 @@
-import { get, post } from './http';
+import { get } from './http';
 
 export type CurriculumItemType = 'LECTURE' | 'QUIZ';
 
@@ -38,13 +38,6 @@ export interface CourseReviewSummary {
   ratingCounts: Record<string, number>;
 }
 
-export interface CourseEnrollment {
-  uuid: string;
-  course: string;
-  student: string;
-  completionStatus: string;
-}
-
 export function fetchCourseDetails(uuid: string): Promise<CourseDetails> {
   return get<CourseDetails>(`/api/courses/${encodeURIComponent(uuid)}`);
 }
@@ -55,12 +48,4 @@ export function fetchCourseReviews(uuid: string): Promise<CourseReview[]> {
 
 export function fetchCourseReviewSummary(uuid: string): Promise<CourseReviewSummary> {
   return get<CourseReviewSummary>(`/api/courses/${encodeURIComponent(uuid)}/reviews/summary`);
-}
-
-export function fetchMyEnrollments(): Promise<CourseEnrollment[]> {
-  return get<CourseEnrollment[]>('/api/course-enrollments');
-}
-
-export function enrollInCourse(uuid: string, student: string): Promise<string> {
-  return post<string>(`/api/courses/${encodeURIComponent(uuid)}/course-enrollments`, { student });
 }

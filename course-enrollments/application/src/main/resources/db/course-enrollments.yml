@@ -116,3 +116,117 @@ databaseChangeLog:
             referencedColumnNames: id
             referencedTableName: student
             validate: true
+  - changeSet:
+      id: 2026_10_06-1
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          columnExists:
+            tableName: enroll_course
+            columnName: name
+      changes:
+        - addColumn:
+            tableName: enroll_course
+            columns:
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+  - changeSet:
+      id: 2026_10_06-2
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          tableExists:
+            tableName: enroll_lecture
+      changes:
+        - createTable:
+            tableName: enroll_lecture
+            columns:
+              - column:
+                  name: id
+                  type: int
+                  autoIncrement: true
+                  startWith: 1
+                  incrementBy: 1
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: enroll_lecture_pk
+              - column:
+                  constraints:
+                    nullable: false
+                  name: uuid
+                  type: uuid
+              - column:
+                  name: title
+                  type: VARCHAR(255)
+              - column:
+                  name: serial_number
+                  type: int
+              - column:
+                  constraints:
+                    nullable: false
+                    foreignKeyName: enroll_lecture_course_fkey
+                    references: enroll_course(id)
+                  name: course
+                  type: int
+  - changeSet:
+      id: 2026_10_06-3
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          columnExists:
+            tableName: course_enrollment
+            columnName: archived
+      changes:
+        - addColumn:
+            tableName: course_enrollment
+            columns:
+              - column:
+                  name: archived
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enrolled_at
+                  type: timestamp
+              - column:
+                  name: last_activity_at
+                  type: timestamp
+              - column:
+                  name: completed_at
+                  type: timestamp
+              - column:
+                  name: archived_at
+                  type: timestamp
+  - changeSet:
+      id: 2026_10_06-4
+      author: devin
+      preConditions:
+        onFail: MARK_RAN
+        not:
+          tableExists:
+            tableName: course_enrollment_completed_lecture
+      changes:
+        - createTable:
+            tableName: course_enrollment_completed_lecture
+            columns:
+              - column:
+                  constraints:
+                    nullable: false
+                    foreignKeyName: completed_lecture_enrollment_fkey
+                    references: course_enrollment(id)
+                  name: enrollment
+                  type: int
+              - column:
+                  constraints:
+                    nullable: false
+                  name: lecture
+                  type: uuid
+        - addPrimaryKey:
+            tableName: course_enrollment_completed_lecture
+            columnNames: enrollment, lecture
+            constraintName: course_enrollment_completed_lecture_pk

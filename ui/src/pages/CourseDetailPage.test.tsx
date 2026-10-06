@@ -74,9 +74,13 @@ function mockApi(options: MockOptions = {}) {
     if (url.endsWith('/course-enrollments') && method === 'POST') {
       return Promise.resolve(response(options.enrollStatus ?? 201, 'enrollment-uuid'));
     }
-    if (url.endsWith('/course-enrollments')) {
+    if (url.endsWith('/course-enrollments/current')) {
       const status = options.enrollmentsStatus ?? 200;
-      return Promise.resolve(response(status, status === 200 ? (options.enrollments ?? []) : {}));
+      if (status !== 200) return Promise.resolve(response(status, {}));
+      const current = (options.enrollments ?? []).find((e) => e.course === COURSE_UUID);
+      return Promise.resolve(
+        current ? response(200, { uuid: 'enrollment-uuid', course: current.course }) : response(404, { message: 'not found' }),
+      );
     }
     if (url.endsWith(`/api/courses/${COURSE_UUID}`)) {
       const status = options.courseStatus ?? 200;
@@ -147,7 +151,7 @@ describe('CourseDetailPage', () => {
     mockApi({ enrollments: [{ course: COURSE_UUID }] });
     renderPage();
 
-    expect(await screen.findByRole('link', { name: 'Enrolled — go to course' })).toHaveAttribute('href', '#curriculum');
+    expect(await screen.findByRole('link', { name: 'Enrolled — go to course' })).toHaveAttribute('href', '/learning/enrollment-uuid');
     expect(screen.queryByRole('button', { name: 'Enroll' })).not.toBeInTheDocument();
   });
 

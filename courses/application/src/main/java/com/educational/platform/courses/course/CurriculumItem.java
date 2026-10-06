@@ -13,6 +13,8 @@ import jakarta.persistence.InheritanceType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 
+import com.educational.platform.courses.integration.event.CoursePublishedIntegrationEvent;
+
 /**
  * Represents Curriculum Item domain model.
  */
@@ -47,5 +49,9 @@ public abstract class CurriculumItem {
 		this.description = description;
 		this.course = course;
 		this.serialNumber = serialNumber;
+	}
+
+	CoursePublishedIntegrationEvent.Lecture toPublishedLecture() {
+		return new CoursePublishedIntegrationEvent.Lecture(uuid, title, serialNumber);
 	}
 }

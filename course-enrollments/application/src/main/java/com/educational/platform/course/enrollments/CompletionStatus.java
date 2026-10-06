@@ -1,7 +1,7 @@
 package com.educational.platform.course.enrollments;
 
 /**
- * Represents possible values for completion status of enrollment
+ * Represents the completion status of the enrollment.
  */
 public enum CompletionStatus {
 

@@ -96,3 +96,7 @@ export function get<T>(url: string): Promise<T> {
 export function post<T>(url: string, body: unknown, parse: 'json' | 'text' = 'json'): Promise<T> {
   return request<T>(url, { method: 'POST', body, parse });
 }
+
+export function put<T>(url: string, body: unknown): Promise<T> {
+  return request<T>(url, { method: 'PUT', body });
+}

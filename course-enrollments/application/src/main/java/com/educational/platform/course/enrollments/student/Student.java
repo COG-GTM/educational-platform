@@ -21,7 +21,7 @@ public class Student implements AggregateRoot {
     private String username;
 
     // for JPA
-    private Student() {
+    protected Student() {
     }
 
     public Student(CreateStudentCommand createStudentCommand) {

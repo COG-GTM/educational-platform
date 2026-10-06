@@ -5,12 +5,15 @@ import com.educational.platform.course.enrollments.course.EnrollCourse;
 import com.educational.platform.course.enrollments.course.EnrollCourseRepository;
 import com.educational.platform.course.enrollments.register.RegisterStudentToCourseCommand;
 import com.educational.platform.course.enrollments.student.Student;
+import com.educational.platform.course.enrollments.student.StudentRepository;
+import com.educational.platform.course.enrollments.student.create.CreateStudentCommand;
 
 import org.springframework.stereotype.Component;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validator;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -21,11 +24,14 @@ public class CourseEnrollmentFactory {
 
     private final Validator validator;
     private final EnrollCourseRepository courseRepository;
+    private final StudentRepository studentRepository;
     private final CurrentUserAsStudent currentUserAsStudent;
 
-    public CourseEnrollmentFactory(Validator validator, EnrollCourseRepository courseRepository, CurrentUserAsStudent currentUserAsStudent) {
+    public CourseEnrollmentFactory(Validator validator, EnrollCourseRepository courseRepository, StudentRepository studentRepository,
+                                   CurrentUserAsStudent currentUserAsStudent) {
         this.validator = validator;
         this.courseRepository = courseRepository;
+        this.studentRepository = studentRepository;
         this.currentUserAsStudent = currentUserAsStudent;
     }
 
@@ -46,8 +52,9 @@ public class CourseEnrollmentFactory {
         final EnrollCourse course = courseRepository.findByUuid(command.courseId())
                 .orElseThrow(() -> new RelatedResourceIsNotResolvedException("Course cannot be found by uuid = " + command.courseId()));
 
-        final Student student = currentUserAsStudent.userAsStudent();
+        final Student student = Optional.ofNullable(currentUserAsStudent.userAsStudent())
+                .orElseGet(() -> studentRepository.save(new Student(new CreateStudentCommand(currentUserAsStudent.username()))));
 
-        return new CourseEnrollment(course.getId(), student.getId());
+        return new CourseEnrollment(course, student);
     }
 }

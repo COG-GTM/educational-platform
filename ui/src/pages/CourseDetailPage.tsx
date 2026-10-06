@@ -4,12 +4,11 @@ import {
   CourseDetails,
   CourseReview,
   CourseReviewSummary,
-  enrollInCourse,
   fetchCourseDetails,
   fetchCourseReviews,
   fetchCourseReviewSummary,
-  fetchMyEnrollments,
 } from '../api/courses';
+import { enrollInCourse, fetchCurrentEnrollment } from '../api/enrollments';
 import { HttpError } from '../api/http';
 import { useAuth } from '../auth/AuthContext';
 import RatingBreakdown from '../components/RatingBreakdown';
@@ -34,6 +33,7 @@ export default function CourseDetailPage() {
   const [reloadToken, setReloadToken] = useState(0);
 
   const [enrollment, setEnrollment] = useState<EnrollmentState>('unknown');
+  const [enrollmentUuid, setEnrollmentUuid] = useState<string | null>(null);
   const [enrollmentCheckToken, setEnrollmentCheckToken] = useState(0);
   const [enrolling, setEnrolling] = useState(false);
   const [enrollMessage, setEnrollMessage] = useState<string | null>(null);
@@ -80,10 +80,11 @@ export default function CourseDetailPage() {
     }
     let cancelled = false;
     setEnrollment('checking');
-    fetchMyEnrollments()
-      .then((enrollments) => {
+    fetchCurrentEnrollment(uuid)
+      .then((current) => {
         if (cancelled) return;
-        setEnrollment(enrollments.some((e) => e.course === uuid) ? 'enrolled' : 'not-enrolled');
+        setEnrollmentUuid(current?.uuid ?? null);
+        setEnrollment(current ? 'enrolled' : 'not-enrolled');
       })
       .catch(() => {
         if (!cancelled) setEnrollment('check-failed');
@@ -99,8 +100,9 @@ export default function CourseDetailPage() {
     setEnrolling(true);
     setEnrollError(null);
     try {
-      await enrollInCourse(target, user.username);
+      const created = await enrollInCourse(target, user.username);
       if (activeUuid.current !== target) return;
+      setEnrollmentUuid(created);
       setEnrollment('enrolled');
       setEnrollMessage("You're enrolled! The course is now in your learning list.");
       setCourse((current) =>
@@ -227,9 +229,9 @@ export default function CourseDetailPage() {
             </button>
           )}
           {user && isStudent && enrollment === 'enrolled' && (
-            <a href="#curriculum" className="button-link button-enrolled">
+            <Link to={enrollmentUuid ? `/learning/${enrollmentUuid}` : '/learning'} className="button-link button-enrolled">
               Enrolled — go to course
-            </a>
+            </Link>
           )}
           <p className="course-detail-cta-status" role="status" aria-live="polite">
             {enrollMessage}

@@ -27,4 +27,15 @@ describe('Pagination', () => {
     fireEvent.click(screen.getByText('Previous'));
     expect(onPageChange).toHaveBeenCalledWith(0);
   });
+
+  it('labels the navigation "Catalog pages" by default', () => {
+    render(<Pagination page={0} totalPages={2} onPageChange={() => {}} />);
+    expect(screen.getByRole('navigation', { name: 'Catalog pages' })).toBeInTheDocument();
+  });
+
+  it('uses a custom navigation label when provided', () => {
+    render(<Pagination page={0} totalPages={2} onPageChange={() => {}} label="My Learning pages" />);
+    expect(screen.getByRole('navigation', { name: 'My Learning pages' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Catalog pages' })).not.toBeInTheDocument();
+  });
 });

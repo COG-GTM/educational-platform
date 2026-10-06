@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Command handler for {@link CreateCourseCommand} creates a course.
+ * Command handler for {@link CreateCourseCommand} creates a course or refreshes its snapshot when the course is published again.
  */
 @Component
 @Transactional
@@ -20,12 +20,14 @@ public class CreateEnrollmentCourseCommandHandler {
     }
 
     /**
-     * Creates course from command.
+     * Creates course from command or updates already known course.
      *
      * @param command command
      */
     public void handle(CreateCourseCommand command) {
-        final EnrollCourse course = new EnrollCourse(command);
+        final EnrollCourse course = courseRepository.findByUuid(command.uuid())
+                .map(existing -> existing.refresh(command))
+                .orElseGet(() -> new EnrollCourse(command));
         courseRepository.save(course);
     }
 }

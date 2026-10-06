@@ -2,13 +2,14 @@ interface PaginationProps {
   page: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  label?: string;
 }
 
-export default function Pagination({ page, totalPages, onPageChange }: PaginationProps) {
+export default function Pagination({ page, totalPages, onPageChange, label = 'Catalog pages' }: PaginationProps) {
   if (totalPages <= 1) return null;
 
   return (
-    <nav className="pagination" aria-label="Catalog pages">
+    <nav className="pagination" aria-label={label}>
       <button type="button" disabled={page <= 0} onClick={() => onPageChange(page - 1)}>
         Previous
       </button>
