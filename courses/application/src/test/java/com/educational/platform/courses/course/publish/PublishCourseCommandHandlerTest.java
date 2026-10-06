@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,8 +26,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -103,5 +106,56 @@ public class PublishCourseCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void handle_approvedCourse_eventReferencesCourseAndIsPublishedAfterSave() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final PublishCourseCommand command = new PublishCourseCommand(uuid);
+        final Teacher teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        final Course correspondingCourse = courseFactory.createFrom(CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .curriculumItems(List.of(CreateLectureCommand.builder().title("Intro").serialNumber(3).text("text").build()))
+                .build());
+        correspondingCourse.approve();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        sut.handle(command);
+
+        // then
+        final InOrder inOrder = inOrder(repository, eventPublisher);
+        inOrder.verify(repository).save(correspondingCourse);
+        final ArgumentCaptor<CoursePublishedIntegrationEvent> event = ArgumentCaptor.forClass(CoursePublishedIntegrationEvent.class);
+        inOrder.verify(eventPublisher).publishEvent(event.capture());
+        assertThat(event.getValue().courseId()).isEqualTo(correspondingCourse.toIdentity());
+        assertThat(event.getValue().lectures()).singleElement()
+                .hasFieldOrPropertyWithValue("title", "Intro")
+                .hasFieldOrPropertyWithValue("serialNumber", 3);
+    }
+
+    @Test
+    void handle_courseNotApproved_courseCannotBePublishedExceptionAndNoEvent() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final PublishCourseCommand command = new PublishCourseCommand(uuid);
+        final Teacher teacher = mock(Teacher.class);
+        when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
+        final Course correspondingCourse = courseFactory.createFrom(CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build());
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourse));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(handle);
+        verifyNoInteractions(eventPublisher);
     }
 }

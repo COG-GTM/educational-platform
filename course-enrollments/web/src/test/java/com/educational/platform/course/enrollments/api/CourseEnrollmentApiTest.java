@@ -287,4 +287,94 @@ public class CourseEnrollmentApiTest {
                 .statusCode(HttpStatus.NOT_FOUND.value());
     }
 
+
+    @Test
+    void enrollment_ownedByAnotherStudent_notFoundOnEveryStudentScopedEndpoint() {
+        var ownerToken = SignUpHelper.signUpStudent();
+        var course = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        var lecture = UUID.fromString("223e4567-e89b-12d3-a456-426655440001");
+
+        var enrollment = given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + ownerToken)
+                .body("{\"student\": \"username\"}")
+                .when()
+                .post("/courses/{uuid}/course-enrollments", course)
+                .then()
+                .statusCode(HttpStatus.CREATED.value())
+                .extract().asString().replace("\"", "");
+
+        var otherToken = signUpOtherStudent();
+
+        given()
+                .header("Authorization", "Bearer " + otherToken)
+                .when()
+                .get("/course-enrollments/{uuid}", enrollment)
+                .then()
+                .statusCode(HttpStatus.NOT_FOUND.value());
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + otherToken)
+                .body("{\"completed\": true}")
+                .when()
+                .put("/course-enrollments/{uuid}/lectures/{lecture}/progress", enrollment, lecture)
+                .then()
+                .statusCode(HttpStatus.NOT_FOUND.value());
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + otherToken)
+                .body("{\"archived\": true}")
+                .when()
+                .put("/course-enrollments/{uuid}/archive-status", enrollment)
+                .then()
+                .statusCode(HttpStatus.NOT_FOUND.value());
+
+        given()
+                .header("Authorization", "Bearer " + otherToken)
+                .when()
+                .get("/courses/{uuid}/course-enrollments/current", course)
+                .then()
+                .statusCode(HttpStatus.NOT_FOUND.value());
+
+        given()
+                .header("Authorization", "Bearer " + otherToken)
+                .when()
+                .get("/course-enrollments")
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("items", hasSize(0))
+                .body("counts.inProgress", is(0));
+
+        given()
+                .header("Authorization", "Bearer " + ownerToken)
+                .when()
+                .get("/course-enrollments/{uuid}", enrollment)
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("enrollment.progressPercent", is(0))
+                .body("enrollment.archived", is(false));
+    }
+
+    private static String signUpOtherStudent() {
+        var response = given()
+                .contentType(ContentType.JSON)
+                .body("{\"role\": \"ROLE_STUDENT\", \"username\": \"other\", \"email\": \"other@gmail.com\", \"password\": \"password\"}")
+                .when()
+                .post("/users/sign-up")
+                .then()
+                .extract().response();
+
+        if (response.statusCode() == HttpStatus.UNPROCESSABLE_ENTITY.value()) {
+            return given()
+                    .contentType(ContentType.JSON)
+                    .body("{\"username\": \"other\", \"password\": \"password\"}")
+                    .when()
+                    .post("/users/sign-in")
+                    .asString();
+        }
+
+        return response.asString();
+    }
 }

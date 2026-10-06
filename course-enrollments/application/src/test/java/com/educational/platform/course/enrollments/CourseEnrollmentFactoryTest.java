@@ -59,6 +59,9 @@ public class CourseEnrollmentFactoryTest {
 
         // then
         assertThat(enrollment).hasFieldOrPropertyWithValue("completionStatus", CompletionStatus.IN_PROGRESS);
+        assertThat(enrollment.toDTO().course()).isEqualTo(courseId);
+        assertThat(enrollment.toDTO().student()).isEqualTo("username");
+        assertThat(enrollment.toDTO().totalLectures()).isZero();
     }
 
     @Test
