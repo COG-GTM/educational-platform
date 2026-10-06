@@ -404,4 +404,42 @@ public class CourseEnrollmentTest {
 		assertThat(sut.toDTO().progressPercent()).isEqualTo(100);
 	}
 
+	@Test
+	void completeLecture_completedCourseGainsLectureOnRepublish_statusAndCompletedAtKept() {
+		// given
+		final EnrollCourse course = new EnrollCourse(new CreateCourseCommand(COURSE, "Java Basics", List.of(
+				new CreateCourseCommand.CreateLectureCommand(FIRST_LECTURE, "Intro", 1),
+				new CreateCourseCommand.CreateLectureCommand(SECOND_LECTURE, "Variables", 2))));
+		final CourseEnrollment sut = new CourseEnrollment(course, new Student(new CreateStudentCommand("username")));
+		sut.completeLecture(FIRST_LECTURE);
+		sut.completeLecture(SECOND_LECTURE);
+		final LocalDateTime completedAt = sut.toDTO().completedAt();
+		assertThat(completedAt).isNotNull();
+
+		// when
+		final UUID thirdLecture = UUID.fromString("223e4567-e89b-12d3-a456-426655440003");
+		course.refresh(new CreateCourseCommand(COURSE, "Java Basics", List.of(
+				new CreateCourseCommand.CreateLectureCommand(FIRST_LECTURE, "Intro", 1),
+				new CreateCourseCommand.CreateLectureCommand(SECOND_LECTURE, "Variables", 2),
+				new CreateCourseCommand.CreateLectureCommand(thirdLecture, "Loops", 3))));
+
+		// then
+		CourseEnrollmentDTO dto = sut.toDTO();
+		assertThat(dto.completionStatus()).isEqualTo(CompletionStatusDTO.COMPLETED);
+		assertThat(dto.completedLectures()).isEqualTo(2);
+		assertThat(dto.totalLectures()).isEqualTo(3);
+		assertThat(dto.progressPercent()).isEqualTo(67);
+		assertThat(dto.completedAt()).isEqualTo(completedAt);
+
+		// when
+		sut.completeLecture(thirdLecture);
+
+		// then
+		dto = sut.toDTO();
+		assertThat(dto.completionStatus()).isEqualTo(CompletionStatusDTO.COMPLETED);
+		assertThat(dto.progressPercent()).isEqualTo(100);
+		assertThat(dto.completedAt()).isEqualTo(completedAt);
+		assertThat(dto.lastActivityAt()).isAfterOrEqualTo(completedAt);
+	}
+
 }
