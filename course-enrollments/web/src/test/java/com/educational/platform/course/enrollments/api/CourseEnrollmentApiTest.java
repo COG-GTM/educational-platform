@@ -214,4 +214,77 @@ public class CourseEnrollmentApiTest {
                 .statusCode(HttpStatus.FORBIDDEN.value());
     }
 
+    @Test
+    void enrollments_pageSizeAboveMaxAndNegativePage_clampedToLimits() {
+        var token = SignUpHelper.signUpStudent();
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .when()
+                .get("/course-enrollments?page=-1&size=500")
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("page", is(0))
+                .body("size", is(50))
+                .body("items", hasSize(0))
+                .body("totalElements", is(0))
+                .body("totalPages", is(0))
+                .body("counts.inProgress", is(0))
+                .body("counts.completed", is(0))
+                .body("counts.archived", is(0));
+    }
+
+    @Test
+    void enrollments_noParameters_defaultPageSize() {
+        var token = SignUpHelper.signUpStudent();
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .when()
+                .get("/course-enrollments")
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("page", is(0))
+                .body("size", is(12));
+    }
+
+    @Test
+    void updateLectureProgress_lectureNotInCourse_notFound() {
+        var token = SignUpHelper.signUpStudent();
+        var course = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        var enrollment = given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .body("{\"student\": \"username\"}")
+                .when()
+                .post("/courses/{uuid}/course-enrollments", course)
+                .then()
+                .statusCode(HttpStatus.CREATED.value())
+                .extract().asString().replace("\"", "");
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .body("{\"completed\": true}")
+                .when()
+                .put("/course-enrollments/{uuid}/lectures/{lecture}/progress", enrollment, UUID.randomUUID())
+                .then()
+                .statusCode(HttpStatus.NOT_FOUND.value());
+    }
+
+    @Test
+    void updateArchiveStatus_unknownEnrollment_notFound() {
+        var token = SignUpHelper.signUpStudent();
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .body("{\"archived\": true}")
+                .when()
+                .put("/course-enrollments/{uuid}/archive-status", UUID.randomUUID())
+                .then()
+                .statusCode(HttpStatus.NOT_FOUND.value());
+    }
+
 }

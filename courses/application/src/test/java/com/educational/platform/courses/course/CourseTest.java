@@ -2,6 +2,9 @@ package com.educational.platform.courses.course;
 
 
 import com.educational.platform.courses.course.create.CreateCourseCommand;
+import com.educational.platform.courses.course.create.CreateLectureCommand;
+import com.educational.platform.courses.course.create.CreateQuizCommand;
+import com.educational.platform.courses.integration.event.CoursePublishedIntegrationEvent;
 import com.educational.platform.courses.teacher.Teacher;
 import com.educational.platform.courses.teacher.create.CreateTeacherCommand;
 import org.assertj.core.api.ThrowableAssert;
@@ -10,9 +13,11 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.InstanceOfAssertFactories.LOCAL_DATE_TIME;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public class CourseTest {
 
@@ -235,4 +240,45 @@ public class CourseTest {
         assertThat(course).hasFieldOrPropertyWithValue("publishedDate", null);
     }
 
+    @Test
+    void toPublishedEvent_lecturesAndQuizzes_onlyLecturesInPublishedOrder() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .curriculumItems(List.of(
+                        CreateLectureCommand.builder().title("Intro").serialNumber(1).text("text").build(),
+                        CreateQuizCommand.builder().title("Quiz").serialNumber(2).text("text").questions(List.of()).build(),
+                        CreateLectureCommand.builder().title("Basics").serialNumber(3).text("text").build()))
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when
+        final CoursePublishedIntegrationEvent event = course.toPublishedEvent();
+
+        // then
+        assertThat(event.courseId()).isEqualTo(course.toIdentity());
+        assertThat(event.name()).isEqualTo("name");
+        assertThat(event.lectures()).extracting("title", "serialNumber")
+                .containsExactly(tuple("Intro", 1), tuple("Basics", 3));
+        assertThat(event.lectures()).extracting("uuid").doesNotContainNull().doesNotHaveDuplicates();
+    }
+
+    @Test
+    void toPublishedEvent_noCurriculum_emptyLectures() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+
+        // when
+        final CoursePublishedIntegrationEvent event = course.toPublishedEvent();
+
+        // then
+        assertThat(event.courseId()).isEqualTo(course.toIdentity());
+        assertThat(event.name()).isEqualTo("name");
+        assertThat(event.lectures()).isEmpty();
+    }
 }
