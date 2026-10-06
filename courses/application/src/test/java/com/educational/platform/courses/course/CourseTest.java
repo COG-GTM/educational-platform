@@ -206,14 +206,15 @@ public class CourseTest {
                 .build();
         final Course course = new Course(createCourseCommand, TEACHER_ID);
         course.approve();
-        final LocalDateTime firstPublishedDate = LocalDateTime.of(2024, 1, 15, 10, 30);
-        ReflectionTestUtils.setField(course, "publishedDate", firstPublishedDate);
+        course.publish();
+        final LocalDateTime firstPublishedDate = (LocalDateTime) ReflectionTestUtils.getField(course, "publishedDate");
         course.archive();
 
         // when
         course.publish();
 
         // then
+        assertThat(firstPublishedDate).isNotNull();
         assertThat(course)
                 .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED)
                 .hasFieldOrPropertyWithValue("publishedDate", firstPublishedDate);
