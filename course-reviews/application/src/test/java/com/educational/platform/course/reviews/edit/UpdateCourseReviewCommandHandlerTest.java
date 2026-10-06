@@ -6,6 +6,7 @@ import com.educational.platform.course.reviews.course.ReviewableCourse;
 import com.educational.platform.course.reviews.course.ReviewableCourseRepository;
 import com.educational.platform.course.reviews.course.create.CreateReviewableCourseCommand;
 import com.educational.platform.course.reviews.create.ReviewCourseCommand;
+import com.educational.platform.course.reviews.rating.CourseRatingRecalculator;
 import com.educational.platform.course.reviews.reviewer.Reviewer;
 import com.educational.platform.course.reviews.reviewer.create.CreateReviewerCommand;
 import org.assertj.core.api.ThrowableAssert;
@@ -40,6 +41,9 @@ public class UpdateCourseReviewCommandHandlerTest {
     @Mock
     private CurrentUserAsReviewer currentUserAsReviewer;
 
+    @Mock
+    private CourseRatingRecalculator courseRatingRecalculator;
+
     private CourseReviewFactory courseReviewFactory;
     private UpdateCourseReviewCommandHandler sut;
 
@@ -47,7 +51,7 @@ public class UpdateCourseReviewCommandHandlerTest {
     void setUp() {
         final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
         courseReviewFactory = new CourseReviewFactory(validator, currentUserAsReviewer, reviewableCourseRepository);
-        sut = new UpdateCourseReviewCommandHandler(validator, courseReviewRepository);
+        sut = new UpdateCourseReviewCommandHandler(validator, courseReviewRepository, courseRatingRecalculator);
     }
 
     @Test

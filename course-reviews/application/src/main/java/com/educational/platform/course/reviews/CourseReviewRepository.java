@@ -32,7 +32,7 @@ public interface CourseReviewRepository extends JpaRepository<CourseReview, Inte
             + "join com.educational.platform.course.reviews.course.ReviewableCourse c on cr.course = c.id "
             + "join com.educational.platform.course.reviews.reviewer.Reviewer r on cr.reviewer = r.id "
             + "where c.originalCourseId = :uuid "
-            + "order by cr.createdDate desc, cr.id desc")
+            + "order by cr.createdDate desc nulls last, cr.id desc")
     List<CourseReviewDTO> listCourseReviews(@Param("uuid") UUID uuid);
 
     /**
@@ -45,6 +45,17 @@ public interface CourseReviewRepository extends JpaRepository<CourseReview, Inte
             + "join com.educational.platform.course.reviews.course.ReviewableCourse c on cr.course = c.id "
             + "where c.originalCourseId = :uuid")
     List<Double> listRatings(@Param("uuid") UUID uuid);
+
+    /**
+     * Resolves the uuid of the course a review belongs to.
+     *
+     * @param reviewUuid course review uuid.
+     * @return course uuid or empty if the review does not exist.
+     */
+    @Query("select c.originalCourseId from CourseReview cr "
+            + "join com.educational.platform.course.reviews.course.ReviewableCourse c on cr.course = c.id "
+            + "where cr.uuid = :reviewUuid")
+    Optional<UUID> findCourseUuid(@Param("reviewUuid") UUID reviewUuid);
 
     /**
      * Checks if passed username is an username of reviewer of course review.

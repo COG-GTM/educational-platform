@@ -89,8 +89,8 @@ describe('LoginPage', () => {
     expect(screen.getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/courses/abc');
   });
 
-  it('reports wrong credentials on 401 and stays on the page without a token', async () => {
-    mockSignIn(401, '{}');
+  it.each([401, 422])('reports wrong credentials on %i and stays on the page without a token', async (status) => {
+    mockSignIn(status, '{}');
     renderPage();
 
     submit();

@@ -25,7 +25,7 @@ export default function LoginPage() {
       await signIn(username.trim(), password);
       navigate(redirectTo, { replace: true });
     } catch (e) {
-      if (e instanceof HttpError && (e.status === 400 || e.status === 401 || e.status === 403)) {
+      if (e instanceof HttpError && [400, 401, 403, 422].includes(e.status)) {
         setError('Wrong username or password.');
       } else {
         setError('Could not sign you in right now. Please try again.');

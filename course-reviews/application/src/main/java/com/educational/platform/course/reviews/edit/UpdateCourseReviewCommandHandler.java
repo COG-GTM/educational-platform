@@ -3,6 +3,7 @@ package com.educational.platform.course.reviews.edit;
 import com.educational.platform.common.exception.ResourceNotFoundException;
 import com.educational.platform.course.reviews.CourseReview;
 import com.educational.platform.course.reviews.CourseReviewRepository;
+import com.educational.platform.course.reviews.rating.CourseRatingRecalculator;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.parameters.P;
@@ -24,10 +25,13 @@ public class UpdateCourseReviewCommandHandler {
 
     private final Validator validator;
     private final CourseReviewRepository courseReviewRepository;
+    private final CourseRatingRecalculator courseRatingRecalculator;
 
-    public UpdateCourseReviewCommandHandler(Validator validator, CourseReviewRepository courseReviewRepository) {
+    public UpdateCourseReviewCommandHandler(Validator validator, CourseReviewRepository courseReviewRepository,
+                                           CourseRatingRecalculator courseRatingRecalculator) {
         this.validator = validator;
         this.courseReviewRepository = courseReviewRepository;
+        this.courseRatingRecalculator = courseRatingRecalculator;
     }
 
     /**
@@ -53,6 +57,7 @@ public class UpdateCourseReviewCommandHandler {
         final CourseReview review = dbResult.get();
         review.update(command);
         courseReviewRepository.save(review);
+        courseRatingRecalculator.recalculateForReview(command.uuid());
     }
 
 }
