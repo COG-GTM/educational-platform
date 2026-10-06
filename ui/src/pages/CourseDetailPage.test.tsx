@@ -59,6 +59,7 @@ function response(status: number, body?: unknown) {
 interface MockOptions {
   courseStatus?: number;
   enrollments?: { course: string }[];
+  enrollmentsStatus?: number;
   enrollStatus?: number;
 }
 
@@ -74,7 +75,8 @@ function mockApi(options: MockOptions = {}) {
       return Promise.resolve(response(options.enrollStatus ?? 201, 'enrollment-uuid'));
     }
     if (url.endsWith('/course-enrollments')) {
-      return Promise.resolve(response(200, options.enrollments ?? []));
+      const status = options.enrollmentsStatus ?? 200;
+      return Promise.resolve(response(status, status === 200 ? (options.enrollments ?? []) : {}));
     }
     if (url.endsWith(`/api/courses/${COURSE_UUID}`)) {
       const status = options.courseStatus ?? 200;
@@ -165,6 +167,31 @@ describe('CourseDetailPage', () => {
     expect(enrollCall?.url).toBe(`/api/courses/${COURSE_UUID}/course-enrollments`);
     expect(enrollCall?.headers.Authorization).toBe(`Bearer ${STUDENT_TOKEN}`);
     expect(fetch).toHaveBeenCalledTimes(5);
+  });
+
+  it('keeps Enroll disabled with a retry when the enrollment check fails', async () => {
+    setToken(STUDENT_TOKEN);
+    mockApi({ enrollmentsStatus: 500 });
+    renderPage();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("We couldn't check your enrollment");
+    expect(screen.getByRole('button', { name: 'Enroll' })).toBeDisabled();
+
+    vi.restoreAllMocks();
+    mockApi({ enrollments: [{ course: COURSE_UUID }] });
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByRole('link', { name: 'Enrolled — go to course' })).toBeInTheDocument();
+  });
+
+  it('does not send an expired token on public requests', async () => {
+    setToken(makeToken({ sub: 'alice', auth: [{ authority: 'ROLE_STUDENT' }], exp: Math.floor(Date.now() / 1000) - 60 }));
+    const calls = mockApi();
+    renderPage();
+
+    await screen.findByRole('link', { name: 'Sign in to enroll' });
+    expect(calls.every((c) => c.headers.Authorization === undefined)).toBe(true);
+    expect(localStorage.getItem('educational-platform.token')).toBeNull();
   });
 
   it('shows an error and keeps the Enroll button when enrollment fails', async () => {

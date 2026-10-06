@@ -98,7 +98,9 @@ public class Course implements AggregateRoot {
 		}
 
 		publishStatus = PublishStatus.PUBLISHED;
-		publishedDate = LocalDateTime.now();
+		if (publishedDate == null) {
+			publishedDate = LocalDateTime.now();
+		}
 	}
 
 	public void archive() {

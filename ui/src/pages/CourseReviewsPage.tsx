@@ -24,7 +24,11 @@ export default function CourseReviewsPage() {
   useEffect(() => {
     let cancelled = false;
     setState('loading');
-    Promise.all([fetchCourseDetails(uuid), fetchCourseReviews(uuid), fetchCourseReviewSummary(uuid)])
+    Promise.all([
+      fetchCourseDetails(uuid),
+      fetchCourseReviews(uuid),
+      fetchCourseReviewSummary(uuid).catch(() => null),
+    ])
       .then(([details, reviewList, reviewSummary]) => {
         if (cancelled) return;
         setCourse(details);

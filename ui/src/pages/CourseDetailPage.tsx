@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import {
   CourseDetails,
@@ -20,7 +20,7 @@ import { formatDate, formatDuration } from '../utils/format';
 const RECENT_REVIEWS = 3;
 
 type LoadState = 'loading' | 'ready' | 'not-found' | 'error';
-type EnrollmentState = 'unknown' | 'checking' | 'not-enrolled' | 'enrolled';
+type EnrollmentState = 'unknown' | 'checking' | 'check-failed' | 'not-enrolled' | 'enrolled';
 
 export default function CourseDetailPage() {
   const { uuid = '' } = useParams();
@@ -34,9 +34,12 @@ export default function CourseDetailPage() {
   const [reloadToken, setReloadToken] = useState(0);
 
   const [enrollment, setEnrollment] = useState<EnrollmentState>('unknown');
+  const [enrollmentCheckToken, setEnrollmentCheckToken] = useState(0);
   const [enrolling, setEnrolling] = useState(false);
   const [enrollMessage, setEnrollMessage] = useState<string | null>(null);
   const [enrollError, setEnrollError] = useState<string | null>(null);
+  const activeUuid = useRef(uuid);
+  activeUuid.current = uuid;
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +47,9 @@ export default function CourseDetailPage() {
     setCourse(null);
     setReviews([]);
     setSummary(null);
+    setEnrollMessage(null);
+    setEnrollError(null);
+    setEnrolling(false);
 
     fetchCourseDetails(uuid)
       .then(async (details) => {
@@ -80,28 +86,30 @@ export default function CourseDetailPage() {
         setEnrollment(enrollments.some((e) => e.course === uuid) ? 'enrolled' : 'not-enrolled');
       })
       .catch(() => {
-        if (!cancelled) setEnrollment('not-enrolled');
+        if (!cancelled) setEnrollment('check-failed');
       });
     return () => {
       cancelled = true;
     };
-  }, [user, isStudent, uuid]);
+  }, [user, isStudent, uuid, enrollmentCheckToken]);
 
   const onEnroll = useCallback(async () => {
     if (!user) return;
+    const target = uuid;
     setEnrolling(true);
     setEnrollError(null);
     try {
-      await enrollInCourse(uuid, user.username);
+      await enrollInCourse(target, user.username);
+      if (activeUuid.current !== target) return;
       setEnrollment('enrolled');
       setEnrollMessage("You're enrolled! The course is now in your learning list.");
       setCourse((current) =>
         current ? { ...current, numberOfStudents: current.numberOfStudents + 1 } : current,
       );
     } catch {
-      setEnrollError('Enrollment failed. Please try again.');
+      if (activeUuid.current === target) setEnrollError('Enrollment failed. Please try again.');
     } finally {
-      setEnrolling(false);
+      if (activeUuid.current === target) setEnrolling(false);
     }
   }, [uuid, user]);
 
@@ -195,6 +203,23 @@ export default function CourseDetailPage() {
             <button type="button" disabled>
               Checking enrollment…
             </button>
+          )}
+          {user && isStudent && enrollment === 'check-failed' && (
+            <>
+              <button type="button" disabled>
+                Enroll
+              </button>
+              <p className="form-error" role="alert">
+                We couldn't check your enrollment.{' '}
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => setEnrollmentCheckToken((token) => token + 1)}
+                >
+                  Retry
+                </button>
+              </p>
+            </>
           )}
           {user && isStudent && enrollment === 'not-enrolled' && (
             <button type="button" onClick={onEnroll} disabled={enrolling}>
