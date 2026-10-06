@@ -4,6 +4,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.educational.platform.courses.course.details.CourseDetailsDTO;
+import com.educational.platform.courses.course.details.CurriculumItemSummaryDTO;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -57,5 +60,29 @@ public interface CourseRepository extends JpaRepository<Course, Integer>, Course
 	 */
 	@Query("select distinct r.username from Course c join com.educational.platform.courses.teacher.Teacher r on c.teacher = r.id where c.publishStatus = com.educational.platform.courses.course.PublishStatus.PUBLISHED order by r.username")
 	List<String> publishedTeachers();
+
+	/**
+	 * Retrieves details of a published course by uuid. Draft and archived courses are not returned.
+	 *
+	 * @param uuid course uuid.
+	 * @return course details or {@literal Optional#empty()} if the course does not exist or is not published.
+	 */
+	@Query("select new com.educational.platform.courses.course.details.CourseDetailsDTO("
+			+ "c.uuid, c.name, c.description, c.category, r.username, c.rating.rating, c.numberOfStudents.number, c.publishedDate) "
+			+ "from Course c join com.educational.platform.courses.teacher.Teacher r on c.teacher = r.id "
+			+ "where c.uuid = :uuid and c.publishStatus = com.educational.platform.courses.course.PublishStatus.PUBLISHED")
+	Optional<CourseDetailsDTO> findPublishedDetails(@Param("uuid") UUID uuid);
+
+	/**
+	 * Retrieves the ordered curriculum outline of a course.
+	 *
+	 * @param uuid course uuid.
+	 * @return curriculum items ordered by serial number.
+	 */
+	@Query("select new com.educational.platform.courses.course.details.CurriculumItemSummaryDTO("
+			+ "ci.uuid, ci.title, ci.description, ci.serialNumber, "
+			+ "case when type(ci) = com.educational.platform.courses.course.Lecture then 'LECTURE' else 'QUIZ' end) "
+			+ "from CurriculumItem ci where ci.course.uuid = :uuid order by ci.serialNumber asc, ci.id asc")
+	List<CurriculumItemSummaryDTO> findCurriculum(@Param("uuid") UUID uuid);
 
 }

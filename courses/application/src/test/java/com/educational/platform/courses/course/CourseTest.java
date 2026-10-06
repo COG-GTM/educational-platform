@@ -10,6 +10,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.InstanceOfAssertFactories.LOCAL_DATE_TIME;
+
+import java.time.LocalDateTime;
 
 public class CourseTest {
 
@@ -151,6 +154,85 @@ public class CourseTest {
         // then
         assertThat(course)
                 .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.WAITING_FOR_APPROVAL);
+    }
+
+
+    @Test
+    void publish_approvedCourse_publishedDateSetToNow() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+        course.approve();
+        final LocalDateTime before = LocalDateTime.now();
+
+        // when
+        course.publish();
+
+        // then
+        final LocalDateTime after = LocalDateTime.now();
+        assertThat(course).extracting("publishedDate", LOCAL_DATE_TIME)
+                .isAfterOrEqualTo(before)
+                .isBeforeOrEqualTo(after);
+    }
+
+    @Test
+    void publish_notApprovedCourse_publishedDateStaysNull() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+        ReflectionTestUtils.setField(course, "id", 15);
+
+        // when
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(course::publish);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT)
+                .hasFieldOrPropertyWithValue("publishedDate", null);
+    }
+
+    @Test
+    void publish_republishedAfterArchive_firstPublishedDateKept() {
+        // given
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, TEACHER_ID);
+        course.approve();
+        course.publish();
+        final LocalDateTime firstPublishedDate = (LocalDateTime) ReflectionTestUtils.getField(course, "publishedDate");
+        course.archive();
+
+        // when
+        course.publish();
+
+        // then
+        assertThat(firstPublishedDate).isNotNull();
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED)
+                .hasFieldOrPropertyWithValue("publishedDate", firstPublishedDate);
+    }
+
+    @Test
+    void create_validCommand_publishedDateNull() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+
+        // when
+        final Course course = new Course(command, TEACHER_ID);
+
+        // then
+        assertThat(course).hasFieldOrPropertyWithValue("publishedDate", null);
     }
 
 }

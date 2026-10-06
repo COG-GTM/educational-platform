@@ -7,6 +7,9 @@ import java.util.UUID;
 
 import com.educational.platform.course.reviews.create.ReviewCourseCommandHandler;
 import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommandHandler;
+import com.educational.platform.course.reviews.query.CourseReviewSummaryDTO;
+import com.educational.platform.course.reviews.query.CourseReviewSummaryQuery;
+import com.educational.platform.course.reviews.query.CourseReviewSummaryQueryHandler;
 import com.educational.platform.course.reviews.query.ListCourseReviewsByCourseUUIDQueryHandler;
 import jakarta.validation.Valid;
 
@@ -34,11 +37,14 @@ public class CourseReviewController {
 	private final ReviewCourseCommandHandler reviewCourseCommandHandler;
 	private final UpdateCourseReviewCommandHandler updateCourseReviewCommandHandler;
 	private final ListCourseReviewsByCourseUUIDQueryHandler listCourseReviewsByCourseUUIDQueryHandler;
+	private final CourseReviewSummaryQueryHandler courseReviewSummaryQueryHandler;
 
-    public CourseReviewController(ReviewCourseCommandHandler reviewCourseCommandHandler, UpdateCourseReviewCommandHandler updateCourseReviewCommandHandler, ListCourseReviewsByCourseUUIDQueryHandler listCourseReviewsByCourseUUIDQueryHandler) {
+    public CourseReviewController(ReviewCourseCommandHandler reviewCourseCommandHandler, UpdateCourseReviewCommandHandler updateCourseReviewCommandHandler, ListCourseReviewsByCourseUUIDQueryHandler listCourseReviewsByCourseUUIDQueryHandler,
+                                  CourseReviewSummaryQueryHandler courseReviewSummaryQueryHandler) {
         this.reviewCourseCommandHandler = reviewCourseCommandHandler;
         this.updateCourseReviewCommandHandler = updateCourseReviewCommandHandler;
         this.listCourseReviewsByCourseUUIDQueryHandler = listCourseReviewsByCourseUUIDQueryHandler;
+        this.courseReviewSummaryQueryHandler = courseReviewSummaryQueryHandler;
     }
 
     @PostMapping(value = "/courses/{uuid}/reviews", consumes = APPLICATION_JSON_VALUE, produces = APPLICATION_JSON_VALUE)
@@ -55,6 +61,12 @@ public class CourseReviewController {
 		final ListCourseReviewsByCourseUUIDQuery query = new ListCourseReviewsByCourseUUIDQuery(uuid);
 
 		return listCourseReviewsByCourseUUIDQueryHandler.handle(query);
+	}
+
+	@GetMapping(value = "/courses/{uuid}/reviews/summary", produces = APPLICATION_JSON_VALUE)
+	@ResponseStatus(HttpStatus.OK)
+	public CourseReviewSummaryDTO summary(@PathVariable("uuid") UUID uuid) {
+		return courseReviewSummaryQueryHandler.handle(new CourseReviewSummaryQuery(uuid));
 	}
 
 	@PutMapping(value = "/courses/{courseUuid}/reviews/{reviewUuid}", consumes = APPLICATION_JSON_VALUE, produces = APPLICATION_JSON_VALUE)

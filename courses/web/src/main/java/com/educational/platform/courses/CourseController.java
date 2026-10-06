@@ -7,10 +7,14 @@ import com.educational.platform.courses.course.catalog.CourseCatalogPageDTO;
 import com.educational.platform.courses.course.catalog.CourseCatalogQuery;
 import com.educational.platform.courses.course.catalog.CourseCatalogQueryHandler;
 import com.educational.platform.courses.course.catalog.CourseCatalogSort;
+import com.educational.platform.courses.course.details.CourseDetailsDTO;
+import com.educational.platform.courses.course.details.CourseDetailsQuery;
+import com.educational.platform.courses.course.details.CourseDetailsQueryHandler;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
 import com.educational.platform.courses.course.create.CreateCourseCommandHandler;
 import com.educational.platform.courses.course.publish.PublishCourseCommand;
 import com.educational.platform.courses.course.publish.PublishCourseCommandHandler;
+import com.educational.platform.common.exception.ResourceNotFoundException;
 import com.educational.platform.web.handler.ErrorResponse;
 
 import org.springframework.http.HttpStatus;
@@ -39,13 +43,16 @@ public class CourseController {
     private final PublishCourseCommandHandler publishCourseCommandHandler;
     private final CourseCatalogQueryHandler courseCatalogQueryHandler;
     private final CatalogFacetsQueryHandler catalogFacetsQueryHandler;
+    private final CourseDetailsQueryHandler courseDetailsQueryHandler;
 
     public CourseController(CreateCourseCommandHandler createCourseCommandHandler, PublishCourseCommandHandler publishCourseCommandHandler,
-                            CourseCatalogQueryHandler courseCatalogQueryHandler, CatalogFacetsQueryHandler catalogFacetsQueryHandler) {
+                            CourseCatalogQueryHandler courseCatalogQueryHandler, CatalogFacetsQueryHandler catalogFacetsQueryHandler,
+                            CourseDetailsQueryHandler courseDetailsQueryHandler) {
         this.createCourseCommandHandler = createCourseCommandHandler;
         this.publishCourseCommandHandler = publishCourseCommandHandler;
         this.courseCatalogQueryHandler = courseCatalogQueryHandler;
         this.catalogFacetsQueryHandler = catalogFacetsQueryHandler;
+        this.courseDetailsQueryHandler = courseDetailsQueryHandler;
     }
 
     @GetMapping(produces = APPLICATION_JSON_VALUE)
@@ -62,6 +69,12 @@ public class CourseController {
     @GetMapping(value = "/catalog-facets", produces = APPLICATION_JSON_VALUE)
     CatalogFacetsDTO catalogFacets() {
         return catalogFacetsQueryHandler.handle();
+    }
+
+    @GetMapping(value = "/{uuid}", produces = APPLICATION_JSON_VALUE)
+    CourseDetailsDTO details(@PathVariable("uuid") UUID uuid) {
+        return courseDetailsQueryHandler.handle(new CourseDetailsQuery(uuid))
+                .orElseThrow(() -> new ResourceNotFoundException(String.format("Course with uuid: %s not found", uuid)));
     }
 
     @PostMapping(consumes = APPLICATION_JSON_VALUE, produces = APPLICATION_JSON_VALUE)

@@ -6,6 +6,7 @@ import com.educational.platform.course.reviews.course.ReviewableCourse;
 import com.educational.platform.course.reviews.course.ReviewableCourseRepository;
 import com.educational.platform.course.reviews.course.create.CreateReviewableCourseCommand;
 import com.educational.platform.course.reviews.create.ReviewCourseCommand;
+import com.educational.platform.course.reviews.rating.CourseRatingRecalculator;
 import com.educational.platform.course.reviews.reviewer.Reviewer;
 import com.educational.platform.course.reviews.reviewer.create.CreateReviewerCommand;
 import org.assertj.core.api.ThrowableAssert;
@@ -26,6 +27,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,6 +42,9 @@ public class UpdateCourseReviewCommandHandlerTest {
     @Mock
     private CurrentUserAsReviewer currentUserAsReviewer;
 
+    @Mock
+    private CourseRatingRecalculator courseRatingRecalculator;
+
     private CourseReviewFactory courseReviewFactory;
     private UpdateCourseReviewCommandHandler sut;
 
@@ -47,7 +52,7 @@ public class UpdateCourseReviewCommandHandlerTest {
     void setUp() {
         final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
         courseReviewFactory = new CourseReviewFactory(validator, currentUserAsReviewer, reviewableCourseRepository);
-        sut = new UpdateCourseReviewCommandHandler(validator, courseReviewRepository);
+        sut = new UpdateCourseReviewCommandHandler(validator, courseReviewRepository, courseRatingRecalculator);
     }
 
     @Test
@@ -67,6 +72,7 @@ public class UpdateCourseReviewCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("uuid", uuid)
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(3))
                 .hasFieldOrPropertyWithValue("comment", new Comment("updated comment"));
+        verify(courseRatingRecalculator).recalculateForReview(uuid);
     }
 
     @Test
@@ -81,6 +87,7 @@ public class UpdateCourseReviewCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verifyNoInteractions(courseRatingRecalculator);
     }
 
     @Test
@@ -94,6 +101,7 @@ public class UpdateCourseReviewCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(courseRatingRecalculator);
     }
 
     private UUID configureCourseReview() {

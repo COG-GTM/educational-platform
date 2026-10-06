@@ -2,6 +2,8 @@ package com.educational.platform.course.reviews.jpa;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -9,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.test.context.jdbc.Sql;
 
+import com.educational.platform.course.reviews.CourseReviewDTO;
 import com.educational.platform.course.reviews.CourseReviewRepository;
 
 @Sql(scripts = "classpath:course_review.sql")
@@ -29,6 +32,111 @@ public class CourseReviewRepositoryTest {
 
 		// then
 		assertThat(result).hasSize(1);
+	}
+
+	@Test
+	void listCourseReviews_legacyReviewWithoutCreatedDate_listedWithNullCreatedDate() {
+		// given/when
+		var result = sut.listCourseReviews(COURSE_UUID);
+
+		// then
+		assertThat(result).hasSize(1);
+		assertThat(result.getFirst())
+				.hasFieldOrPropertyWithValue("uuid", COURSE_REVIEW_UUID)
+				.hasFieldOrPropertyWithValue("course", COURSE_UUID)
+				.hasFieldOrPropertyWithValue("username", REVIEWER_USERNAME)
+				.hasFieldOrPropertyWithValue("comment", "comment")
+				.hasFieldOrPropertyWithValue("rating", 4.0)
+				.hasFieldOrPropertyWithValue("createdDate", null);
+	}
+
+	@Test
+	@Sql(scripts = "classpath:course_reviews_listing.sql")
+	void listCourseReviews_severalCourses_onlyRequestedCourseReviewsMostRecentFirst() {
+		// given/when
+		var result = sut.listCourseReviews(COURSE_UUID);
+
+		// then
+		assertThat(result).hasSize(4);
+		assertThat(result).extracting(CourseReviewDTO::comment)
+				.containsExactly("newest", "same instant, higher id", "same instant, lower id", "oldest");
+		assertThat(result).extracting(CourseReviewDTO::course).containsOnly(COURSE_UUID);
+		assertThat(result).extracting(CourseReviewDTO::username).containsOnly(REVIEWER_USERNAME);
+		assertThat(result).extracting(CourseReviewDTO::createdDate)
+				.doesNotContainNull()
+				.isSortedAccordingTo(Comparator.<LocalDateTime>reverseOrder());
+		assertThat(result.getFirst().createdDate()).isEqualTo(LocalDateTime.of(2026, 3, 1, 10, 0));
+	}
+
+	@Test
+	@Sql(scripts = "classpath:course_reviews_listing.sql")
+	void listCourseReviews_unknownCourse_empty() {
+		// given/when
+		var result = sut.listCourseReviews(UUID.fromString("123e4567-e89b-12d3-a456-426655440099"));
+
+		// then
+		assertThat(result).isEmpty();
+	}
+
+	@Test
+	@Sql(scripts = "classpath:course_reviews_listing.sql")
+	void listRatings_severalCourses_onlyRequestedCourseRatings() {
+		// given/when
+		var result = sut.listRatings(COURSE_UUID);
+
+		// then
+		assertThat(result).containsExactlyInAnyOrder(2.0, 5.0, 4.0, 3.0);
+	}
+
+	@Test
+	@Sql(scripts = "classpath:course_reviews_listing.sql")
+	void listRatings_unknownCourse_empty() {
+		// given/when
+		var result = sut.listRatings(UUID.fromString("123e4567-e89b-12d3-a456-426655440099"));
+
+		// then
+		assertThat(result).isEmpty();
+	}
+
+	@Test
+	@Sql(scripts = "classpath:course_reviews_nulls_last.sql")
+	void listCourseReviews_mixedCreatedDates_datedMostRecentFirstThenLegacyByIdDescending() {
+		// given/when
+		var result = sut.listCourseReviews(COURSE_UUID);
+
+		// then
+		assertThat(result).extracting(CourseReviewDTO::comment)
+				.containsExactly("newer dated", "older dated", "legacy, higher id", "legacy, lower id");
+		assertThat(result).extracting(CourseReviewDTO::createdDate)
+				.containsExactly(LocalDateTime.of(2026, 2, 1, 10, 0), LocalDateTime.of(2026, 1, 1, 10, 0), null, null);
+	}
+
+	@Test
+	void findCourseUuid_existingReview_courseUuid() {
+		// given/when
+		var result = sut.findCourseUuid(COURSE_REVIEW_UUID);
+
+		// then
+		assertThat(result).contains(COURSE_UUID);
+	}
+
+	@Test
+	@Sql(scripts = "classpath:course_reviews_listing.sql")
+	void findCourseUuid_reviewOfAnotherCourse_thatCourseUuid() {
+		// given/when
+		var result = sut.findCourseUuid(UUID.fromString("123e4567-e89b-12d3-a456-426655440005"));
+
+		// then
+		assertThat(result).contains(UUID.fromString("123e4567-e89b-12d3-a456-426655440009"));
+	}
+
+	@Test
+	void findCourseUuid_unknownReview_empty() {
+		// given/when
+		var result = sut.findCourseUuid(UUID.fromString("123e4567-e89b-12d3-a456-426655440099"));
+
+		// then
+		assertThat(result).isEmpty();
 	}
 
 	@Test

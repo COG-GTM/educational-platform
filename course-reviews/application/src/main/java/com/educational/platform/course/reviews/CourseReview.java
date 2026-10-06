@@ -5,6 +5,7 @@ import com.educational.platform.course.reviews.create.ReviewCourseCommand;
 import com.educational.platform.course.reviews.edit.UpdateCourseReviewCommand;
 
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -23,6 +24,7 @@ public class CourseReview implements AggregateRoot {
     private Integer course;
     private CourseRating rating;
     private Comment comment;
+    private LocalDateTime createdDate;
 
     // for JPA
     private CourseReview() {
@@ -35,6 +37,7 @@ public class CourseReview implements AggregateRoot {
         this.reviewer = reviewer;
         this.rating = new CourseRating(command.rating());
         this.comment = new Comment(command.comment());
+        this.createdDate = LocalDateTime.now();
     }
 
     public void update(UpdateCourseReviewCommand command) {

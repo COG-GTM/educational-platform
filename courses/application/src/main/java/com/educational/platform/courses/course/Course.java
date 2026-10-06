@@ -34,6 +34,7 @@ public class Course implements AggregateRoot {
 	private String description;
 	private String category;
 	private LocalDateTime createdDate;
+	private LocalDateTime publishedDate;
 
 	@Enumerated(EnumType.STRING)
 	private PublishStatus publishStatus;
@@ -97,6 +98,9 @@ public class Course implements AggregateRoot {
 		}
 
 		publishStatus = PublishStatus.PUBLISHED;
+		if (publishedDate == null) {
+			publishedDate = LocalDateTime.now();
+		}
 	}
 
 	public void archive() {

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { CourseCatalogItem } from '../api/catalog';
 import StarRating from './StarRating';
 
@@ -9,7 +10,11 @@ export default function CourseCard({ course }: CourseCardProps) {
   return (
     <article className="course-card">
       <div className="course-card-header">
-        <h3 className="course-card-title">{course.name}</h3>
+        <h3 className="course-card-title">
+          <Link to={`/courses/${course.uuid}`} className="course-card-link">
+            {course.name}
+          </Link>
+        </h3>
         {course.category && <span className="course-card-category">{course.category}</span>}
       </div>
       <p className="course-card-teacher">by {course.teacherName}</p>

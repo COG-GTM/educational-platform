@@ -1,3 +1,5 @@
+import { get } from './http';
+
 export type CatalogSort = 'RATING' | 'POPULARITY' | 'NEWEST';
 
 export interface CourseCatalogItem {
@@ -32,14 +34,6 @@ export interface CatalogParams {
   sort?: CatalogSort;
   page?: number;
   size?: number;
-}
-
-async function get<T>(url: string): Promise<T> {
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
-  }
-  return response.json() as Promise<T>;
 }
 
 export function fetchCatalog(params: CatalogParams): Promise<CourseCatalogPage> {

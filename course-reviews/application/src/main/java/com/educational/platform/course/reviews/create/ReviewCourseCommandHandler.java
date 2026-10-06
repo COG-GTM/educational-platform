@@ -4,6 +4,7 @@ import com.educational.platform.common.exception.RelatedResourceIsNotResolvedExc
 import com.educational.platform.course.reviews.CourseReview;
 import com.educational.platform.course.reviews.CourseReviewFactory;
 import com.educational.platform.course.reviews.CourseReviewRepository;
+import com.educational.platform.course.reviews.rating.CourseRatingRecalculator;
 
 import jakarta.annotation.Nonnull;
 import org.springframework.stereotype.Component;
@@ -21,10 +22,13 @@ public class ReviewCourseCommandHandler {
 
     private final CourseReviewRepository courseReviewRepository;
     private final CourseReviewFactory courseReviewFactory;
+    private final CourseRatingRecalculator courseRatingRecalculator;
 
-    public ReviewCourseCommandHandler(CourseReviewRepository courseReviewRepository, CourseReviewFactory courseReviewFactory) {
+    public ReviewCourseCommandHandler(CourseReviewRepository courseReviewRepository, CourseReviewFactory courseReviewFactory,
+                                     CourseRatingRecalculator courseRatingRecalculator) {
         this.courseReviewRepository = courseReviewRepository;
         this.courseReviewFactory = courseReviewFactory;
+        this.courseRatingRecalculator = courseRatingRecalculator;
     }
 
     /**
@@ -39,6 +43,7 @@ public class ReviewCourseCommandHandler {
     public UUID handle(ReviewCourseCommand command) {
         final CourseReview courseReview = courseReviewFactory.createFrom(command);
         courseReviewRepository.save(courseReview);
+        courseRatingRecalculator.recalculate(command.courseId());
 
         return courseReview.toIdentifier();
     }
