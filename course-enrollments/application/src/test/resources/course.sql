@@ -10,3 +10,6 @@ INSERT INTO enroll_course (uuid, name) VALUES ('123e4567-e89b-12d3-a456-42665544
 INSERT INTO enroll_lecture (uuid, title, serial_number, course) VALUES ('223e4567-e89b-12d3-a456-426655440001', 'Intro', 1, (SELECT id FROM enroll_course WHERE uuid = '123e4567-e89b-12d3-a456-426655440001'));
 INSERT INTO enroll_lecture (uuid, title, serial_number, course) VALUES ('223e4567-e89b-12d3-a456-426655440002', 'Variables', 2, (SELECT id FROM enroll_course WHERE uuid = '123e4567-e89b-12d3-a456-426655440001'));
 INSERT INTO enroll_lecture (uuid, title, serial_number, course) VALUES ('223e4567-e89b-12d3-a456-426655440003', 'Spring Intro', 1, (SELECT id FROM enroll_course WHERE uuid = '123e4567-e89b-12d3-a456-426655440002'));
+INSERT INTO enroll_course (uuid, name) VALUES ('123e4567-e89b-12d3-a456-426655440003', 'Advanced Java');
+INSERT INTO enroll_lecture (uuid, title, serial_number, course) VALUES ('223e4567-e89b-12d3-a456-426655440012', 'Streams', 2, (SELECT id FROM enroll_course WHERE uuid = '123e4567-e89b-12d3-a456-426655440003'));
+INSERT INTO enroll_lecture (uuid, title, serial_number, course) VALUES ('223e4567-e89b-12d3-a456-426655440011', 'Generics', 1, (SELECT id FROM enroll_course WHERE uuid = '123e4567-e89b-12d3-a456-426655440003'));
