@@ -78,7 +78,7 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
   if (!response.ok) {
-    if (response.status === 401 && token) {
+    if (response.status === 401 && token && getToken() === token) {
       clearToken();
     }
     throw new HttpError(response.status);
