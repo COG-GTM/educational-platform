@@ -27,6 +27,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -71,6 +72,7 @@ public class UpdateCourseReviewCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("uuid", uuid)
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(3))
                 .hasFieldOrPropertyWithValue("comment", new Comment("updated comment"));
+        verify(courseRatingRecalculator).recalculateForReview(uuid);
     }
 
     @Test
@@ -85,6 +87,7 @@ public class UpdateCourseReviewCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verifyNoInteractions(courseRatingRecalculator);
     }
 
     @Test
@@ -98,6 +101,7 @@ public class UpdateCourseReviewCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(handle);
+        verifyNoInteractions(courseRatingRecalculator);
     }
 
     private UUID configureCourseReview() {
