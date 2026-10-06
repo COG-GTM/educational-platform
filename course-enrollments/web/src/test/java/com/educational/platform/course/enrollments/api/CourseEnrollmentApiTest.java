@@ -14,6 +14,7 @@ import org.springframework.test.context.jdbc.Sql;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
@@ -50,6 +51,44 @@ public class CourseEnrollmentApiTest {
 
                 .then()
                 .statusCode(HttpStatus.CREATED.value());
+    }
+
+    @Test
+    void register_sameCourseTwice_existingEnrollmentReturnedInsteadOfDuplicate() {
+        var token = SignUpHelper.signUpStudent();
+        var course = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        var first = given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .body("{\"student\": \"username\"}")
+                .when()
+                .post("/courses/{uuid}/course-enrollments", course)
+                .then()
+                .statusCode(HttpStatus.CREATED.value())
+                .extract().asString().replace("\"", "");
+
+        var second = given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .body("{\"student\": \"username\"}")
+                .when()
+                .post("/courses/{uuid}/course-enrollments", course)
+                .then()
+                .statusCode(HttpStatus.CREATED.value())
+                .extract().asString().replace("\"", "");
+
+        assertThat(second).isEqualTo(first);
+
+        given()
+                .header("Authorization", "Bearer " + token)
+                .when()
+                .get("/course-enrollments?status=IN_PROGRESS")
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("items", hasSize(1))
+                .body("items[0].uuid", equalTo(first))
+                .body("counts.inProgress", is(1));
     }
 
     @Test

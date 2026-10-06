@@ -1,5 +1,6 @@
 package com.educational.platform.course.enrollments.register;
 
+import com.educational.platform.common.exception.RelatedResourceIsNotResolvedException;
 import com.educational.platform.course.enrollments.CourseEnrollment;
 import com.educational.platform.course.enrollments.CourseEnrollmentFactory;
 import com.educational.platform.course.enrollments.CourseEnrollmentRepository;
@@ -10,10 +11,12 @@ import com.educational.platform.course.enrollments.integration.event.StudentEnro
 import com.educational.platform.course.enrollments.student.Student;
 import com.educational.platform.course.enrollments.student.create.CreateStudentCommand;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -25,9 +28,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -105,5 +111,42 @@ public class RegisterStudentToCourseCommandHandlerTest {
         assertThat(result).isEqualTo(existing.getUuid()).isNotEqualTo(enrollment.getUuid());
         verify(repository, never()).save(any());
         verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void handle_notEnrolledYet_eventPublishedOnlyAfterTransactionCommitted() {
+        // given
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(COURSE);
+        when(factory.createFrom(command)).thenReturn(enrollment);
+        when(repository.findFirstByCourseAndStudentOrderByIdAsc(course, student)).thenReturn(Optional.empty());
+        when(currentUserAsStudent.userAsStudent()).thenReturn(student);
+
+        // when
+        sut.handle(command);
+
+        // then
+        final InOrder inOrder = inOrder(transactionManager, repository, eventPublisher);
+        inOrder.verify(repository).save(enrollment);
+        inOrder.verify(transactionManager).commit(any());
+        inOrder.verify(eventPublisher).publishEvent(any(StudentEnrolledToCourseIntegrationEvent.class));
+    }
+
+    @Test
+    void handle_courseCannotBeResolved_transactionRolledBackNothingSavedNoEvent() {
+        // given
+        final RegisterStudentToCourseCommand command = new RegisterStudentToCourseCommand(COURSE);
+        when(factory.createFrom(command)).thenThrow(new RelatedResourceIsNotResolvedException("Course cannot be found by uuid = " + COURSE));
+
+        // when
+        final ThrowingCallable registerAction = () -> sut.handle(command);
+
+        // then
+        assertThatThrownBy(registerAction)
+                .isInstanceOf(RelatedResourceIsNotResolvedException.class)
+                .hasMessageContaining(COURSE.toString());
+        verify(transactionManager).rollback(any());
+        verify(transactionManager, never()).commit(any());
+        verify(repository, never()).save(any());
+        verifyNoInteractions(eventPublisher);
     }
 }
