@@ -17,6 +17,29 @@ const STUDENT_TOKEN = makeToken({
   exp: Math.floor(Date.now() / 1000) + 3600,
 });
 
+const TEACHER_TOKEN = makeToken({
+  sub: 'bob',
+  auth: [{ authority: 'ROLE_TEACHER' }],
+  exp: Math.floor(Date.now() / 1000) + 3600,
+});
+
+const ENROLLMENT_UUID = '123e4567-e89b-12d3-a456-426655440009';
+
+const enrollment = {
+  uuid: ENROLLMENT_UUID,
+  course: COURSE_UUID,
+  courseName: 'Java Basics',
+  student: 'alice',
+  completionStatus: 'IN_PROGRESS',
+  archived: false,
+  completedLectures: 0,
+  totalLectures: 1,
+  progressPercent: 0,
+  enrolledAt: '2026-10-01T10:00:00',
+  lastActivityAt: '2026-10-02T10:00:00',
+  completedAt: null,
+};
+
 const course = {
   uuid: COURSE_UUID,
   name: 'Java Basics',
@@ -49,7 +72,14 @@ function mockApi() {
     }
     if (url.endsWith('/reviews/summary')) return Promise.resolve(response(200, { averageRating: 0, totalReviews: 0, ratingCounts: {} }));
     if (url.endsWith('/reviews')) return Promise.resolve(response(200, []));
-    if (url.endsWith('/course-enrollments')) return Promise.resolve(response(200, []));
+    if (url === `/api/course-enrollments/${ENROLLMENT_UUID}`) {
+      return Promise.resolve(response(200, { enrollment, lectures: [{ uuid: 'l-1', title: 'Intro', serialNumber: 1, completed: false }] }));
+    }
+    if (url.startsWith('/api/course-enrollments')) {
+      return Promise.resolve(
+        response(200, { items: [enrollment], page: 0, size: 12, totalElements: 1, totalPages: 1, counts: { inProgress: 1, completed: 0, archived: 0 } }),
+      );
+    }
     if (url === `/api/courses/${COURSE_UUID}`) return Promise.resolve(response(200, course));
     return Promise.resolve(response(404, { message: 'not found' }));
   });
@@ -112,6 +142,46 @@ describe('App shell', () => {
     renderApp(`/courses/${COURSE_UUID}/reviews`);
 
     expect(await screen.findByRole('heading', { name: 'Reviews for Java Basics' })).toBeInTheDocument();
+  });
+
+  it('shows the My Learning link only to signed-in students', () => {
+    mockApi();
+    setToken(STUDENT_TOKEN);
+
+    const { unmount } = renderApp('/catalog');
+
+    const nav = screen.getByRole('navigation', { name: 'Main' });
+    expect(within(nav).getByRole('link', { name: 'My Learning' })).toHaveAttribute('href', '/learning');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(within(nav).queryByRole('link', { name: 'My Learning' })).not.toBeInTheDocument();
+    unmount();
+
+    setToken(TEACHER_TOKEN);
+    renderApp('/catalog');
+    expect(screen.getByText('Signed in as bob')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'My Learning' })).not.toBeInTheDocument();
+  });
+
+  it('routes /learning to the student dashboard', async () => {
+    const calls = mockApi();
+    setToken(STUDENT_TOKEN);
+
+    renderApp('/learning');
+
+    expect(screen.getByRole('heading', { name: 'My Learning' })).toBeInTheDocument();
+    expect(await screen.findByRole('tablist', { name: 'Enrollment status' })).toBeInTheDocument();
+    await waitFor(() => expect(calls.some((url) => url.startsWith('/api/course-enrollments'))).toBe(true));
+  });
+
+  it('routes /learning/:uuid to the course progress page', async () => {
+    const calls = mockApi();
+    setToken(STUDENT_TOKEN);
+
+    renderApp(`/learning/${ENROLLMENT_UUID}`);
+
+    expect(await screen.findByRole('heading', { name: 'Java Basics' })).toBeInTheDocument();
+    expect(calls).toContain(`/api/course-enrollments/${ENROLLMENT_UUID}`);
   });
 
   it('routes /login to the sign-in page', () => {

@@ -7,6 +7,7 @@ import {
   HttpError,
   isTokenExpired,
   post,
+  put,
   setToken,
   TOKEN_CLEARED_EVENT,
   tokenExpiresAt,
@@ -164,6 +165,25 @@ describe('http request', () => {
     expect(init.method).toBe('POST');
     expect(init.body).toBe(JSON.stringify({ student: 'alice' }));
     expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+  });
+
+  it('PUT serialises the body as JSON with a content type and parses the JSON response', async () => {
+    const spy = mockFetch(200, { archived: true });
+
+    const result = await put<{ archived: boolean }>('/api/course-enrollments/e-1/archive-status', { archived: true });
+
+    expect(result).toEqual({ archived: true });
+    const init = requestInit(spy);
+    expect(init.method).toBe('PUT');
+    expect(init.body).toBe(JSON.stringify({ archived: true }));
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+    expect((init.headers as Record<string, string>).Accept).toBe('application/json');
+  });
+
+  it('PUT rejects with an HttpError carrying the status on non-2xx responses', async () => {
+    mockFetch(422, { message: 'archived' });
+
+    await expect(put('/api/course-enrollments/e-1/lectures/l-1/progress', { completed: true })).rejects.toMatchObject({ status: 422 });
   });
 
   it('POST with parse=text returns the raw response text', async () => {
