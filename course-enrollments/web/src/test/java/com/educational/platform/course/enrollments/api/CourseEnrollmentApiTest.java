@@ -49,4 +49,29 @@ public class CourseEnrollmentApiTest {
                 .statusCode(HttpStatus.CREATED.value());
     }
 
+    @Test
+    void register_anonymousRequest_forbidden() {
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\n" +
+                        "  \"student\": \"username\"\n" +
+                        "}")
+
+                .when()
+                .post("/courses/{uuid}/course-enrollments", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void enrollments_anonymousRequest_forbidden() {
+        given()
+                .when()
+                .get("/course-enrollments")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
 }

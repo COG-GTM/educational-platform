@@ -35,6 +35,22 @@ public class CourseReviewRepositoryTest {
 	}
 
 	@Test
+	void listCourseReviews_legacyReviewWithoutCreatedDate_listedWithNullCreatedDate() {
+		// given/when
+		var result = sut.listCourseReviews(COURSE_UUID);
+
+		// then
+		assertThat(result).hasSize(1);
+		assertThat(result.getFirst())
+				.hasFieldOrPropertyWithValue("uuid", COURSE_REVIEW_UUID)
+				.hasFieldOrPropertyWithValue("course", COURSE_UUID)
+				.hasFieldOrPropertyWithValue("username", REVIEWER_USERNAME)
+				.hasFieldOrPropertyWithValue("comment", "comment")
+				.hasFieldOrPropertyWithValue("rating", 4.0)
+				.hasFieldOrPropertyWithValue("createdDate", null);
+	}
+
+	@Test
 	@Sql(scripts = "classpath:course_reviews_listing.sql")
 	void listCourseReviews_severalCourses_onlyRequestedCourseReviewsMostRecentFirst() {
 		// given/when

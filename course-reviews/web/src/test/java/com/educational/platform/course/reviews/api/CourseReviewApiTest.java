@@ -137,6 +137,27 @@ public class CourseReviewApiTest {
 	}
 
 	@Test
+	void review_anonymousRequest_forbidden() {
+		given()
+				.contentType(ContentType.JSON)
+				.body("{\n" + "  \"rating\": 3.2,\n" + "  \"comment\": \"comment\"\n" + "}")
+
+				.when()
+				.post("/courses/{uuid}/reviews", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+
+				.then()
+				.statusCode(HttpStatus.FORBIDDEN.value());
+
+		given()
+				.when()
+				.get("/courses/{uuid}/reviews", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+
+				.then()
+				.statusCode(HttpStatus.OK.value())
+				.body("$", hasSize(0));
+	}
+
+	@Test
 	void review_validRequest_created() {
 		var token = SignUpHelper.signUpStudent();
 
