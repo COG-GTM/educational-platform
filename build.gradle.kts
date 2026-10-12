@@ -3,6 +3,10 @@ plugins {
     alias(libs.plugins.springdependencies)
 }
 
+val testJwtSecretKey: String = java.util.Base64.getEncoder().encodeToString(
+    ByteArray(48).also { java.security.SecureRandom().nextBytes(it) }
+)
+
 allprojects {
     group = "com.educational.platform"
     version = "0.0.1-SNAPSHOT"
@@ -22,6 +26,12 @@ subprojects {
     java {
         sourceCompatibility = JavaVersion.VERSION_25
         targetCompatibility = JavaVersion.VERSION_25
+    }
+
+    tasks.withType<Test>().configureEach {
+        jvmArgumentProviders.add(object : CommandLineArgumentProvider {
+            override fun asArguments() = listOf("-Dsecurity.jwt.token.secret-key=$testJwtSecretKey")
+        })
     }
 
     dependencyManagement {

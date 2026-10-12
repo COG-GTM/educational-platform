@@ -14,6 +14,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
@@ -25,16 +26,30 @@ import java.util.stream.Collectors;
 @Component
 public class JwtTokenProvider {
 
+    static final String SECRET_KEY_PROPERTY = "security.jwt.token.secret-key";
+    static final int MIN_SECRET_KEY_BYTES = 32;
+
     private final MyUserDetails myUserDetails;
     private final long validityInMilliseconds;
     private final String secretKey;
 
     public JwtTokenProvider(MyUserDetails myUserDetails,
                             @Value("${security.jwt.token.expire-length:3600000}") long validityInMilliseconds,
-                            @Value("${security.jwt.token.secret-key:secret-key}") String secretKey) {
+                            @Value("${" + SECRET_KEY_PROPERTY + ":}") String secretKey) {
         this.myUserDetails = myUserDetails;
         this.validityInMilliseconds = validityInMilliseconds;
-        this.secretKey = Base64.getEncoder().encodeToString(secretKey.getBytes());
+        this.secretKey = Base64.getEncoder().encodeToString(requireSecretKey(secretKey));
+    }
+
+    private static byte[] requireSecretKey(String secretKey) {
+        if (secretKey == null || secretKey.isBlank()) {
+            throw new IllegalStateException(SECRET_KEY_PROPERTY + " must be configured (e.g. via the SECURITY_JWT_TOKEN_SECRET_KEY environment variable)");
+        }
+        final byte[] keyBytes = secretKey.getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < MIN_SECRET_KEY_BYTES) {
+            throw new IllegalStateException(SECRET_KEY_PROPERTY + " must be at least " + MIN_SECRET_KEY_BYTES + " bytes for HS256");
+        }
+        return keyBytes;
     }
 
 
