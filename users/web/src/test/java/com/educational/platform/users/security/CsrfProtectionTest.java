@@ -367,6 +367,97 @@ public class CsrfProtectionTest {
         assertThat(cookie).isNull();
     }
 
+    @Test
+    void post_withMismatchedCsrfFormParameter_forbidden() {
+        given()
+                .cookie("XSRF-TOKEN", UUID.randomUUID().toString())
+                .formParam("_csrf", UUID.randomUUID().toString())
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void post_withBearerTokenAndStaleCsrfCookie_allowed() {
+        var jwt = signUp();
+        given()
+                .header("Authorization", "Bearer " + jwt)
+                .cookie("XSRF-TOKEN", "stale-cookie-token")
+                .header("X-XSRF-TOKEN", "other-token")
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void post_withBearerToken_doesNotIssueXsrfCookie() {
+        var jwt = signUp();
+        var cookie = given()
+                .header("Authorization", "Bearer " + jwt)
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .extract()
+                .cookie("XSRF-TOKEN");
+
+        assertThat(cookie).isNull();
+    }
+
+    @Test
+    void signUp_withFormContentType_withoutCsrfToken_rejectedAndNoAccountCreated() {
+        var username = "csrfform" + UUID.randomUUID().toString().substring(0, 8);
+        given()
+                .contentType(ContentType.URLENC)
+                .formParam("role", "ROLE_STUDENT")
+                .formParam("username", username)
+                .formParam("email", username + "@gmail.com")
+                .formParam("password", "password")
+
+                .when()
+                .post("/users/sign-up")
+
+                .then()
+                .statusCode(not(HttpStatus.OK.value()));
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\n" +
+                        "  \"username\": \"" + username + "\",\n" +
+                        "  \"password\": \"password\"\n" +
+                        "}")
+
+                .when()
+                .post("/users/sign-in")
+
+                .then()
+                .statusCode(not(HttpStatus.OK.value()));
+    }
+
+    @Test
+    void signIn_withTextPlainContentType_withoutCsrfToken_rejected() {
+        var username = "csrf" + UUID.randomUUID().toString().substring(0, 8);
+        signUp(username);
+
+        given()
+                .contentType(ContentType.TEXT)
+                .body("{\"username\": \"" + username + "\", \"password\": \"password\"}")
+
+                .when()
+                .post("/users/sign-in")
+
+                .then()
+                .statusCode(not(HttpStatus.OK.value()));
+    }
+
     private String signUp() {
         return signUp("csrf" + UUID.randomUUID().toString().substring(0, 8));
     }
