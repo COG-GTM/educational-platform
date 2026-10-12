@@ -399,6 +399,14 @@ GET http://127.0.0.1:8080/course-enrollments
 Authorization: Bearer [TOKEN]
 ```
 
+### API docs and Swagger UI
+`/v3/api-docs/**` and `/swagger-ui/**` require a valid `Authorization: Bearer [TOKEN]` header.
+For local development only, they can be opened anonymously with:
+
+`./gradlew bootRun --args='--com.educational.platform.security.api-docs.public=true'`
+
+To turn them off entirely, set `springdoc.api-docs.enabled=false` and `springdoc.swagger-ui.enabled=false`.
+
 ## 5. Contribution
 The application is in development status. Please feel free to submit pull request or create the issue.
 

@@ -1,5 +1,6 @@
 package com.educational.platform.users.security;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,10 +18,28 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @ConditionalOnProperty(name = "com.educational.platform.security.enabled", havingValue = "true")
 public class WebSecurityConfig {
 
-	private final JwtTokenProvider jwtTokenProvider;
+	private static final String[] PUBLIC_PATHS = {
+			"/users/sign-in",
+			"/users/sign-up",
+			"/webjars/**",
+			"/h2-console/**",
+			"/public"
+	};
 
-    public WebSecurityConfig(JwtTokenProvider jwtTokenProvider) {
+	private static final String[] API_DOCS_PATHS = {
+			"/v3/api-docs/**",
+			"/v3/api-docs.yaml",
+			"/swagger-ui.html",
+			"/swagger-ui/**"
+	};
+
+	private final JwtTokenProvider jwtTokenProvider;
+	private final boolean apiDocsPublic;
+
+    public WebSecurityConfig(JwtTokenProvider jwtTokenProvider,
+                             @Value("${com.educational.platform.security.api-docs.public:false}") boolean apiDocsPublic) {
         this.jwtTokenProvider = jwtTokenProvider;
+        this.apiDocsPublic = apiDocsPublic;
     }
 
     @Bean
@@ -28,19 +47,13 @@ public class WebSecurityConfig {
 		http.csrf(AbstractHttpConfigurer::disable);
 		http.sessionManagement((sessionManagement) -> sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-		http.authorizeHttpRequests((authorizeHttpRequests) -> authorizeHttpRequests.requestMatchers(
-				"/users/sign-in",
-				"/users/sign-up",
-				"/v2/api-docs/**",
-				"/v3/api-docs/**",
-				"/swagger-resources/**",
-				"/swagger-ui.html",
-				"/swagger-ui/**",
-				"/configuration/**",
-				"/webjars/**",
-				"/h2-console/**",
-				"/public"
-		).permitAll().anyRequest().authenticated());
+		http.authorizeHttpRequests((authorizeHttpRequests) -> {
+			authorizeHttpRequests.requestMatchers(PUBLIC_PATHS).permitAll();
+			if (apiDocsPublic) {
+				authorizeHttpRequests.requestMatchers(API_DOCS_PATHS).permitAll();
+			}
+			authorizeHttpRequests.anyRequest().authenticated();
+		});
 
 		http.addFilterBefore(new JwtTokenFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
 		return http.build();
