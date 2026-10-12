@@ -421,12 +421,43 @@ public class JwtTokenProviderTest {
         assertThatExceptionOfType(JwtTokenValidationException.class).isThrownBy(() -> sut.validateToken(legacyToken));
     }
 
+    @Test
+    void validateToken_headerClaimsStrongerHmacAlgorithmThanKeyAllows_jwtTokenValidationException() throws Exception {
+        // given: a 32-byte secret only authorises HS256; an attacker re-signs the same key material as HS384/HS512
+        final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, VALIDITY, SECRET);
+        final long nowSeconds = System.currentTimeMillis() / 1000;
+        final String payload = "{\"sub\":\"username\",\"iat\":" + nowSeconds + ",\"exp\":" + (nowSeconds + 3600) + "}";
+        final String hs384 = hmacToken("HS384", "HmacSHA384", payload, SECRET);
+        final String hs512 = hmacToken("HS512", "HmacSHA512", payload, SECRET);
+
+        // then
+        assertThatExceptionOfType(JwtTokenValidationException.class).isThrownBy(() -> sut.validateToken(hs384));
+        assertThatExceptionOfType(JwtTokenValidationException.class).isThrownBy(() -> sut.validateToken(hs512));
+    }
+
+    @Test
+    void validateToken_algNoneWithSignatureSegment_jwtTokenValidationException() {
+        // given: a validly signed token whose header is rewritten to alg=none while keeping the signature segment
+        final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, VALIDITY, SECRET);
+        final String[] parts = sut.createToken("username", List.of(Role.ROLE_STUDENT)).split("\\.");
+        final String noneHeader = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString("{\"alg\":\"none\"}".getBytes(StandardCharsets.UTF_8));
+        final String tampered = noneHeader + "." + parts[1] + "." + parts[2];
+
+        // then
+        assertThatExceptionOfType(JwtTokenValidationException.class).isThrownBy(() -> sut.validateToken(tampered));
+    }
+
     private static String legacyHs256Token(String payloadJson, String secret) throws Exception {
+        return hmacToken("HS256", "HmacSHA256", payloadJson, secret);
+    }
+
+    private static String hmacToken(String alg, String macAlgorithm, String payloadJson, String secret) throws Exception {
         final Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
-        final String signingInput = encoder.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8))
+        final String signingInput = encoder.encodeToString(("{\"alg\":\"" + alg + "\"}").getBytes(StandardCharsets.UTF_8))
                 + "." + encoder.encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
-        final Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        final Mac mac = Mac.getInstance(macAlgorithm);
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), macAlgorithm));
         return signingInput + "." + encoder.encodeToString(mac.doFinal(signingInput.getBytes(StandardCharsets.US_ASCII)));
     }
 
