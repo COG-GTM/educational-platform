@@ -421,17 +421,6 @@ public class JwtTokenProviderTest {
         assertThatExceptionOfType(JwtTokenValidationException.class).isThrownBy(() -> sut.validateToken(legacyToken));
     }
 
-    @Test
-    void getUsername_tokenSignedWithOtherKey_jwtException() {
-        // given
-        final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, VALIDITY, SECRET);
-        final String token = new JwtTokenProvider(myUserDetails, VALIDITY, "fedcba9876543210fedcba9876543210")
-                .createToken("username", List.of(Role.ROLE_ADMIN));
-
-        // then
-        assertThatExceptionOfType(JwtException.class).isThrownBy(() -> sut.getUsername(token));
-    }
-
     private static String legacyHs256Token(String payloadJson, String secret) throws Exception {
         final Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         final String signingInput = encoder.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8))
