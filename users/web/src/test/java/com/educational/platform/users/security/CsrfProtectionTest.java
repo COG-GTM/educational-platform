@@ -235,13 +235,13 @@ public class CsrfProtectionTest {
     }
 
     @Test
-    void h2Console_post_withoutCsrfToken_notForbidden() {
+    void h2Console_post_withoutCsrfToken_allowed() {
         given()
                 .when()
-                .post("/h2-console/login.do")
+                .post("/h2-console/probe")
 
                 .then()
-                .statusCode(not(HttpStatus.FORBIDDEN.value()));
+                .statusCode(HttpStatus.OK.value());
     }
 
     private String signUp() {

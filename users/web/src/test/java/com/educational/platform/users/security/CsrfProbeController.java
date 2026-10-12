@@ -6,7 +6,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Test-only endpoints used to observe CSRF filter decisions:
- * {@code /public} is on the permitted path list, {@code /protected} requires authentication.
+ * {@code /public} is on the permitted path list, {@code /protected} requires authentication and
+ * {@code /h2-console/probe} sits under the CSRF-exempt H2 console path.
  */
 @RestController
 public class CsrfProbeController {
@@ -23,6 +24,11 @@ public class CsrfProbeController {
 
     @PostMapping("/protected")
     public String protectedProbe() {
+        return "ok";
+    }
+
+    @PostMapping("/h2-console/probe")
+    public String h2ConsoleProbe() {
         return "ok";
     }
 
