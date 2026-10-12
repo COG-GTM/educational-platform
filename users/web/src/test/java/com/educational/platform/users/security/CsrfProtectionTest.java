@@ -1,14 +1,18 @@
 package com.educational.platform.users.security;
 
+import com.educational.platform.users.Role;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.context.TestPropertySource;
 
+import java.util.List;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
@@ -24,6 +28,12 @@ public class CsrfProtectionTest {
 
     @LocalServerPort
     private int port;
+
+    @Autowired
+    private MyUserDetails myUserDetails;
+
+    @Value("${security.jwt.token.secret-key:secret-key}")
+    private String secretKey;
 
     @BeforeEach
     void setup() {
@@ -191,6 +201,38 @@ public class CsrfProtectionTest {
     }
 
     @Test
+    void post_withExpiredBearerToken_notAccepted() {
+        var username = signUpAndReturnUsername();
+        var expiredJwt = new JwtTokenProvider(myUserDetails, -60_000L, secretKey)
+                .createToken(username, List.of(Role.ROLE_STUDENT));
+
+        given()
+                .header("Authorization", "Bearer " + expiredJwt)
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(not(HttpStatus.OK.value()));
+    }
+
+    @Test
+    void post_withBearerTokenSignedWithOtherKey_notAccepted() {
+        var username = signUpAndReturnUsername();
+        var forgedJwt = new JwtTokenProvider(myUserDetails, 3_600_000L, "other-" + secretKey)
+                .createToken(username, List.of(Role.ROLE_STUDENT));
+
+        given()
+                .header("Authorization", "Bearer " + forgedJwt)
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(not(HttpStatus.OK.value()));
+    }
+
+    @Test
     void post_withNonBearerAuthorizationHeader_forbidden() {
         given()
                 .header("Authorization", "Basic dXNlcjpwYXNz")
@@ -235,6 +277,26 @@ public class CsrfProtectionTest {
         signUp(username);
 
         given()
+                .contentType(ContentType.JSON)
+                .body("{\n" +
+                        "  \"username\": \"" + username + "\",\n" +
+                        "  \"password\": \"password\"\n" +
+                        "}")
+
+                .when()
+                .post("/users/sign-in")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void signIn_withMismatchedCsrfToken_stillAllowed() {
+        var username = signUpAndReturnUsername();
+
+        given()
+                .cookie("XSRF-TOKEN", "stale-cookie-token")
+                .header("X-XSRF-TOKEN", "other-token")
                 .contentType(ContentType.JSON)
                 .body("{\n" +
                         "  \"username\": \"" + username + "\",\n" +
@@ -502,6 +564,12 @@ public class CsrfProtectionTest {
 
         assertThat(response.asString()).isNotBlank();
         assertThat(response.cookies()).isEmpty();
+    }
+
+    private String signUpAndReturnUsername() {
+        var username = "csrf" + UUID.randomUUID().toString().substring(0, 8);
+        signUp(username);
+        return username;
     }
 
     private String signUp() {
