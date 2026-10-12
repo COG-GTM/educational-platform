@@ -458,6 +458,52 @@ public class CsrfProtectionTest {
                 .statusCode(not(HttpStatus.OK.value()));
     }
 
+    @Test
+    void signUp_response_setsNoCookies() {
+        var username = "csrf" + UUID.randomUUID().toString().substring(0, 8);
+        var response = given()
+                .contentType(ContentType.JSON)
+                .body("{\n" +
+                        "  \"role\": \"ROLE_STUDENT\",\n" +
+                        "  \"username\": \"" + username + "\",\n" +
+                        "  \"email\": \"" + username + "@gmail.com\",\n" +
+                        "  \"password\": \"password\"\n" +
+                        "}")
+
+                .when()
+                .post("/users/sign-up")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .extract();
+
+        assertThat(response.asString()).isNotBlank();
+        assertThat(response.cookies()).isEmpty();
+    }
+
+    @Test
+    void signIn_response_setsNoCookies() {
+        var username = "csrf" + UUID.randomUUID().toString().substring(0, 8);
+        signUp(username);
+
+        var response = given()
+                .contentType(ContentType.JSON)
+                .body("{\n" +
+                        "  \"username\": \"" + username + "\",\n" +
+                        "  \"password\": \"password\"\n" +
+                        "}")
+
+                .when()
+                .post("/users/sign-in")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .extract();
+
+        assertThat(response.asString()).isNotBlank();
+        assertThat(response.cookies()).isEmpty();
+    }
+
     private String signUp() {
         return signUp("csrf" + UUID.randomUUID().toString().substring(0, 8));
     }
