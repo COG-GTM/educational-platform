@@ -1,10 +1,13 @@
+import java.security.SecureRandom
+import java.util.Base64
+
 plugins {
     java
     alias(libs.plugins.springdependencies)
 }
 
-val testJwtSecretKey: String = java.util.Base64.getEncoder().encodeToString(
-    ByteArray(48).also { java.security.SecureRandom().nextBytes(it) }
+val testJwtSecretKey: String = Base64.getEncoder().encodeToString(
+    ByteArray(48).also { SecureRandom().nextBytes(it) }
 )
 
 allprojects {
