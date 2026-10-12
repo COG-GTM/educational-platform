@@ -3,6 +3,7 @@ package com.educational.platform.users.security;
 import io.restassured.RestAssured;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -10,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.context.TestPropertySource;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 
 /**
@@ -29,13 +31,14 @@ public class ApiDocsPublicOptInTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/v3/api-docs", "/swagger-ui/index.html"})
-    void apiDocs_anonymous_accessibleWhenOptedIn(String path) {
+    @CsvSource({"/v3/api-docs, application/json", "/swagger-ui/index.html, text/html"})
+    void apiDocs_anonymous_accessibleWhenOptedIn(String path, String contentType) {
         given()
                 .when()
                 .get(path)
                 .then()
-                .statusCode(HttpStatus.OK.value());
+                .statusCode(HttpStatus.OK.value())
+                .contentType(containsString(contentType));
     }
 
     @ParameterizedTest

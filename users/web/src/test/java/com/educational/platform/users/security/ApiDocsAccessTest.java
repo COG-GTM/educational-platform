@@ -4,6 +4,7 @@ import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -11,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.context.TestPropertySource;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.oneOf;
 
 /**
@@ -41,8 +43,8 @@ public class ApiDocsAccessTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/v3/api-docs", "/swagger-ui/index.html"})
-    void apiDocs_authenticated_accessible(String path) {
+    @CsvSource({"/v3/api-docs, application/json", "/swagger-ui/index.html, text/html"})
+    void apiDocs_authenticated_accessible(String path, String contentType) {
         given()
                 .contentType(ContentType.JSON)
                 .body("{\"role\": \"ROLE_STUDENT\", \"username\": \"docs-user\", \"email\": \"docs@gmail.com\", \"password\": \"password\"}")
@@ -60,6 +62,7 @@ public class ApiDocsAccessTest {
                 .when()
                 .get(path)
                 .then()
-                .statusCode(HttpStatus.OK.value());
+                .statusCode(HttpStatus.OK.value())
+                .contentType(containsString(contentType));
     }
 }

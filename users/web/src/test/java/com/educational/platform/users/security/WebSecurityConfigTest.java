@@ -16,10 +16,12 @@ import org.springframework.test.context.junit.jupiter.web.SpringJUnitWebConfig;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import org.springframework.web.servlet.function.RequestPredicates;
+import org.springframework.web.servlet.function.RouterFunction;
+import org.springframework.web.servlet.function.RouterFunctions;
+import org.springframework.web.servlet.function.ServerResponse;
 
 import java.util.List;
 
@@ -37,8 +39,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Unit tests for the authorization rules built by {@link WebSecurityConfig#filterChain}.
  * <p>
  * Only {@link WebSecurityConfig} itself is bootstrapped (with a mocked {@link JwtTokenProvider} and a catch-all
- * controller), so the tests pin the request-matcher contract without the full application context.
- * A permitted request reaches the catch-all controller and returns 200; a denied one never does.
+ * route), so the tests pin the request-matcher contract without the full application context.
+ * A permitted request reaches the catch-all route and returns 200; a denied one never does.
+ * The route is a {@link RouterFunction} bean rather than a {@code @RestController} so that the
+ * {@code @SpringBootApplication} component scan of the module's integration tests does not pick it up.
  */
 @SpringJUnitWebConfig(classes = {WebSecurityConfig.class, WebSecurityConfigTest.Fixture.class})
 @TestPropertySource(properties = "com.educational.platform.security.enabled=true")
@@ -56,17 +60,8 @@ class WebSecurityConfigTest {
         }
 
         @Bean
-        CatchAllController catchAllController() {
-            return new CatchAllController();
-        }
-    }
-
-    @RestController
-    static class CatchAllController {
-
-        @RequestMapping("/**")
-        String ok() {
-            return "ok";
+        RouterFunction<ServerResponse> catchAllRoute() {
+            return RouterFunctions.route(RequestPredicates.all(), request -> ServerResponse.ok().body("ok"));
         }
     }
 
