@@ -2,13 +2,17 @@ package com.educational.platform.users.security;
 
 import com.educational.platform.security.JwtTokenValidationException;
 import com.educational.platform.users.Role;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Collections;
+import java.util.Date;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -135,6 +139,23 @@ public class JwtTokenProviderTest {
 
         assertThatExceptionOfType(JwtTokenValidationException.class)
                 .isThrownBy(() -> sut.validateToken(token));
+    }
+
+    @Test
+    void validateToken_tokenSignedWithLegacyDefaultKey_rejected() {
+        // given: a token forged with the removed fallback key, derived exactly as the old provider did
+        final String legacyKey = Base64.getEncoder().encodeToString("secret-key".getBytes(StandardCharsets.UTF_8));
+        final String forgedToken = Jwts.builder()
+                .setSubject("admin")
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + 3600000))
+                .signWith(SignatureAlgorithm.HS256, legacyKey)
+                .compact();
+        final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, 3600000, SECRET);
+
+        // when / then
+        assertThatExceptionOfType(JwtTokenValidationException.class)
+                .isThrownBy(() -> sut.validateToken(forgedToken));
     }
 
 }
