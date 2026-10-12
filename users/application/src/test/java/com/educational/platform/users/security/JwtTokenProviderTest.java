@@ -2,13 +2,12 @@ package com.educational.platform.users.security;
 
 import com.educational.platform.security.JwtTokenValidationException;
 import com.educational.platform.users.Role;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import org.junit.jupiter.api.Test;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.Date;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,13 +55,11 @@ class JwtTokenProviderTest {
     }
 
     @Test
-    void validateToken_tokenForgedWithFormerDefaultKey_rejected() {
+    void validateToken_tokenForgedWithFormerDefaultKey_rejected() throws Exception {
         final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, 3600000, "");
-        final String forged = Jwts.builder()
-                .setSubject("admin")
-                .setExpiration(new Date(System.currentTimeMillis() + 60000))
-                .signWith(SignatureAlgorithm.HS256, "secret-key".getBytes(StandardCharsets.UTF_8))
-                .compact();
+        final String forged = hs256("{\"alg\":\"HS256\"}",
+                "{\"sub\":\"admin\",\"exp\":" + (System.currentTimeMillis() / 1000 + 60) + "}",
+                "secret-key".getBytes(StandardCharsets.UTF_8));
 
         assertThatExceptionOfType(JwtTokenValidationException.class).isThrownBy(() -> sut.validateToken(forged));
     }
@@ -76,6 +73,15 @@ class JwtTokenProviderTest {
 
         assertThat(first.validateToken(token)).isTrue();
         assertThatExceptionOfType(JwtTokenValidationException.class).isThrownBy(() -> second.validateToken(token));
+    }
+
+    private static String hs256(String header, String payload, byte[] key) throws Exception {
+        final Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
+        final String signingInput = encoder.encodeToString(header.getBytes(StandardCharsets.UTF_8))
+                + "." + encoder.encodeToString(payload.getBytes(StandardCharsets.UTF_8));
+        final Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(key, "HmacSHA256"));
+        return signingInput + "." + encoder.encodeToString(mac.doFinal(signingInput.getBytes(StandardCharsets.UTF_8)));
     }
 
     private static String header(String token) {
