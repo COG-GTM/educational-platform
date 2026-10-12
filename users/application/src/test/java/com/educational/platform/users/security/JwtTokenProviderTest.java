@@ -3,6 +3,7 @@ package com.educational.platform.users.security;
 import com.educational.platform.security.JwtTokenValidationException;
 import com.educational.platform.users.Role;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import ch.qos.logback.classic.Level;
@@ -16,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
@@ -27,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -77,6 +80,36 @@ public class JwtTokenProviderTest {
     }
 
     @Test
+    void getAuthentication_validToken_authoritiesTakenFromUserDetailsNotFromTokenClaim() {
+        // given
+        final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, VALIDITY, SECRET);
+        final String token = sut.createToken("username", List.of(Role.ROLE_STUDENT));
+        final UserDetails userDetails = User.withUsername("username").password("").authorities(Role.ROLE_ADMIN).build();
+        when(myUserDetails.loadUserByUsername("username")).thenReturn(userDetails);
+
+        // when
+        final Authentication authentication = sut.getAuthentication(token);
+
+        // then
+        assertThat(authentication.isAuthenticated()).isTrue();
+        assertThat(authentication.getPrincipal()).isSameAs(userDetails);
+        assertThat(authentication.getCredentials()).isEqualTo("");
+        assertThat(authentication.getAuthorities()).extracting("authority").containsExactly("ROLE_ADMIN");
+    }
+
+    @Test
+    void getAuthentication_tokenSignedWithOtherKey_jwtExceptionAndUserDetailsNotLoaded() {
+        // given
+        final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, VALIDITY, SECRET);
+        final String token = new JwtTokenProvider(myUserDetails, VALIDITY, "fedcba9876543210fedcba9876543210")
+                .createToken("username", List.of(Role.ROLE_ADMIN));
+
+        // then
+        assertThatExceptionOfType(JwtException.class).isThrownBy(() -> sut.getAuthentication(token));
+        verifyNoInteractions(myUserDetails);
+    }
+
+    @Test
     void constructor_secretShorterThan32Bytes_illegalStateException() {
         assertThatIllegalStateException()
                 .isThrownBy(() -> new JwtTokenProvider(myUserDetails, VALIDITY, "secret-key"))
@@ -88,6 +121,20 @@ public class JwtTokenProviderTest {
         // given
         final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, VALIDITY, "");
         final JwtTokenProvider other = new JwtTokenProvider(myUserDetails, VALIDITY, " ");
+
+        // when
+        final String token = sut.createToken("username", List.of(Role.ROLE_STUDENT));
+
+        // then
+        assertThat(sut.validateToken(token)).isTrue();
+        assertThatExceptionOfType(JwtTokenValidationException.class).isThrownBy(() -> other.validateToken(token));
+    }
+
+    @Test
+    void constructor_nullSecret_randomKeyUsed() {
+        // given
+        final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, VALIDITY, null);
+        final JwtTokenProvider other = new JwtTokenProvider(myUserDetails, VALIDITY, SECRET);
 
         // when
         final String token = sut.createToken("username", List.of(Role.ROLE_STUDENT));
