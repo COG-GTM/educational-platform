@@ -68,6 +68,20 @@ public class CsrfProtectionTest {
     }
 
     @Test
+    void post_withMatchingCsrfCookieAndFormParameter_allowed() {
+        var token = UUID.randomUUID().toString();
+        given()
+                .cookie("XSRF-TOKEN", token)
+                .formParam("_csrf", token)
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
     void post_withBearerToken_exemptFromCsrf() {
         var jwt = signUp();
         given()
