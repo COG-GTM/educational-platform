@@ -53,7 +53,7 @@ public class ApiDocsAccessTest {
                 .post("/users/sign-in")
                 .then()
                 .statusCode(HttpStatus.OK.value())
-                .extract().path("token");
+                .extract().asString();
 
         given()
                 .header("Authorization", "Bearer " + token)
