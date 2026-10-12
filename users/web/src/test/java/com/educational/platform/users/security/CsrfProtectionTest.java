@@ -12,6 +12,8 @@ import org.springframework.test.context.TestPropertySource;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.not;
 
 /**
  * Verifies CSRF protection is enabled for cookie/browser style requests while Bearer-token API calls keep working.
@@ -90,8 +92,163 @@ public class CsrfProtectionTest {
                 .statusCode(HttpStatus.FORBIDDEN.value());
     }
 
-    private String signUp() {
+    @Test
+    void post_withCsrfCookieButNoHeader_forbidden() {
+        given()
+                .cookie("XSRF-TOKEN", UUID.randomUUID().toString())
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void post_withCsrfHeaderButNoCookie_forbidden() {
+        given()
+                .header("X-XSRF-TOKEN", UUID.randomUUID().toString())
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void post_withoutCsrfToken_issuesReadableXsrfCookie() {
+        var cookie = given()
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value())
+                .extract()
+                .detailedCookie("XSRF-TOKEN");
+
+        assertThat(cookie).isNotNull();
+        assertThat(cookie.getValue()).isNotBlank();
+        assertThat(cookie.isHttpOnly()).isFalse();
+        assertThat(cookie.getPath()).isEqualTo("/");
+    }
+
+    @Test
+    void post_withIssuedXsrfCookieEchoedInHeader_allowed() {
+        var issued = given()
+                .when()
+                .post("/public")
+
+                .then()
+                .extract()
+                .cookie("XSRF-TOKEN");
+
+        given()
+                .cookie("XSRF-TOKEN", issued)
+                .header("X-XSRF-TOKEN", issued)
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void get_withoutCsrfToken_allowed() {
+        given()
+                .when()
+                .get("/public")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void post_withInvalidBearerToken_notAccepted() {
+        given()
+                .header("Authorization", "Bearer not-a-jwt")
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(not(HttpStatus.OK.value()));
+    }
+
+    @Test
+    void post_withNonBearerAuthorizationHeader_forbidden() {
+        given()
+                .header("Authorization", "Basic dXNlcjpwYXNz")
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void post_toAuthenticatedEndpoint_withBearerToken_allowedWithoutCsrf() {
+        var jwt = signUp();
+        given()
+                .header("Authorization", "Bearer " + jwt)
+
+                .when()
+                .post("/protected")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void post_toAuthenticatedEndpoint_withCsrfTokenButNoBearer_notOk() {
+        var token = UUID.randomUUID().toString();
+        given()
+                .cookie("XSRF-TOKEN", token)
+                .header("X-XSRF-TOKEN", token)
+
+                .when()
+                .post("/protected")
+
+                .then()
+                .statusCode(not(HttpStatus.OK.value()));
+    }
+
+    @Test
+    void signIn_withoutCsrfToken_allowed() {
         var username = "csrf" + UUID.randomUUID().toString().substring(0, 8);
+        signUp(username);
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\n" +
+                        "  \"username\": \"" + username + "\",\n" +
+                        "  \"password\": \"password\"\n" +
+                        "}")
+
+                .when()
+                .post("/users/sign-in")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void h2Console_post_withoutCsrfToken_notForbidden() {
+        given()
+                .when()
+                .post("/h2-console/login.do")
+
+                .then()
+                .statusCode(not(HttpStatus.FORBIDDEN.value()));
+    }
+
+    private String signUp() {
+        return signUp("csrf" + UUID.randomUUID().toString().substring(0, 8));
+    }
+
+    private String signUp(String username) {
         return given()
                 .contentType(ContentType.JSON)
                 .body("{\n" +
