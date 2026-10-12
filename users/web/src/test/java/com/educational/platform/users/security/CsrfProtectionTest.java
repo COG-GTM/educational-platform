@@ -78,6 +78,18 @@ public class CsrfProtectionTest {
                 .statusCode(HttpStatus.OK.value());
     }
 
+    @Test
+    void post_withEmptyBearerToken_stillRequiresCsrfToken() {
+        given()
+                .header("Authorization", "Bearer ")
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
     private String signUp() {
         var username = "csrf" + UUID.randomUUID().toString().substring(0, 8);
         return given()

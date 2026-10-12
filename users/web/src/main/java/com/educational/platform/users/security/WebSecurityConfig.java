@@ -13,6 +13,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.util.matcher.RequestMatcher;
+import org.springframework.util.StringUtils;
 
 @Configuration
 @EnableWebSecurity
@@ -59,7 +60,7 @@ public class WebSecurityConfig {
 	 * Any other state-changing request (e.g. one relying on cookies) must present the XSRF token.
 	 */
 	private RequestMatcher bearerTokenRequest() {
-		return (request) -> jwtTokenProvider.resolveToken(request) != null;
+		return (request) -> StringUtils.hasText(jwtTokenProvider.resolveToken(request));
 	}
 
 	@Bean
