@@ -1,7 +1,14 @@
+import java.security.SecureRandom
+import java.util.Base64
+
 plugins {
     java
     alias(libs.plugins.springdependencies)
 }
+
+val testJwtSecretKey: String = Base64.getEncoder().encodeToString(
+    ByteArray(48).also { SecureRandom().nextBytes(it) }
+)
 
 allprojects {
     group = "com.educational.platform"
@@ -22,6 +29,12 @@ subprojects {
     java {
         sourceCompatibility = JavaVersion.VERSION_25
         targetCompatibility = JavaVersion.VERSION_25
+    }
+
+    tasks.withType<Test>().configureEach {
+        jvmArgumentProviders.add(object : CommandLineArgumentProvider {
+            override fun asArguments() = listOf("-Dsecurity.jwt.token.secret-key=$testJwtSecretKey")
+        })
     }
 
     dependencyManagement {

@@ -376,6 +376,13 @@ Communication between bounded contexts is performed via Spring's `ApplicationEve
 ### Install Java 21
 - Download and install Java 21
 
+### Configure the JWT signing key
+The application does not ship a default JWT signing key and fails to start without one. Provide a random secret of at least 32 bytes via `security.jwt.token.secret-key`, for example through the environment:
+```shell
+export SECURITY_JWT_TOKEN_SECRET_KEY="$(openssl rand -base64 48)"
+```
+In production, inject it from your secrets manager. Tests get a random key generated per Gradle build.
+
 ### Run application
 `./gradlew bootRun`
 
