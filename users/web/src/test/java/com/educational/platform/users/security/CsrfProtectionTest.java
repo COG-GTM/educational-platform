@@ -189,6 +189,22 @@ public class CsrfProtectionTest {
     }
 
     @Test
+    void get_withoutCsrfToken_doesNotIssueXsrfCookie() {
+        // The token is loaded lazily and only materialised when an unsafe request is checked, so a safe
+        // request never mints the XSRF-TOKEN cookie: SPA clients bootstrap it via a (rejected) unsafe request.
+        var cookie = given()
+                .when()
+                .get("/public")
+
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .extract()
+                .cookie("XSRF-TOKEN");
+
+        assertThat(cookie).isNull();
+    }
+
+    @Test
     void post_withInvalidBearerToken_notAccepted() {
         given()
                 .header("Authorization", "Bearer not-a-jwt")
