@@ -23,6 +23,8 @@ public class DatasourceCredentialsTest {
 
         assertThat(properties.getProperty("spring.datasource.password"))
                 .isEqualTo("${SPRING_DATASOURCE_PASSWORD:}");
+        assertThat(properties.getProperty("spring.h2.console.enabled"))
+                .isEqualTo("${SPRING_H2_CONSOLE_ENABLED:false}");
     }
 
     @Nested
