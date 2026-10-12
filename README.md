@@ -379,6 +379,8 @@ Communication between bounded contexts is performed via Spring's `ApplicationEve
 ### Run application
 `./gradlew bootRun`
 
+Datasource credentials are read from the `SPRING_DATASOURCE_USERNAME` (default `sa`) and `SPRING_DATASOURCE_PASSWORD` (default empty) environment variables; never commit them to `application.properties`. The H2 console (`/h2-console`) is off by default; set `SPRING_H2_CONSOLE_ENABLED=true` to enable it locally.
+
 ### Sign up in educational platform
 ```http
 POST http://127.0.0.1:8080/users/sign-up
