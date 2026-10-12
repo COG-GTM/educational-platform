@@ -7,10 +7,12 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 
 @Configuration
 @EnableWebSecurity
@@ -25,7 +27,12 @@ public class WebSecurityConfig {
 
     @Bean
 	public SecurityFilterChain filterChain(HttpSecurity http) {
-		http.csrf(AbstractHttpConfigurer::disable);
+		http.csrf((csrf) -> csrf
+				.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+				.csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+				.ignoringRequestMatchers(bearerTokenRequest())
+				// JSON-only, unauthenticated endpoints that return the JWT in the response body (no cookie is set).
+				.ignoringRequestMatchers("/users/sign-in", "/users/sign-up", "/h2-console/**"));
 		http.sessionManagement((sessionManagement) -> sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
 		http.authorizeHttpRequests((authorizeHttpRequests) -> authorizeHttpRequests.requestMatchers(
@@ -44,6 +51,15 @@ public class WebSecurityConfig {
 
 		http.addFilterBefore(new JwtTokenFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
 		return http.build();
+	}
+
+	/**
+	 * Requests authenticated with an explicit {@code Authorization: Bearer} header carry no ambient
+	 * browser credentials and cannot be forged cross-site, so they are exempt from CSRF checks.
+	 * Any other state-changing request (e.g. one relying on cookies) must present the XSRF token.
+	 */
+	private RequestMatcher bearerTokenRequest() {
+		return (request) -> jwtTokenProvider.resolveToken(request) != null;
 	}
 
 	@Bean
