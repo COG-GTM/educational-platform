@@ -1,7 +1,9 @@
 package com.educational.platform.users.security;
 
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -19,6 +21,16 @@ public class CsrfProbeController {
 
     @GetMapping("/public")
     public String read() {
+        return "ok";
+    }
+
+    @PutMapping("/public")
+    public String update() {
+        return "ok";
+    }
+
+    @DeleteMapping("/public")
+    public String remove() {
         return "ok";
     }
 

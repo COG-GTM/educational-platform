@@ -244,6 +244,115 @@ public class CsrfProtectionTest {
                 .statusCode(HttpStatus.OK.value());
     }
 
+    @Test
+    void put_withoutCsrfToken_forbidden() {
+        given()
+                .when()
+                .put("/public")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void delete_withoutCsrfToken_forbidden() {
+        given()
+                .when()
+                .delete("/public")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void put_withMatchingCsrfCookieAndHeader_allowed() {
+        var token = UUID.randomUUID().toString();
+        given()
+                .cookie("XSRF-TOKEN", token)
+                .header("X-XSRF-TOKEN", token)
+
+                .when()
+                .put("/public")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void delete_withBearerToken_exemptFromCsrf() {
+        var jwt = signUp();
+        given()
+                .header("Authorization", "Bearer " + jwt)
+
+                .when()
+                .delete("/public")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void head_withoutCsrfToken_allowed() {
+        given()
+                .when()
+                .head("/public")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void options_withoutCsrfToken_allowed() {
+        given()
+                .when()
+                .options("/public")
+
+                .then()
+                .statusCode(HttpStatus.OK.value());
+    }
+
+    @Test
+    void post_withWhitespaceOnlyBearerToken_stillRequiresCsrfToken() {
+        given()
+                .header("Authorization", "Bearer    ")
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void post_withLowercaseBearerScheme_forbidden() {
+        var jwt = signUp();
+        given()
+                .header("Authorization", "bearer " + jwt)
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void post_withMismatchedCsrfToken_keepsExistingCookie() {
+        var cookie = given()
+                .cookie("XSRF-TOKEN", "cookie-token")
+                .header("X-XSRF-TOKEN", "other-token")
+
+                .when()
+                .post("/public")
+
+                .then()
+                .statusCode(HttpStatus.FORBIDDEN.value())
+                .extract()
+                .detailedCookie("XSRF-TOKEN");
+
+        assertThat(cookie).isNull();
+    }
+
     private String signUp() {
         return signUp("csrf" + UUID.randomUUID().toString().substring(0, 8));
     }
