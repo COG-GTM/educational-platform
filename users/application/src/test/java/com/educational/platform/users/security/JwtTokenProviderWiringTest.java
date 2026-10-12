@@ -6,9 +6,11 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.mock.env.MockEnvironment;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,6 +72,40 @@ public class JwtTokenProviderWiringTest {
         assertThat(provider.validateToken(token)).isTrue();
         assertThat(new JwtTokenProvider(mock(MyUserDetails.class), 3600000, secret).getUsername(token))
                 .isEqualTo("username");
+    }
+
+    @Test
+    void contextRefresh_secretKeyProvidedAsEnvironmentVariable_boundThroughRelaxedName() {
+        // given: README and the fail-fast message point operators to SECURITY_JWT_TOKEN_SECRET_KEY
+        final String secret = UUID.randomUUID().toString() + UUID.randomUUID();
+        final MockEnvironment environment = new MockEnvironment();
+        environment.getPropertySources().addFirst(new SystemEnvironmentPropertySource(
+                "systemEnvironment", Map.<String, Object>of("SECURITY_JWT_TOKEN_SECRET_KEY", secret)));
+        context = contextWith(environment);
+
+        // when
+        context.refresh();
+        final String token = context.getBean(JwtTokenProvider.class)
+                .createToken("username", Collections.singletonList(Role.ROLE_STUDENT));
+
+        // then
+        assertThat(new JwtTokenProvider(mock(MyUserDetails.class), 3600000, secret).getUsername(token))
+                .isEqualTo("username");
+    }
+
+    @Test
+    void contextRefresh_secretKeyEnvironmentVariableEmpty_failsInsteadOfFallingBack() {
+        // given: an exported but empty variable must not be treated as "configured"
+        final MockEnvironment environment = new MockEnvironment();
+        environment.getPropertySources().addFirst(new SystemEnvironmentPropertySource(
+                "systemEnvironment", Map.<String, Object>of("SECURITY_JWT_TOKEN_SECRET_KEY", "")));
+        final AnnotationConfigApplicationContext sut = contextWith(environment);
+
+        // when / then
+        assertThatExceptionOfType(BeanCreationException.class)
+                .isThrownBy(sut::refresh)
+                .withRootCauseInstanceOf(IllegalStateException.class)
+                .withStackTraceContaining("must be configured");
     }
 
     @Test
