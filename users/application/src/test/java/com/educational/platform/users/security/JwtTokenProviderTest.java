@@ -20,6 +20,8 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.slf4j.LoggerFactory;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Date;
@@ -388,6 +390,55 @@ public class JwtTokenProviderTest {
         final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, VALIDITY, SECRET);
 
         assertThat(sut.resolveToken(requestWithAuthorization("Bearer "))).isEmpty();
+    }
+
+    @Test
+    void validateToken_tokenIssuedByLegacyJjwt091ProviderWithSameSecret_true() throws Exception {
+        // given: jjwt 0.9.1 derived the HMAC key from the raw UTF-8 secret bytes (Base64 round-trip) and
+        // serialized the "auth" claim as SimpleGrantedAuthority objects without a "typ" header
+        final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, VALIDITY, SECRET);
+        final long nowSeconds = System.currentTimeMillis() / 1000;
+        final String legacyToken = legacyHs256Token(
+                "{\"sub\":\"username\",\"auth\":[{\"authority\":\"ROLE_STUDENT\"}],\"iat\":" + nowSeconds
+                        + ",\"exp\":" + (nowSeconds + 3600) + "}",
+                SECRET);
+
+        // then
+        assertThat(sut.validateToken(legacyToken)).isTrue();
+        assertThat(sut.getUsername(legacyToken)).isEqualTo("username");
+    }
+
+    @Test
+    void validateToken_tokenIssuedByLegacyJjwt091ProviderWithOtherSecret_jwtTokenValidationException() throws Exception {
+        // given
+        final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, VALIDITY, SECRET);
+        final long nowSeconds = System.currentTimeMillis() / 1000;
+        final String legacyToken = legacyHs256Token(
+                "{\"sub\":\"username\",\"iat\":" + nowSeconds + ",\"exp\":" + (nowSeconds + 3600) + "}",
+                "fedcba9876543210fedcba9876543210");
+
+        // then
+        assertThatExceptionOfType(JwtTokenValidationException.class).isThrownBy(() -> sut.validateToken(legacyToken));
+    }
+
+    @Test
+    void getUsername_tokenSignedWithOtherKey_jwtException() {
+        // given
+        final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, VALIDITY, SECRET);
+        final String token = new JwtTokenProvider(myUserDetails, VALIDITY, "fedcba9876543210fedcba9876543210")
+                .createToken("username", List.of(Role.ROLE_ADMIN));
+
+        // then
+        assertThatExceptionOfType(JwtException.class).isThrownBy(() -> sut.getUsername(token));
+    }
+
+    private static String legacyHs256Token(String payloadJson, String secret) throws Exception {
+        final Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
+        final String signingInput = encoder.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8))
+                + "." + encoder.encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
+        final Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        return signingInput + "." + encoder.encodeToString(mac.doFinal(signingInput.getBytes(StandardCharsets.US_ASCII)));
     }
 
     private static MockHttpServletRequest requestWithAuthorization(String value) {
