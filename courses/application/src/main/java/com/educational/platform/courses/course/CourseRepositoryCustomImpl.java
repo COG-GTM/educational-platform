@@ -29,6 +29,9 @@ public class CourseRepositoryCustomImpl implements CourseRepositoryCustom {
 
 	@Override
 	public List<CourseLightDTO> searchByKeyword(String keyword) {
+		if (keyword == null) {
+			return List.of();
+		}
 		return entityManager
 				.createQuery(
 						"SELECT new com.educational.platform.courses.course.CourseLightDTO(c.uuid, c.name, c.description, c.numberOfStudents) "

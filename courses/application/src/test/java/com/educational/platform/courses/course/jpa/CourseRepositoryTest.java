@@ -188,12 +188,12 @@ public class CourseRepositoryTest {
 	}
 
 	@Test
-	void searchByKeyword_nullKeyword_treatedAsLiteralAndReturnsNothing() {
+	void searchByKeyword_nullKeyword_emptyListReturned() {
 		// given
 		givenCourse("Java Fundamentals", "Introductory programming course");
+		givenCourse("Understanding Nullable Types", "Avoiding null pointer exceptions");
 
 		// when
-		// null is concatenated into the LIKE pattern as the literal "%null%", so it matches nothing rather than throwing.
 		var result = courseRepository.searchByKeyword(null);
 
 		// then

@@ -21,7 +21,7 @@ public interface CourseRepositoryCustom {
 	 * Retrieves courses whose name or description matches the given keyword.
 	 *
 	 * @param keyword search keyword.
-	 * @return the list of matching course dtos.
+	 * @return the list of matching course dtos, or an empty list if the keyword is {@code null}.
 	 */
 	List<CourseLightDTO> searchByKeyword(@Param("keyword") String keyword);
 
