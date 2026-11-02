@@ -12,7 +12,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class Jackson2VersionTest {
 
-    private static final Version MINIMUM_SAFE_VERSION = new Version(2, 21, 4, null, null, null);
+    private static final int SAFE_MAJOR = 2;
+    private static final int SAFE_MINOR = 21;
+    private static final int SAFE_PATCH = 4;
 
     @Test
     void jacksonDatabind_isAtLeastMinimumSafeVersion() {
@@ -20,10 +22,10 @@ class Jackson2VersionTest {
         final Version databind = com.fasterxml.jackson.databind.cfg.PackageVersion.VERSION;
 
         // then
-        assertThat(databind.getMajorVersion()).isEqualTo(2);
-        assertThat(databind.compareTo(MINIMUM_SAFE_VERSION))
-                .as("jackson-databind %s must be >= %s (CVE-2026-59888)", databind, MINIMUM_SAFE_VERSION)
-                .isGreaterThanOrEqualTo(0);
+        assertThat(databind.getMajorVersion()).isEqualTo(SAFE_MAJOR);
+        assertThat(isAtLeastMinimumSafeVersion(databind))
+                .as("jackson-databind %s must be >= %d.%d.%d (CVE-2026-59888)", databind, SAFE_MAJOR, SAFE_MINOR, SAFE_PATCH)
+                .isTrue();
     }
 
     @Test
@@ -33,6 +35,31 @@ class Jackson2VersionTest {
         final Version databind = com.fasterxml.jackson.databind.cfg.PackageVersion.VERSION;
 
         // then
-        assertThat(core).isEqualTo(databind);
+        assertThat(core.toString()).isEqualTo(databind.toString());
+    }
+
+    @Test
+    void isAtLeastMinimumSafeVersion_comparesNumericComponentsIgnoringArtifactIds() {
+        // then
+        assertThat(isAtLeastMinimumSafeVersion(databindVersion(2, 20, 1))).isFalse();
+        assertThat(isAtLeastMinimumSafeVersion(databindVersion(2, 21, 3))).isFalse();
+        assertThat(isAtLeastMinimumSafeVersion(databindVersion(1, 99, 99))).isFalse();
+        assertThat(isAtLeastMinimumSafeVersion(databindVersion(2, 21, 4))).isTrue();
+        assertThat(isAtLeastMinimumSafeVersion(databindVersion(2, 21, 5))).isTrue();
+        assertThat(isAtLeastMinimumSafeVersion(databindVersion(2, 22, 0))).isTrue();
+    }
+
+    private static Version databindVersion(final int major, final int minor, final int patch) {
+        return new Version(major, minor, patch, null, "com.fasterxml.jackson.core", "jackson-databind");
+    }
+
+    private static boolean isAtLeastMinimumSafeVersion(final Version version) {
+        if (version.getMajorVersion() != SAFE_MAJOR) {
+            return version.getMajorVersion() > SAFE_MAJOR;
+        }
+        if (version.getMinorVersion() != SAFE_MINOR) {
+            return version.getMinorVersion() > SAFE_MINOR;
+        }
+        return version.getPatchLevel() >= SAFE_PATCH;
     }
 }
