@@ -26,7 +26,10 @@ dependencies {
     implementation("org.springframework.boot", "spring-boot-starter-web")
     implementation("org.liquibase", "liquibase-core")
 
+    testImplementation("org.springframework.data", "spring-data-commons")
+
     testImplementation("org.junit.jupiter", "junit-jupiter-api")
+    testRuntimeOnly("org.junit.jupiter", "junit-jupiter-engine")
     testImplementation("org.junit.platform", "junit-platform-engine")
     testImplementation("org.junit.platform", "junit-platform-launcher")
     testImplementation("org.mockito", "mockito-junit-jupiter", libs.versions.mockito.get())
