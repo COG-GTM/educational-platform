@@ -16,6 +16,7 @@ dependencies {
     testImplementation("org.springframework.boot", "spring-boot-data-jpa-test")
     testImplementation("org.springframework.security", "spring-security-test")
     testImplementation("org.junit.jupiter", "junit-jupiter-api")
+    testRuntimeOnly("org.junit.jupiter", "junit-jupiter-engine")
     testImplementation("org.junit.platform", "junit-platform-engine")
     testImplementation("org.junit.platform", "junit-platform-launcher")
     testImplementation("org.mockito", "mockito-junit-jupiter", libs.versions.mockito.get())
@@ -25,4 +26,3 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
-

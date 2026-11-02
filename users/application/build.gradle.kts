@@ -13,6 +13,7 @@ dependencies {
 
     testImplementation("org.springframework.boot", "spring-boot-starter-test")
     testImplementation("org.junit.jupiter", "junit-jupiter-api")
+    testRuntimeOnly("org.junit.jupiter", "junit-jupiter-engine")
     testImplementation("org.junit.platform", "junit-platform-engine")
     testImplementation("org.junit.platform", "junit-platform-launcher")
     testImplementation("io.rest-assured", "rest-assured", libs.versions.restAssured.get())
