@@ -31,6 +31,11 @@ dependencies {
     testImplementation("org.junit.platform", "junit-platform-launcher")
     testImplementation("org.mockito", "mockito-junit-jupiter", libs.versions.mockito.get())
     testImplementation("com.tngtech.archunit", "archunit-junit5", libs.versions.archunit.get())
+    testRuntimeOnly("org.junit.jupiter", "junit-jupiter-engine")
+}
+
+tasks.withType<Test>().configureEach {
+    systemProperty("expected.tomcat.version", libs.versions.tomcat.get())
 }
 
 tasks.test {
