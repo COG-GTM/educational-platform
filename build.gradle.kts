@@ -24,6 +24,9 @@ subprojects {
         targetCompatibility = JavaVersion.VERSION_25
     }
 
+    // Overrides the Spring Boot BOM's Tomcat 11.0.15 (CVE-2026-24734, fixed in 11.0.18).
+    ext["tomcat.version"] = "11.0.18"
+
     dependencyManagement {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
