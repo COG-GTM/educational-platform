@@ -26,7 +26,10 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
+            mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}") {
+                // CVE-2026-41721 (SNYK-JAVA-ORGSPRINGFRAMEWORKDATA-17279540): Boot 4.0.1 manages spring-data-commons 4.0.1
+                bomProperty("spring-data-bom.version", rootProject.libs.versions.springData.get())
+            }
         }
     }
 }
