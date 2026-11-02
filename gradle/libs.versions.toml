@@ -1,5 +1,7 @@
 [versions]
 spring = "4.0.1"
+jackson = "3.1.5"
+jacksonAnnotations = "2.21"
 restAssured = "6.0.0"
 mockito = "5.19.0"
 assertj = "3.27.3"
