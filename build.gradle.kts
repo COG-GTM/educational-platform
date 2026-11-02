@@ -24,6 +24,8 @@ subprojects {
         targetCompatibility = JavaVersion.VERSION_25
     }
 
+    extra["jackson-2-bom.version"] = rootProject.libs.versions.jackson2.get()
+
     dependencyManagement {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
