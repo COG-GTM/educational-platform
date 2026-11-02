@@ -24,6 +24,9 @@ subprojects {
         targetCompatibility = JavaVersion.VERSION_25
     }
 
+    // CVE-2026-55276 (SNYK-JAVA-ORGAPACHETOMCATEMBED-17734715): Boot 4.0.1 manages Tomcat 11.0.15
+    ext["tomcat.version"] = "11.0.23"
+
     dependencyManagement {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
