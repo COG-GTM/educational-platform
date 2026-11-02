@@ -24,6 +24,8 @@ subprojects {
         targetCompatibility = JavaVersion.VERSION_25
     }
 
+    extra["logback.version"] = rootProject.libs.versions.logback.get()
+
     dependencyManagement {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
