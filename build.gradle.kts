@@ -31,5 +31,9 @@ subprojects {
                 bomProperty("jackson-bom.version", rootProject.libs.versions.jacksonBom.get())
             }
         }
+        dependencies {
+            // jackson-databind 3.1.x needs jackson-annotations >= 2.21 (Boot 4.0.1's jackson-2-bom manages 2.20)
+            dependency("com.fasterxml.jackson.core:jackson-annotations:${rootProject.libs.versions.jacksonAnnotations.get()}")
+        }
     }
 }
