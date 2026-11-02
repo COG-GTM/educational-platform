@@ -3,6 +3,14 @@ package com.educational.platform.dependencies;
 import org.apache.catalina.util.ServerInfo;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.file.Path;
+import java.util.jar.JarFile;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -24,6 +32,37 @@ class EmbeddedTomcatVersionTest {
         // then
         assertTrue(isAtLeast(version, MINIMUM_SAFE_VERSION),
                 "Embedded Tomcat " + serverNumber + " is below 11.0.20 (CVE-2026-32990)");
+    }
+
+    @Test
+    void embeddedTomcatModules_allResolveToSameVersionAsCore() throws IOException, URISyntaxException {
+        // given
+        String coreVersion = implementationVersion(ServerInfo.class);
+
+        // when
+        Class<?> elClass = assertDoesNotThrow(() -> Class.forName("org.apache.el.ExpressionFactoryImpl"),
+                "tomcat-embed-el must be on the configuration test runtime classpath");
+        Class<?> websocketClass = assertDoesNotThrow(() -> Class.forName("org.apache.tomcat.websocket.WsWebSocketContainer"),
+                "tomcat-embed-websocket must be on the configuration test runtime classpath");
+        String elVersion = implementationVersion(elClass);
+        String websocketVersion = implementationVersion(websocketClass);
+
+        // then
+        assertEquals(coreVersion, elVersion, "tomcat-embed-el must match tomcat-embed-core");
+        assertEquals(coreVersion, websocketVersion, "tomcat-embed-websocket must match tomcat-embed-core");
+    }
+
+    private static String implementationVersion(Class<?> moduleClass) throws IOException, URISyntaxException {
+        String version = moduleClass.getPackage().getImplementationVersion();
+        if (version == null) {
+            Path jarPath = Path.of(moduleClass.getProtectionDomain().getCodeSource().getLocation().toURI());
+            try (JarFile jar = new JarFile(jarPath.toFile())) {
+                assertNotNull(jar.getManifest(), "Missing manifest for " + moduleClass.getName());
+                version = jar.getManifest().getMainAttributes().getValue("Implementation-Version");
+            }
+        }
+        assertNotNull(version, "Missing Implementation-Version for " + moduleClass.getName());
+        return version;
     }
 
     private static int[] parseVersion(String serverNumber) {
