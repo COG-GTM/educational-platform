@@ -3,6 +3,8 @@ package com.educational.platform.dependencies;
 import com.fasterxml.jackson.core.Version;
 import org.junit.jupiter.api.Test;
 
+import java.util.Comparator;
+
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -12,6 +14,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class Jackson2VersionTest {
 
     private static final Version MINIMUM = new Version(2, 21, 2, null, null, null);
+
+    // Version.compareTo orders by groupId/artifactId first, so compare the numeric parts only.
+    private static final Comparator<Version> BY_NUMBER = Comparator
+            .comparingInt(Version::getMajorVersion)
+            .thenComparingInt(Version::getMinorVersion)
+            .thenComparingInt(Version::getPatchLevel);
 
     @Test
     void jacksonCore_isAtLeastFixedVersion() {
@@ -24,6 +32,6 @@ class Jackson2VersionTest {
     }
 
     private static void assertAtLeastMinimum(Version actual) {
-        assertTrue(actual.compareTo(MINIMUM) >= 0, () -> actual + " must be >= " + MINIMUM);
+        assertTrue(BY_NUMBER.compare(actual, MINIMUM) >= 0, () -> actual + " must be >= " + MINIMUM);
     }
 }
