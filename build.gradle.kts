@@ -26,7 +26,10 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
+            mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}") {
+                // CVE-2026-54517 (GHSA-5hh8-q8hv-fr38): Boot 4.0.1 manages jackson-databind 3.0.3
+                bomProperty("jackson-bom.version", rootProject.libs.versions.jacksonBom.get())
+            }
         }
     }
 }
