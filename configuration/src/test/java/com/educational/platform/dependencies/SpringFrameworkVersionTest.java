@@ -1,11 +1,18 @@
 package com.educational.platform.dependencies;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.framework.AopProxy;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.SpringVersion;
 import org.springframework.expression.ExpressionParser;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.DispatcherServlet;
 
 import java.util.Arrays;
+import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -25,6 +32,17 @@ class SpringFrameworkVersionTest {
     @Test
     void springCoreIsPatched() {
         assertPatched(SpringVersion.getVersion());
+    }
+
+    @Test
+    void allSpringFrameworkModulesShareOneVersion() {
+        String expected = SpringVersion.getVersion();
+        assertNotNull(expected, "Spring Framework version is not available from the jar manifest");
+        for (Class<?> type : List.of(BeanFactory.class, ApplicationContext.class, ExpressionParser.class,
+                AopProxy.class, RestTemplate.class, DispatcherServlet.class)) {
+            assertEquals(expected, type.getPackage().getImplementationVersion(),
+                    type.getName() + " comes from a different Spring Framework version than spring-core");
+        }
     }
 
     private static void assertPatched(String version) {
