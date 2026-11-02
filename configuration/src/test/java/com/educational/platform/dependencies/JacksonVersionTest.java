@@ -1,9 +1,13 @@
 package com.educational.platform.dependencies;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.junit.jupiter.api.Test;
 import tools.jackson.core.Version;
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -32,5 +36,30 @@ public class JacksonVersionTest {
     void jacksonAnnotations_providesTypesRequiredByDatabind() {
         assertDoesNotThrow(() -> Class.forName("com.fasterxml.jackson.annotation.JsonSerializeAs"),
                 "com.fasterxml.jackson.core:jackson-annotations must be >= 2.21 for jackson-databind 3.1.x");
+    }
+
+    @Test
+    void jacksonCore_andDatabind_shareMajorMinor() {
+        final Version core = tools.jackson.core.json.PackageVersion.VERSION;
+        final Version databind = tools.jackson.databind.cfg.PackageVersion.VERSION;
+
+        assertEquals(databind.getMajorVersion(), core.getMajorVersion());
+        assertEquals(databind.getMinorVersion(), core.getMinorVersion());
+    }
+
+    @Test
+    void jsonMapper_roundTripsAnnotatedType_withResolvedAnnotationsAndDatabind() throws Exception {
+        final JsonMapper mapper = JsonMapper.builder().build();
+        final CourseView course = new CourseView("DDD", 5, null);
+
+        assertEquals("{\"course_name\":\"DDD\",\"rating\":5}", mapper.writeValueAsString(course));
+        assertEquals(course, mapper.readValue("{\"course_name\":\"DDD\",\"rating\":5}", CourseView.class));
+    }
+
+    private static record CourseView(
+            @JsonProperty("course_name") String name,
+            int rating,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String description
+    ) {
     }
 }
