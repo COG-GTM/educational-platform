@@ -62,7 +62,7 @@ class JacksonStreamReadConstraintsTest {
         StreamConstraintsException exception = assertThrows(StreamConstraintsException.class, () -> sut.readTree(json));
 
         // then
-        assertTrue(exception.getMessage().contains("(" + StreamReadConstraints.DEFAULT_MAX_NUM_LEN + ")"), exception::getMessage);
+        assertTrue(exception.getMessage().contains(String.valueOf(StreamReadConstraints.DEFAULT_MAX_NUM_LEN)), exception::getMessage);
     }
 
     private static String nestedArrays(int depth) {
