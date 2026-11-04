@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -24,6 +25,14 @@ class LogbackVersionTest {
     @Test
     void logbackCore_resolvedVersion_isAtLeastFixedVersion() {
         assertAtLeastFixedVersion("logback-core", Appender.class);
+    }
+
+    @Test
+    void logbackClassicAndCore_resolveToSameVersion() {
+        final String classicVersion = Logger.class.getPackage().getImplementationVersion();
+        final String coreVersion = Appender.class.getPackage().getImplementationVersion();
+        assertNotNull(classicVersion, "logback-classic version could not be determined");
+        assertEquals(classicVersion, coreVersion, "logback-classic and logback-core must resolve to the same version");
     }
 
     private static void assertAtLeastFixedVersion(String artifact, Class<?> clazz) {
