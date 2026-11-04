@@ -2,13 +2,16 @@ package com.educational.platform.dependencies;
 
 import org.h2.util.JdbcUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Arrays;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -74,6 +77,62 @@ public class H2VersionTest {
         // then
         assertEquals("08001", exception.getSQLState());
         assertTrue(exception.getMessage().contains("Only java scheme is supported for JNDI lookups"), exception.getMessage());
+    }
+
+    @Test
+    void jndiLookup_withOtherRemoteSchemes_isRejectedBeforeLookup() {
+        // given
+        final String[] urls = {
+                "rmi://127.0.0.1:1/Exploit",
+                "dns://127.0.0.1/Exploit",
+                "iiop://127.0.0.1:1/Exploit",
+                "LDAP://127.0.0.1:1/Exploit",
+                "ldap:java:Exploit"
+        };
+
+        // when / then
+        assertAll(Arrays.stream(urls).map(url -> (Executable) () -> {
+            final SQLException exception = assertThrows(SQLException.class, () ->
+                    JdbcUtils.getConnection("javax.naming.InitialContext", url, "sa", ""));
+            assertEquals("08001", exception.getSQLState(), url);
+            assertTrue(exception.getMessage().contains("Only java scheme is supported for JNDI lookups"),
+                    url + ": " + exception.getMessage());
+        }).toArray(Executable[]::new));
+    }
+
+    @Test
+    void jndiLookup_withJavaScheme_passesSchemeGuard() {
+        // when
+        final SQLException exception = assertThrows(SQLException.class, () ->
+                JdbcUtils.getConnection("javax.naming.InitialContext", "java:comp/env/jdbc/missing", "sa", ""));
+
+        // then
+        assertFalse(exception.getMessage().contains("Only java scheme is supported"), exception.getMessage());
+        assertTrue(exception.getMessage().contains("NoInitialContextException"), exception.getMessage());
+    }
+
+    @Test
+    void jdbcDriverVersion_matchesDatabaseProductVersion() throws Exception {
+        // given
+        final int[] databaseVersion = parse(resolvedH2Version());
+        final org.h2.Driver driver = new org.h2.Driver();
+
+        // when / then
+        assertEquals(databaseVersion[0], driver.getMajorVersion());
+        assertEquals(databaseVersion[1], driver.getMinorVersion());
+        assertTrue(compare(new int[]{driver.getMajorVersion(), driver.getMinorVersion()}, new int[]{2, 0}) >= 0);
+    }
+
+    @Test
+    void parse_nonNumericQualifier_failsLoudly() {
+        // when / then
+        assertThrows(NumberFormatException.class, () -> parse("2.4.240-SNAPSHOT"));
+    }
+
+    @Test
+    void compare_longerVersionWithExtraComponent_isAboveMinimum() {
+        // when / then
+        assertTrue(compare(parse("2.0.206.1"), MINIMUM_SAFE_VERSION) > 0);
     }
 
     private static String resolvedH2Version() throws Exception {
