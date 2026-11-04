@@ -29,6 +29,7 @@ dependencies {
     testImplementation("org.junit.jupiter", "junit-jupiter-api")
     testImplementation("org.junit.platform", "junit-platform-engine")
     testImplementation("org.junit.platform", "junit-platform-launcher")
+    testImplementation("com.h2database", "h2")
     testImplementation("org.mockito", "mockito-junit-jupiter", libs.versions.mockito.get())
     testImplementation("com.tngtech.archunit", "archunit-junit5", libs.versions.archunit.get())
     testRuntimeOnly("org.junit.jupiter", "junit-jupiter-engine")
