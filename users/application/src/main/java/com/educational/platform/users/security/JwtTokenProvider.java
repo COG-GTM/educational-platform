@@ -2,10 +2,10 @@ package com.educational.platform.users.security;
 
 import com.educational.platform.security.JwtTokenValidationException;
 import com.educational.platform.users.Role;
-import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -14,7 +14,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import jakarta.servlet.http.HttpServletRequest;
-import java.util.Base64;
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -27,32 +28,39 @@ public class JwtTokenProvider {
 
     private final MyUserDetails myUserDetails;
     private final long validityInMilliseconds;
-    private final String secretKey;
+    private final SecretKey secretKey;
+    private final JwtParser jwtParser;
 
+    /**
+     * @param secretKey HMAC secret (at least 256 bits). When blank, a random key is generated on startup,
+     *                  so issued tokens do not survive a restart.
+     */
     public JwtTokenProvider(MyUserDetails myUserDetails,
                             @Value("${security.jwt.token.expire-length:3600000}") long validityInMilliseconds,
-                            @Value("${security.jwt.token.secret-key:secret-key}") String secretKey) {
+                            @Value("${security.jwt.token.secret-key:}") String secretKey) {
         this.myUserDetails = myUserDetails;
         this.validityInMilliseconds = validityInMilliseconds;
-        this.secretKey = Base64.getEncoder().encodeToString(secretKey.getBytes());
+        this.secretKey = secretKey == null || secretKey.isBlank()
+                ? Jwts.SIG.HS256.key().build()
+                : Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
+        this.jwtParser = Jwts.parser()
+                .verifyWith(this.secretKey)
+                .sig().add(Jwts.SIG.HS256).and()
+                .build();
     }
 
-
     public String createToken(String username, List<Role> roles) {
-        Claims claims = Jwts.claims().setSubject(username);
-        claims.put("auth", roles.stream()
-                .map(s -> new SimpleGrantedAuthority(s.getAuthority()))
-                .collect(Collectors.toList())
-        );
-
         Date now = new Date();
         Date validity = new Date(now.getTime() + validityInMilliseconds);
 
         return Jwts.builder()
-                .setClaims(claims)
-                .setIssuedAt(now)
-                .setExpiration(validity)
-                .signWith(SignatureAlgorithm.HS256, secretKey)
+                .subject(username)
+                .claim("auth", roles.stream()
+                        .map(s -> new SimpleGrantedAuthority(s.getAuthority()))
+                        .collect(Collectors.toList()))
+                .issuedAt(now)
+                .expiration(validity)
+                .signWith(secretKey, Jwts.SIG.HS256)
                 .compact();
     }
 
@@ -62,7 +70,7 @@ public class JwtTokenProvider {
     }
 
     public String getUsername(String token) {
-        return Jwts.parser().setSigningKey(secretKey).parseClaimsJws(token).getBody().getSubject();
+        return jwtParser.parseSignedClaims(token).getPayload().getSubject();
     }
 
     public String resolveToken(HttpServletRequest req) {
@@ -75,7 +83,7 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parser().setSigningKey(secretKey).parseClaimsJws(token);
+            jwtParser.parseSignedClaims(token);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
             throw new JwtTokenValidationException("Expired or invalid JWT token");
