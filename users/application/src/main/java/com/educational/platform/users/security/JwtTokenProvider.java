@@ -43,10 +43,12 @@ public class JwtTokenProvider {
         this.secretKey = secretKey == null || secretKey.isBlank()
                 ? Jwts.SIG.HS256.key().build()
                 : Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
-        this.jwtParser = Jwts.parser()
-                .verifyWith(this.secretKey)
-                .sig().add(Jwts.SIG.HS256).and()
-                .build();
+        final var signatureAlgorithms = Jwts.parser().verifyWith(this.secretKey).sig();
+        // JJWT 0.12.6 rejects an empty registry, so retain HS256 while removing the other defaults.
+        Jwts.SIG.get().values().stream()
+                .filter(algorithm -> !Jwts.SIG.HS256.equals(algorithm))
+                .forEach(signatureAlgorithms::remove);
+        this.jwtParser = signatureAlgorithms.and().build();
     }
 
     public String createToken(String username, List<Role> roles) {
