@@ -31,9 +31,13 @@ dependencies {
     testImplementation("org.junit.platform", "junit-platform-launcher")
     testImplementation("org.mockito", "mockito-junit-jupiter", libs.versions.mockito.get())
     testImplementation("com.tngtech.archunit", "archunit-junit5", libs.versions.archunit.get())
+    testImplementation(gradleTestKit())
     testRuntimeOnly("org.junit.jupiter", "junit-jupiter-engine")
 }
 
 tasks.test {
     useJUnitPlatform()
+    inputs.files(rootProject.file("build.gradle.kts"), rootProject.file("gradle/libs.versions.toml"))
+    systemProperty("rootProjectDir", rootProject.projectDir.absolutePath)
+    systemProperty("gradleUserHome", gradle.gradleUserHomeDir.absolutePath)
 }

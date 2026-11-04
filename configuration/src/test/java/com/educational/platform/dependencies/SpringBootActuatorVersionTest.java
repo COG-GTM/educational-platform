@@ -5,6 +5,8 @@ import org.springframework.boot.SpringBootVersion;
 
 import java.util.Arrays;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,6 +41,64 @@ class SpringBootActuatorVersionTest {
         assertNotNull(version, "spring-boot-actuator-autoconfigure version could not be determined");
         assertTrue(isAtLeast(version, MINIMUM_SAFE_VERSION),
                 "spring-boot-actuator-autoconfigure " + version + " is vulnerable to CVE-2023-20883; upgrade to " + MINIMUM_SAFE_VERSION + " or later");
+    }
+
+    @Test
+    void isAtLeast_rejectsVulnerableVersions() {
+        assertAll(
+                () -> assertFalse(isAtLeast("0.0.0", MINIMUM_SAFE_VERSION)),
+                () -> assertFalse(isAtLeast("2.7.18", MINIMUM_SAFE_VERSION)),
+                () -> assertFalse(isAtLeast("3.0.13", MINIMUM_SAFE_VERSION)),
+                () -> assertFalse(isAtLeast("3.1.0", MINIMUM_SAFE_VERSION)),
+                () -> assertFalse(isAtLeast("3.1.4", MINIMUM_SAFE_VERSION))
+        );
+    }
+
+    @Test
+    void isAtLeast_acceptsMinimumSafeVersion() {
+        assertTrue(isAtLeast("3.1.5", MINIMUM_SAFE_VERSION));
+    }
+
+    @Test
+    void isAtLeast_acceptsNewerPatchMinorAndMajorVersions() {
+        assertAll(
+                () -> assertTrue(isAtLeast("3.1.6", MINIMUM_SAFE_VERSION)),
+                () -> assertTrue(isAtLeast("3.2.0", MINIMUM_SAFE_VERSION)),
+                () -> assertTrue(isAtLeast("4.0.1", MINIMUM_SAFE_VERSION))
+        );
+    }
+
+    @Test
+    void isAtLeast_comparesVersionComponentsNumerically() {
+        assertAll(
+                () -> assertTrue(isAtLeast("3.1.10", MINIMUM_SAFE_VERSION)),
+                () -> assertTrue(isAtLeast("3.10.0", "3.9.9")),
+                () -> assertTrue(isAtLeast("10.0.0", "9.9.9")),
+                () -> assertFalse(isAtLeast("3.1.5", "3.1.10")),
+                () -> assertFalse(isAtLeast("3.9.9", "3.10.0")),
+                () -> assertFalse(isAtLeast("9.9.9", "10.0.0"))
+        );
+    }
+
+    @Test
+    void isAtLeast_treatsMissingComponentsAsZero() {
+        assertAll(
+                () -> assertTrue(isAtLeast("4", "4.0.0")),
+                () -> assertTrue(isAtLeast("3.2", "3.2.0")),
+                () -> assertTrue(isAtLeast("3.2.0", "3.2")),
+                () -> assertFalse(isAtLeast("3.1", MINIMUM_SAFE_VERSION)),
+                () -> assertFalse(isAtLeast("3", MINIMUM_SAFE_VERSION))
+        );
+    }
+
+    @Test
+    void isAtLeast_comparesNumericComponentsOfQualifiedVersions() {
+        assertAll(
+                () -> assertTrue(isAtLeast("4.0.1-SNAPSHOT", MINIMUM_SAFE_VERSION)),
+                () -> assertTrue(isAtLeast("3.2.0.RELEASE", MINIMUM_SAFE_VERSION)),
+                () -> assertFalse(isAtLeast("3.1.4-SNAPSHOT", MINIMUM_SAFE_VERSION)),
+                () -> assertFalse(isAtLeast("3.1.0.RELEASE", MINIMUM_SAFE_VERSION))
+        );
     }
 
     static boolean isAtLeast(String actual, String minimum) {
