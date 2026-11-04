@@ -1,6 +1,7 @@
 [versions]
 spring = "4.0.1"
 restAssured = "6.0.0"
+groovy3 = "3.0.25"
 mockito = "5.19.0"
 assertj = "3.27.3"
 archunit = "1.4.1"
