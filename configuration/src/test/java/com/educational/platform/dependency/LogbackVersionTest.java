@@ -1,12 +1,18 @@
 package com.educational.platform.dependency;
 
 import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.core.Appender;
+import org.slf4j.LoggerFactory;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Arrays;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -33,6 +39,33 @@ class LogbackVersionTest {
         final String coreVersion = Appender.class.getPackage().getImplementationVersion();
         assertNotNull(classicVersion, "logback-classic version could not be determined");
         assertEquals(classicVersion, coreVersion, "logback-classic and logback-core must resolve to the same version");
+    }
+
+    @Test
+    void logbackClassic_manifestVersion_matchesMavenPomVersion() throws IOException {
+        assertManifestMatchesPomVersion("logback-classic", Logger.class);
+    }
+
+    @Test
+    void logbackCore_manifestVersion_matchesMavenPomVersion() throws IOException {
+        assertManifestMatchesPomVersion("logback-core", Appender.class);
+    }
+
+    @Test
+    void slf4j_isBoundToLogback() {
+        assertInstanceOf(LoggerContext.class, LoggerFactory.getILoggerFactory(),
+                "SLF4J must bind to logback, otherwise the guarded logback version is not the one in use");
+    }
+
+    private static void assertManifestMatchesPomVersion(String artifact, Class<?> clazz) throws IOException {
+        final String resource = "/META-INF/maven/ch.qos.logback/" + artifact + "/pom.properties";
+        final Properties pom = new Properties();
+        try (InputStream in = clazz.getResourceAsStream(resource)) {
+            assertNotNull(in, artifact + " pom.properties not found at " + resource);
+            pom.load(in);
+        }
+        assertEquals(pom.getProperty("version"), clazz.getPackage().getImplementationVersion(),
+                artifact + " manifest Implementation-Version must match the Maven artifact version");
     }
 
     private static void assertAtLeastFixedVersion(String artifact, Class<?> clazz) {
