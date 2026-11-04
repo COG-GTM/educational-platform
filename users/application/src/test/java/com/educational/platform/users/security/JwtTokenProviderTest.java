@@ -12,6 +12,8 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -279,8 +281,9 @@ public class JwtTokenProviderTest {
         // given
         final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, VALIDITY, SECRET);
         final String[] parts = sut.createToken("username", List.of(Role.ROLE_STUDENT)).split("\\.");
-        final char last = parts[2].charAt(parts[2].length() - 1);
-        final String flipped = parts[2].substring(0, parts[2].length() - 1) + (last == 'A' ? 'B' : 'A');
+        final byte[] signature = Base64.getUrlDecoder().decode(parts[2]);
+        signature[0] ^= 1;
+        final String flipped = Base64.getUrlEncoder().withoutPadding().encodeToString(signature);
         final String tampered = parts[0] + "." + parts[1] + "." + flipped;
 
         // then
@@ -323,6 +326,40 @@ public class JwtTokenProviderTest {
     }
 
     @Test
+    void constructor_multiByteSecret31Bytes_illegalStateException() {
+        // given
+        final String secret = "\u00e4".repeat(15) + "a";
+        assertThat(secret.getBytes(StandardCharsets.UTF_8)).hasSize(31);
+
+        // then
+        assertThatIllegalStateException()
+                .isThrownBy(() -> new JwtTokenProvider(myUserDetails, VALIDITY, secret))
+                .withMessage("security.jwt.token.secret-key must be at least 32 bytes for HS256");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {33, 48, 64})
+    void createToken_longerSecret_stillSignedWithHs256(int secretLength) {
+        // given
+        final String secret = "a".repeat(secretLength);
+        final JwtTokenProvider sut = new JwtTokenProvider(myUserDetails, VALIDITY, secret);
+
+        // when
+        final String token = sut.createToken("username", List.of(Role.ROLE_STUDENT));
+
+        // then
+        final var parsed = Jwts.parser()
+                .verifyWith(Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8)))
+                .build()
+                .parseSignedClaims(token);
+        assertThat(parsed.getHeader().getAlgorithm()).isEqualTo("HS256");
+        assertThat(parsed.getPayload().getSubject()).isEqualTo("username");
+        assertThat(parsed.getPayload().get("auth", List.class)).containsExactly("ROLE_STUDENT");
+        assertThat(sut.validateToken(token)).isTrue();
+        assertThat(new JwtTokenProvider(myUserDetails, VALIDITY, secret).getUsername(token)).isEqualTo("username");
+    }
+
+    @Test
     void constructor_multiByteSecret_lengthMeasuredInUtf8BytesNotChars() {
         // given: 16 chars x 2 bytes each = 32 bytes
         final String secret = "\u00e4".repeat(16);
@@ -336,6 +373,11 @@ public class JwtTokenProviderTest {
         // then
         assertThat(sut.validateToken(token)).isTrue();
         assertThat(new JwtTokenProvider(myUserDetails, VALIDITY, secret).getUsername(token)).isEqualTo("username");
+        assertThat(Jwts.parser()
+                .verifyWith(Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8)))
+                .build()
+                .parseSignedClaims(token)
+                .getPayload().getSubject()).isEqualTo("username");
     }
 
     @Test
