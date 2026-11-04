@@ -20,6 +20,10 @@ dependencies {
     testImplementation("io.rest-assured", "xml-path", libs.versions.restAssured.get())
 }
 
+tasks.withType<Test> {
+    systemProperty("expected.json-path.version", libs.versions.jsonPath.get())
+}
+
 tasks.compileJava {
     options.compilerArgs.add("-Amapstruct.defaultComponentModel=spring")
 }
