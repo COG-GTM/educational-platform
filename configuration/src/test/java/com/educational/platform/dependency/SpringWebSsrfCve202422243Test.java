@@ -1,6 +1,7 @@
 package com.educational.platform.dependency;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.util.ClassUtils;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -12,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Guards against CVE-2024-22243 (SNYK-JAVA-ORGSPRINGFRAMEWORK-6261586): spring-web before 5.3.32,
@@ -79,6 +81,9 @@ class SpringWebSsrfCve202422243Test {
     @Test
     void uriComponentsBuilder_whatwgParser_doesNotTreatUserInfoBracketAsHost() {
         // given
+        assumeTrue(ClassUtils.isPresent("org.springframework.web.util.UriComponentsBuilder$ParserType",
+                SpringWebSsrfCve202422243Test.class.getClassLoader()),
+                "UriComponentsBuilder.ParserType (WHATWG parser) is only available in spring-web 7+");
         UriComponents components;
 
         // when
