@@ -7,6 +7,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -35,6 +37,38 @@ class TomcatRequestSmugglingCveTest {
         assertFalse(isVulnerable("Apache Tomcat/11.0.0-M11"));
         assertFalse(isVulnerable("Apache Tomcat/11.0.0"));
         assertFalse(isVulnerable("Apache Tomcat/11.0.15"));
+    }
+
+    @Test
+    void isVulnerable_coversMilestoneAndOlderLineBoundaries() {
+        // given / when / then
+        assertTrue(isVulnerable("Apache Tomcat/11.0.0-M1"));
+        assertTrue(isVulnerable("Apache Tomcat/10.1.0-M1"));
+        assertTrue(isVulnerable("Apache Tomcat/10.1.0"));
+        assertTrue(isVulnerable("Apache Tomcat/9.0.82"));
+        assertFalse(isVulnerable("Apache Tomcat/11.0.1"));
+        assertFalse(isVulnerable("Apache Tomcat/12.0.0"));
+    }
+
+    @Test
+    void isVulnerable_rejectsUnparseableServerInfo() {
+        // given / when / then
+        assertThrows(IllegalArgumentException.class, () -> isVulnerable("Apache Tomcat"));
+        assertThrows(IllegalArgumentException.class, () -> isVulnerable(""));
+    }
+
+    @Test
+    void serverInfo_matchesResolvedTomcatJarVersion() {
+        // given
+        String jarVersion = ServerInfo.class.getPackage().getImplementationVersion();
+
+        // when
+        String serverNumber = ServerInfo.getServerNumber();
+
+        // then
+        assertNotNull(jarVersion, "tomcat-embed-core jar has no Implementation-Version");
+        assertTrue(serverNumber.startsWith(jarVersion),
+                "ServerInfo reports " + serverNumber + " but resolved tomcat-embed-core jar is " + jarVersion);
     }
 
     static boolean isVulnerable(String serverInfo) {
