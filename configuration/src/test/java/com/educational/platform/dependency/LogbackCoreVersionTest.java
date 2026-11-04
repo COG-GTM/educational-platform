@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -21,6 +23,43 @@ class LogbackCoreVersionTest {
         assertNotNull(version, "logback-core version could not be determined");
         assertTrue(compare(version, MIN_FIXED_VERSION) >= 0,
                 "logback-core " + version + " is below " + Arrays.toString(MIN_FIXED_VERSION));
+    }
+
+    @Test
+    void compare_exactFixedVersion_isAccepted() {
+        assertEquals(0, compare("1.4.12", MIN_FIXED_VERSION));
+    }
+
+    @Test
+    void compare_olderPatchVersion_isRejectedNumerically() {
+        assertAll(
+                () -> assertTrue(compare("1.4.7", MIN_FIXED_VERSION) < 0),
+                () -> assertTrue(compare("1.4.11", MIN_FIXED_VERSION) < 0));
+    }
+
+    @Test
+    void compare_olderMajorOrMinorVersion_isRejectedDespiteHigherRemainingComponents() {
+        assertAll(
+                () -> assertTrue(compare("0.99.99", MIN_FIXED_VERSION) < 0),
+                () -> assertTrue(compare("1.3.99", MIN_FIXED_VERSION) < 0));
+    }
+
+    @Test
+    void compare_newerVersion_isAcceptedByFirstDifferentComponent() {
+        assertAll(
+                () -> assertTrue(compare("1.4.13", MIN_FIXED_VERSION) > 0),
+                () -> assertTrue(compare("1.5.0", MIN_FIXED_VERSION) > 0),
+                () -> assertTrue(compare("1.10.0", MIN_FIXED_VERSION) > 0),
+                () -> assertTrue(compare("2.0.0", MIN_FIXED_VERSION) > 0));
+    }
+
+    @Test
+    void compare_emptyOrIncompleteVersion_doesNotMeetMinimum() {
+        assertAll(
+                () -> assertTrue(compare("", MIN_FIXED_VERSION) < 0),
+                () -> assertTrue(compare("1", MIN_FIXED_VERSION) < 0),
+                () -> assertTrue(compare("1.4", MIN_FIXED_VERSION) < 0),
+                () -> assertTrue(compare("1.4.invalid", MIN_FIXED_VERSION) < 0));
     }
 
     private static int compare(String version, int[] minimum) {
