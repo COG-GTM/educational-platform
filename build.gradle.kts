@@ -29,4 +29,15 @@ subprojects {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
         }
     }
+
+    dependencies {
+        constraints {
+            "implementation"("org.springframework.boot:spring-boot-actuator-autoconfigure") {
+                version {
+                    reject("[0,3.1.5)")
+                }
+                because("CVE-2023-20883: versions before 3.1.5 are vulnerable")
+            }
+        }
+    }
 }
