@@ -81,6 +81,31 @@ class SpringBootActuatorConstraintTest {
     }
 
     @Test
+    void testImplementation_rejectsVulnerableVersion() throws IOException {
+        writeProbe("testImplementation 'org.springframework.boot:" + ACTUATOR + ":3.1.4'", "testRuntimeClasspath");
+
+        assertRejected(runner().buildAndFail());
+    }
+
+    @Test
+    void customConfiguration_rejectsVulnerableVersionWithoutImplementationConstraint() throws IOException {
+        writeProbe("", "isolatedRuntime");
+        Files.writeString(projectDir.resolve("probe/build.gradle"), """
+                configurations {
+                    isolatedRuntime {
+                        canBeResolved = true
+                        canBeConsumed = false
+                    }
+                }
+                dependencies {
+                    isolatedRuntime 'org.springframework.boot:spring-boot-actuator-autoconfigure:3.1.4'
+                }
+                """, java.nio.file.StandardOpenOption.APPEND);
+
+        assertRejected(runner().buildAndFail());
+    }
+
+    @Test
     void runtimeOnly_rejectsOlderMinorAndMajorVersions() throws IOException {
         for (String version : new String[]{"2.7.18", "3.0.13"}) {
             writeProbe("runtimeOnly 'org.springframework.boot:" + ACTUATOR + ":" + version + "'", "runtimeClasspath");
@@ -161,6 +186,17 @@ class SpringBootActuatorConstraintTest {
     }
 
     @Test
+    void constraint_doesNotRejectSameArtifactInAnotherGroup() throws IOException {
+        publish("com.example", ACTUATOR, "3.1.0", "");
+        writeProbe("runtimeOnly 'com.example:" + ACTUATOR + ":3.1.0'", "runtimeClasspath");
+
+        BuildResult result = runner().build();
+
+        assertEquals(SUCCESS, result.task(":probe:resolveActuator").getOutcome());
+        assertTrue(result.getOutput().contains("Resolved artifacts: [" + ACTUATOR + "-3.1.0.jar]"), result.getOutput());
+    }
+
+    @Test
     void constraint_doesNotIntroduceActuatorWhenAbsent() throws IOException {
         writeProbe("", "runtimeClasspath");
 
@@ -196,17 +232,21 @@ class SpringBootActuatorConstraintTest {
     }
 
     private void publish(String artifact, String version, String contents) throws IOException {
-        Path directory = projectDir.resolve("repository/org/springframework/boot/" + artifact + "/" + version);
+        publish("org.springframework.boot", artifact, version, contents);
+    }
+
+    private void publish(String group, String artifact, String version, String contents) throws IOException {
+        Path directory = projectDir.resolve("repository/" + group.replace('.', '/') + "/" + artifact + "/" + version);
         Files.createDirectories(directory);
         Files.writeString(directory.resolve(artifact + "-" + version + ".pom"), """
                 <project xmlns="http://maven.apache.org/POM/4.0.0">
                     <modelVersion>4.0.0</modelVersion>
-                    <groupId>org.springframework.boot</groupId>
+                    <groupId>%s</groupId>
                     <artifactId>%s</artifactId>
                     <version>%s</version>
                     %s
                 </project>
-                """.formatted(artifact, version, contents));
+                """.formatted(group, artifact, version, contents));
         try (var jar = new JarOutputStream(Files.newOutputStream(directory.resolve(artifact + "-" + version + ".jar")))) {
             jar.finish();
         }
