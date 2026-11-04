@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import java.util.Comparator;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * jackson-core below 2.15.3 is affected by SNYK-JAVA-COMFASTERXMLJACKSONCORE-6248036 (CWE-770).
@@ -23,7 +25,49 @@ class JacksonCoreVersionTest {
 
     @Test
     void jacksonCore_isAtLeastFixedVersion() {
+        // given
         Version actual = PackageVersion.VERSION;
-        assertTrue(BY_NUMBER.compare(actual, MINIMUM) >= 0, () -> "jackson-core " + actual + " must be >= " + MINIMUM);
+
+        // when
+        boolean fixed = isAtLeastFixedVersion(actual);
+
+        // then
+        assertTrue(fixed, () -> "jackson-core " + actual + " must be >= " + MINIMUM);
+    }
+
+    @Test
+    void jacksonDatabind_isAlignedWithJacksonCore() {
+        // given
+        Version core = PackageVersion.VERSION;
+        Version databind = com.fasterxml.jackson.databind.cfg.PackageVersion.VERSION;
+
+        // when
+        int comparison = BY_NUMBER.compare(core, databind);
+
+        // then
+        assertEquals(0, comparison, () -> "jackson-core " + core + " must align with jackson-databind " + databind);
+    }
+
+    @Test
+    void versionGuard_acceptsOnlyFixedVersions() {
+        // given
+        Version vulnerablePatch = new Version(2, 15, 2, null, null, null);
+        Version fixedPatch = new Version(2, 15, 3, null, null, null);
+        Version olderMinor = new Version(2, 14, 9, null, null, null);
+        Version olderMajor = new Version(1, 99, 99, null, null, null);
+        Version newerMinor = new Version(2, 16, 0, null, null, null);
+        Version newerMajor = new Version(3, 0, 0, null, null, null);
+
+        // when / then
+        assertFalse(isAtLeastFixedVersion(vulnerablePatch));
+        assertTrue(isAtLeastFixedVersion(fixedPatch));
+        assertFalse(isAtLeastFixedVersion(olderMinor));
+        assertFalse(isAtLeastFixedVersion(olderMajor));
+        assertTrue(isAtLeastFixedVersion(newerMinor));
+        assertTrue(isAtLeastFixedVersion(newerMajor));
+    }
+
+    static boolean isAtLeastFixedVersion(Version version) {
+        return BY_NUMBER.compare(version, MINIMUM) >= 0;
     }
 }
