@@ -31,8 +31,11 @@ dependencies {
     testImplementation("org.junit.platform", "junit-platform-launcher")
     testImplementation("org.mockito", "mockito-junit-jupiter", libs.versions.mockito.get())
     testImplementation("com.tngtech.archunit", "archunit-junit5", libs.versions.archunit.get())
+    testImplementation("org.apache.commons", "commons-lang3")
+    testRuntimeOnly("org.junit.jupiter", "junit-jupiter-engine")
 }
 
 tasks.test {
     useJUnitPlatform()
+    systemProperty("expected.commons-lang3.version", libs.versions.commonsLang3.get())
 }
