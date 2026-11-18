@@ -43,6 +43,25 @@ public class CourseTest {
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(expectedRating));
     }
 
+    @ParameterizedTest
+    @CsvSource({"4.5, 2.49, 2.0", "2.49, 4.5, 5.0", "4.5, 0.0, 0.0"})
+    void updateRating_previousRating_replacedWithRoundedRating(double previousRating, double rating, double expectedRating) {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course sut = new Course(command, TEACHER_ID);
+        sut.updateRating(previousRating);
+
+        // when
+        sut.updateRating(rating);
+
+        // then
+        assertThat(sut)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(expectedRating));
+    }
+
     @Test
     void approve_approvedStatus() {
         // given

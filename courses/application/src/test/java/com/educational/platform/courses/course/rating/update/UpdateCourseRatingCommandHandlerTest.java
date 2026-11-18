@@ -9,6 +9,8 @@ import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -45,11 +47,12 @@ public class UpdateCourseRatingCommandHandlerTest {
         courseFactory = new CourseFactory(validator, currentUserAsTeacher);
     }
 
-    @Test
-    void handle_existingCourse_courseSavedWithRoundedRating() {
+    @ParameterizedTest
+    @CsvSource({"3.2, 3.0", "4.5, 5.0", "4.49, 4.0"})
+    void handle_existingCourse_courseSavedWithRoundedRating(double rating, double expectedRating) {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
-        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 3.2);
+        final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, rating);
 
         var teacher = mock(Teacher.class);
         when(currentUserAsTeacher.userAsTeacher()).thenReturn(teacher);
@@ -71,7 +74,7 @@ public class UpdateCourseRatingCommandHandlerTest {
         assertThat(course)
                 .hasFieldOrPropertyWithValue("name", "name")
                 .hasFieldOrPropertyWithValue("description", "description")
-                .hasFieldOrPropertyWithValue("rating", new CourseRating(3.0));
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(expectedRating));
     }
 
 
