@@ -10,8 +10,8 @@ import jakarta.validation.constraints.Size;
 /**
  * Represents User Registration Command.
  */
-public record UserRegistrationCommand(@NotNull RoleDTO role, @Size(min = 4, max = 255) @NotBlank String username,
-                                      @Email @NotBlank String email, @ValidPassword @NotBlank String password) {
+public record UserRegistrationCommand(@NotNull RoleDTO role, @Size(min = 4, max = 100) @NotBlank String username,
+                                      @Email @Size(max = 100) @NotBlank String email, @ValidPassword @NotBlank String password) {
 
     public static UserRegistrationCommandBuilder builder() {
         return new UserRegistrationCommandBuilder();

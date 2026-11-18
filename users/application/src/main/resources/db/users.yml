@@ -40,3 +40,11 @@ databaseChangeLog:
                     nullable: false
                   name: role
                   type: VARCHAR(100)
+  - changeSet:
+      id: 2026_09_28-1
+      author: devin
+      changes:
+        - addUniqueConstraint:
+            tableName: custom_user
+            columnNames: username
+            constraintName: custom_user_username_uk

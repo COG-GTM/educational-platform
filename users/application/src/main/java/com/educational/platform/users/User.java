@@ -10,6 +10,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.util.Collections;
 
@@ -17,7 +18,7 @@ import java.util.Collections;
  * Represents User domain model.
  */
 @Entity
-@Table(name="custom_user")
+@Table(name="custom_user", uniqueConstraints = @UniqueConstraint(name = "custom_user_username_uk", columnNames = "username"))
 public class User implements AggregateRoot {
 
     @Id
