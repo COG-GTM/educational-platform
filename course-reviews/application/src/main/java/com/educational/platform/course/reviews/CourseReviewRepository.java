@@ -28,11 +28,11 @@ public interface CourseReviewRepository extends JpaRepository<CourseReview, Inte
      * @param uuid course uuid.
      * @return list of course reviews.
      */
-    // todo uuid not used
     @Query("select new com.educational.platform.course.reviews.CourseReviewDTO(cr.uuid, c.originalCourseId, r.username, cr.comment.comment, cr.rating.rating) from CourseReview cr "
             + "join com.educational.platform.course.reviews.course.ReviewableCourse c on cr.course = c.id "
-            + "join com.educational.platform.course.reviews.reviewer.Reviewer r on cr.reviewer =  r.id")
-    List<CourseReviewDTO> listCourseReviews(UUID uuid);
+            + "join com.educational.platform.course.reviews.reviewer.Reviewer r on cr.reviewer = r.id "
+            + "where c.originalCourseId = :uuid")
+    List<CourseReviewDTO> listCourseReviews(@Param("uuid") UUID uuid);
 
     /**
      * Checks if passed username is an username of reviewer of course review.

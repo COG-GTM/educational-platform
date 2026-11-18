@@ -2,6 +2,7 @@ package com.educational.platform.course.reviews.api;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasSize;
 
 import java.util.UUID;
 
@@ -62,6 +63,78 @@ public class CourseReviewApiTest {
 				.body("[0].course", equalTo("123e4567-e89b-12d3-a456-426655440001"))
 				.body("[0].uuid", equalTo(reviewUuid.toString()))
 				.body("[0].username", equalTo("username"))
+				.statusCode(HttpStatus.OK.value());
+	}
+
+	@Test
+	void reviews_twoReviewedCourses_onlyRequestedCourseReviews() {
+		var token = SignUpHelper.signUpStudent();
+		final UUID courseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+		final UUID anotherCourseUuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440002");
+
+		final UUID reviewUuid = UUID.fromString(given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + token)
+				.body("{\n" + "  \"rating\": 3.2\n" + "}")
+
+				.when()
+				.post("/courses/{uuid}/reviews", courseUuid)
+				.path("uuid"));
+
+		final UUID anotherReviewUuid = UUID.fromString(given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + token)
+				.body("{\n" + "  \"rating\": 4.5\n" + "}")
+
+				.when()
+				.post("/courses/{uuid}/reviews", anotherCourseUuid)
+				.path("uuid"));
+
+		given()
+				.header("Authorization", "Bearer " + token)
+
+				.when()
+				.get("/courses/{uuid}/reviews", courseUuid)
+
+				.then()
+				.body("$", hasSize(1))
+				.body("[0].uuid", equalTo(reviewUuid.toString()))
+				.body("[0].course", equalTo(courseUuid.toString()))
+				.statusCode(HttpStatus.OK.value());
+
+		given()
+				.header("Authorization", "Bearer " + token)
+
+				.when()
+				.get("/courses/{uuid}/reviews", anotherCourseUuid)
+
+				.then()
+				.body("$", hasSize(1))
+				.body("[0].uuid", equalTo(anotherReviewUuid.toString()))
+				.body("[0].course", equalTo(anotherCourseUuid.toString()))
+				.statusCode(HttpStatus.OK.value());
+	}
+
+	@Test
+	void reviews_unknownCourse_emptyList() {
+		var token = SignUpHelper.signUpStudent();
+
+		given()
+				.contentType(ContentType.JSON)
+				.header("Authorization", "Bearer " + token)
+				.body("{\n" + "  \"rating\": 3.2\n" + "}")
+
+				.when()
+				.post("/courses/{uuid}/reviews", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"));
+
+		given()
+				.header("Authorization", "Bearer " + token)
+
+				.when()
+				.get("/courses/{uuid}/reviews", UUID.fromString("123e4567-e89b-12d3-a456-426655440099"))
+
+				.then()
+				.body("$", hasSize(0))
 				.statusCode(HttpStatus.OK.value());
 	}
 
