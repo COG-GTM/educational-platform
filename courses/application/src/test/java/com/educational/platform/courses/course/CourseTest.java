@@ -6,6 +6,8 @@ import com.educational.platform.courses.teacher.Teacher;
 import com.educational.platform.courses.teacher.create.CreateTeacherCommand;
 import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -14,6 +16,32 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 public class CourseTest {
 
     private static final Integer TEACHER_ID = 15;
+
+    @ParameterizedTest
+    @CsvSource({
+            "0.0, 0.0",
+            "3.49, 3.0",
+            "3.50, 4.0",
+            "3.51, 4.0",
+            "4.0, 4.0",
+            "4.5, 5.0",
+            "5.0, 5.0"
+    })
+    void updateRating_storesNearestWholeStar(double averageRating, double expectedRating) {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.updateRating(averageRating);
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(expectedRating));
+    }
 
     @Test
     void approve_approvedStatus() {

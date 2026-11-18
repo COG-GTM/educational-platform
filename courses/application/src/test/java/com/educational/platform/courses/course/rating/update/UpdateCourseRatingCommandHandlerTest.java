@@ -46,7 +46,7 @@ public class UpdateCourseRatingCommandHandlerTest {
     }
 
     @Test
-    void handle_existingCourse_courseSavedWithUpdatedRating() {
+    void handle_existingCourse_courseSavedWithRoundedRating() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final UpdateCourseRatingCommand command = new UpdateCourseRatingCommand(uuid, 3.2);
@@ -71,7 +71,7 @@ public class UpdateCourseRatingCommandHandlerTest {
         assertThat(course)
                 .hasFieldOrPropertyWithValue("name", "name")
                 .hasFieldOrPropertyWithValue("description", "description")
-                .hasFieldOrPropertyWithValue("rating", new CourseRating(3.2));
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(3.0));
     }
 
 
