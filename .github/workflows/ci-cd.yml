@@ -1,0 +1,189 @@
+name: CI/CD
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  JAVA_VERSION: "25"
+
+jobs:
+  build-and-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Compile
+        run: ./gradlew assemble --no-daemon
+
+      - name: Unit, integration & architecture tests
+        run: ./gradlew test --no-daemon --continue
+
+      - name: Summarize failed tests
+        if: failure()
+        run: |
+          python3 - <<'PY' > failed-tests.json
+          import glob, json, xml.etree.ElementTree as ET
+          failures = []
+          for path in glob.glob("**/build/test-results/test/*.xml", recursive=True):
+              for case in ET.parse(path).getroot().iter("testcase"):
+                  for tag in ("failure", "error"):
+                      node = case.find(tag)
+                      if node is not None:
+                          failures.append({
+                              "module": path.split("/build/")[0],
+                              "class": case.get("classname"),
+                              "test": case.get("name"),
+                              "message": (node.get("message") or "")[:500],
+                              "stack_trace": (node.text or "")[:2000],
+                          })
+          print(json.dumps(failures[:20], indent=2))
+          PY
+          cat failed-tests.json
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: failed-tests
+          path: failed-tests.json
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: "**/build/reports/tests/test/"
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: platform-jar
+          path: configuration/build/libs/*.jar
+
+  deploy-staging:
+    name: Deploy to staging
+    needs: build-and-test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: platform-jar
+          path: dist
+
+      - name: Deploy
+        run: |
+          echo "Deploying $(ls dist) @ ${GITHUB_SHA::7} to staging"
+          # Demo deploy target: replace with the real rollout (e.g. kubectl / ECS / App Service).
+
+      - name: Smoke test
+        run: test -s dist/*.jar && echo "Smoke test passed"
+
+  notify-oncall:
+    name: Page Devin On-Call
+    needs: [build-and-test, deploy-staging]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: failed-tests
+
+      - name: Send alert to On-Call webhook
+        env:
+          ONCALL_WEBHOOK_URL: ${{ secrets.ONCALL_WEBHOOK_URL }}
+          ONCALL_WEBHOOK_SECRET: ${{ secrets.ONCALL_WEBHOOK_SECRET }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ -z "$ONCALL_WEBHOOK_URL" ]; then
+            echo "::warning::ONCALL_WEBHOOK_URL not set. Skipping On-Call alert."
+            exit 0
+          fi
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" \
+            --jq '[.jobs[] | select(.conclusion == "failure") | {id, name, url: .html_url,
+                    failed_step: ([.steps[] | select(.conclusion == "failure") | .name] | first)}]' \
+            > failed-jobs.json
+
+          : > log-tail.txt
+          for id in $(jq -r '.[].id' failed-jobs.json); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/jobs/$id/logs" 2>/dev/null \
+              | sed -E 's/^[0-9T:.-]+Z //' | grep -v '^\s*$' | tail -n 80 >> log-tail.txt || true
+          done
+          [ -s failed-tests.json ] || echo '[]' > failed-tests.json
+
+          FIRST_JOB=$(jq -r '.[0] | "\(.name) / \(.failed_step)"' failed-jobs.json)
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg repo_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --arg branch "$BRANCH" \
+            --arg sha "$SHA" \
+            --arg actor "$GITHUB_ACTOR" \
+            --arg event "$GITHUB_EVENT_NAME" \
+            --arg commit_message "$COMMIT_MESSAGE" \
+            --arg pr_url "$PR_URL" \
+            --arg workflow "$GITHUB_WORKFLOW" \
+            --arg run_url "$RUN_URL" \
+            --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg first_job "$FIRST_JOB" \
+            --rawfile log_tail log-tail.txt \
+            --slurpfile failed_jobs failed-jobs.json \
+            --slurpfile failed_tests failed-tests.json \
+            '{
+              source: "github-actions",
+              severity: (if $branch == "monolith" then "SEV-2" else "SEV-3" end),
+              title: "CI/CD failed on \($repository)@\($branch): \($first_job)",
+              summary: "\($workflow) run failed (\($failed_tests[0] | length) failing tests). Commit \($sha[0:7]) by \($actor): \($commit_message | split("\n")[0])",
+              repository: $repository,
+              repo_url: $repo_url,
+              branch: $branch,
+              commit_sha: $sha,
+              actor: $actor,
+              event: $event,
+              commit_message: $commit_message,
+              pr_url: (if $pr_url == "" then null else $pr_url end),
+              workflow: $workflow,
+              run_url: $run_url,
+              run_attempt: ($run_attempt | tonumber),
+              failed_jobs: ($failed_jobs[0] | map(del(.id))),
+              failed_tests: $failed_tests[0],
+              log_tail: ($log_tail | .[-6000:]),
+              task: "Investigate why the \($workflow) pipeline failed on \($repository) branch \($branch) at commit \($sha[0:7]). Use the failed jobs, failing tests and log tail to find the root cause, fix it on a new branch off \($branch), confirm ./gradlew test passes (Java 25), and open a PR that links \($run_url)."
+            }' > payload.json
+          jq 'del(.log_tail)' payload.json
+
+          HEADERS=(-H 'Content-Type: application/json')
+          if [ -n "$ONCALL_WEBHOOK_SECRET" ]; then
+            HEADERS+=(-H "Authorization: Bearer $ONCALL_WEBHOOK_SECRET" -H "X-Webhook-Secret: $ONCALL_WEBHOOK_SECRET")
+          fi
+          STATUS=$(curl -sS -o response.txt -w '%{http_code}' -X POST "$ONCALL_WEBHOOK_URL" "${HEADERS[@]}" --data @payload.json)
+          echo "On-Call webhook HTTP $STATUS"; cat response.txt; echo
+          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+            echo "::error::On-Call webhook returned HTTP $STATUS"
+            exit 1
+          fi
