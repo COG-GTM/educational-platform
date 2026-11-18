@@ -12,6 +12,7 @@ import org.springframework.test.context.jdbc.Sql;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.contains;
 
 /**
  * Represents API tests for administration of course proposal functionality.
@@ -38,6 +39,26 @@ public class CourseProposalApiTest {
 
                 .then()
                 .statusCode(HttpStatus.NO_CONTENT.value());
+    }
+
+    @Test
+    void approve_alreadyApprovedCourseProposal_conflict() {
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+
+        given()
+                .contentType(ContentType.JSON)
+                .when()
+                .put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                .then()
+                .statusCode(HttpStatus.NO_CONTENT.value());
+
+        given()
+                .contentType(ContentType.JSON)
+                .when()
+                .put("/administration/course-proposals/{uuid}/approval-status", uuid)
+                .then()
+                .statusCode(HttpStatus.CONFLICT.value())
+                .body("errors", contains("Course Proposal with uuid = " + uuid + " cannot be approved, course proposal was already approved"));
     }
 
     @Test

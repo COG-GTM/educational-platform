@@ -39,7 +39,7 @@ public class CourseProposal implements AggregateRoot {
 
     public void approve() {
         if (status == CourseProposalStatus.APPROVED) {
-            return;
+            throw new CourseProposalAlreadyApprovedException(uuid);
         }
         this.status = CourseProposalStatus.APPROVED;
     }
