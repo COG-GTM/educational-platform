@@ -99,7 +99,7 @@ public class Course implements AggregateRoot {
 	}
 
 	public void updateRating(double value) {
-		rating = new CourseRating(value);
+		rating = new CourseRating(Math.round(value));
 	}
 
 	//todo how it works in concurrency
