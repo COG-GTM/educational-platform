@@ -36,12 +36,15 @@ public class CourseRepositoryTest {
 
 	@ParameterizedTest
 	@CsvSource({"2.49, 2.0", "2.5, 3.0", "1.5, 2.0", "0.0, 0.0"})
-	void handleCourseRatingRecalculatedEvent_roundedRatingPersisted(double rating, double expectedRating) {
+	void handleCourseRatingRecalculatedEvent_roundedRatingReplacesPersistedRating(double rating, double expectedRating) {
 		// given
 		var teacher = teacherRepository.save(new Teacher(new CreateTeacherCommand(TEACHER)));
 		var command = CreateCourseCommand.builder().name("name").description("description").build();
-		var course = courseRepository.save(new Course(command, teacher.getId()));
+		var course = new Course(command, teacher.getId());
+		course.updateRating(4.0);
+		courseRepository.saveAndFlush(course);
 		var uuid = course.toIdentity();
+		entityManager.clear();
 		var sut = new CourseRatingRecalculatedIntegrationEventHandler(new UpdateCourseRatingCommandHandler(courseRepository));
 		var event = new CourseRatingRecalculatedIntegrationEvent(uuid, rating);
 

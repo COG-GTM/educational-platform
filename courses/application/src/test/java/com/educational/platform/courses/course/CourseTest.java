@@ -44,7 +44,12 @@ public class CourseTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"0.49, 0.0", "0.5, 1.0", "0.51, 1.0"})
+    @CsvSource({
+            "0.49, 0.0",
+            "0.49999999999999994, 0.0", // Largest double below 0.5
+            "0.5, 1.0",
+            "0.51, 1.0"
+    })
     void updateRating_nearFirstHalfStar_storesNearestWholeStar(double rating, double expectedRating) {
         // given
         final CreateCourseCommand command = CreateCourseCommand.builder()
