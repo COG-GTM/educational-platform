@@ -43,19 +43,33 @@ public class CourseProposalTest {
     }
 
     @Test
-    void approve_courseProposalAlreadyApproved_courseProposalAlreadyApprovedException() {
+    void approve_courseProposalAlreadyApproved_remainsApproved() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
         final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
         final CourseProposal proposal = new CourseProposal(createCourseProposalCommand);
-        ReflectionTestUtils.setField(proposal, "id", 11);
-        ReflectionTestUtils.setField(proposal, "status", CourseProposalStatus.APPROVED);
+        proposal.approve();
 
         // when
-        final ThrowableAssert.ThrowingCallable sendToApprove = proposal::approve;
+        proposal.approve();
 
         // then
-        assertThatExceptionOfType(CourseProposalAlreadyApprovedException.class).isThrownBy(sendToApprove);
+        assertThat(proposal.toDTO()).isEqualTo(new CourseProposalDTO(uuid, CourseProposalStatusDTO.APPROVED));
+    }
+
+    @Test
+    void approve_declinedCourseProposal_approvedStatus() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(createCourseProposalCommand);
+        proposal.decline();
+
+        // when
+        proposal.approve();
+
+        // then
+        assertThat(proposal.toDTO()).isEqualTo(new CourseProposalDTO(uuid, CourseProposalStatusDTO.APPROVED));
     }
 
     @Test

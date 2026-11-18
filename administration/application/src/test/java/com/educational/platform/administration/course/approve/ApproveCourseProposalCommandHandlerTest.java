@@ -3,6 +3,7 @@ package com.educational.platform.administration.course.approve;
 import com.educational.platform.administration.course.CourseProposal;
 import com.educational.platform.administration.course.CourseProposalRepository;
 import com.educational.platform.administration.course.CourseProposalStatus;
+import com.educational.platform.administration.course.CourseProposalStatusDTO;
 import com.educational.platform.administration.course.create.CreateCourseProposalCommand;
 import com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent;
 import com.educational.platform.common.exception.ResourceNotFoundException;
@@ -23,7 +24,11 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -78,6 +83,24 @@ class ApproveCourseProposalCommandHandlerTest {
     }
 
     @Test
+    void handle_retriedApproval_savesAndPublishesAgain() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+        final CourseProposal proposal = new CourseProposal(new CreateCourseProposalCommand(uuid));
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(proposal));
+        sut.handle(command);
+
+        // when
+        sut.handle(command);
+
+        // then
+        assertThat(proposal.toDTO().status()).isEqualTo(CourseProposalStatusDTO.APPROVED);
+        verify(repository, times(2)).save(proposal);
+        verify(eventPublisher, times(2)).publishEvent(new CourseApprovedByAdminIntegrationEvent(uuid));
+    }
+
+    @Test
     void handle_invalidId_resourceNotFoundException() {
         // given
         final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
@@ -89,5 +112,7 @@ class ApproveCourseProposalCommandHandlerTest {
 
         // then
         assertThatExceptionOfType(ResourceNotFoundException.class).isThrownBy(handle);
+        verify(repository, never()).save(any(CourseProposal.class));
+        verifyNoInteractions(eventPublisher);
     }
 }
