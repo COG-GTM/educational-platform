@@ -43,4 +43,13 @@ public interface CourseReviewRepository extends JpaRepository<CourseReview, Inte
      */
     @Query("select count(cr) > 0 from CourseReview cr join com.educational.platform.course.reviews.reviewer.Reviewer r on cr.reviewer = r.id where cr.uuid = :uuid and r.username = :username")
     boolean isReviewer(@Param("uuid") UUID uuid, @Param("username") String username);
+
+    /**
+     * Checks if the course is already reviewed by the reviewer.
+     *
+     * @param course   reviewable course id.
+     * @param reviewer reviewer id.
+     * @return true if reviewed, false if not.
+     */
+    boolean existsByCourseAndReviewer(Integer course, Integer reviewer);
 }

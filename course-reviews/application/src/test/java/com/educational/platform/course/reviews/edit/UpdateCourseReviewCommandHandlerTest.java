@@ -46,7 +46,7 @@ public class UpdateCourseReviewCommandHandlerTest {
     @BeforeEach
     void setUp() {
         final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
-        courseReviewFactory = new CourseReviewFactory(validator, currentUserAsReviewer, reviewableCourseRepository);
+        courseReviewFactory = new CourseReviewFactory(validator, currentUserAsReviewer, reviewableCourseRepository, courseReviewRepository);
         sut = new UpdateCourseReviewCommandHandler(validator, courseReviewRepository);
     }
 

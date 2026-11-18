@@ -11,6 +11,7 @@ import java.util.UUID;
  * Represents Course Review domain model.
  */
 @Entity
+@Table(name = "course_review", uniqueConstraints = @UniqueConstraint(name = "course_review_reviewer_course_uk", columnNames = {"reviewer", "course"}))
 public class CourseReview implements AggregateRoot {
 
     @Id

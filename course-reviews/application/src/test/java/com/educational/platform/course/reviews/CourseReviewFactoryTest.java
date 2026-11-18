@@ -1,5 +1,7 @@
 package com.educational.platform.course.reviews;
 
+import com.educational.platform.common.exception.RelatedResourceIsNotResolvedException;
+import com.educational.platform.common.exception.UnprocessableEntityException;
 import com.educational.platform.course.reviews.course.ReviewableCourse;
 import com.educational.platform.course.reviews.course.ReviewableCourseRepository;
 import com.educational.platform.course.reviews.course.create.CreateReviewableCourseCommand;
@@ -24,6 +26,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,12 +40,15 @@ public class CourseReviewFactoryTest {
     @Mock
     private CurrentUserAsReviewer currentUserAsReviewer;
 
+    @Mock
+    private CourseReviewRepository courseReviewRepository;
+
     private CourseReviewFactory sut;
 
     @BeforeEach
     void setUp() {
         final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
-        sut = new CourseReviewFactory(validator, currentUserAsReviewer, reviewableCourseRepository);
+        sut = new CourseReviewFactory(validator, currentUserAsReviewer, reviewableCourseRepository, courseReviewRepository);
     }
 
     @Test
@@ -65,12 +73,72 @@ public class CourseReviewFactoryTest {
         final CourseReview courseReview = sut.createFrom(command);
 
         // then
-        // todo recheck course and reviewer references
         assertThat(courseReview)
                 .hasFieldOrPropertyWithValue("rating", new CourseRating(4.0))
-                .hasFieldOrPropertyWithValue("comment", new Comment("comment"));
+                .hasFieldOrPropertyWithValue("comment", new Comment("comment"))
+                .hasFieldOrPropertyWithValue("course", 11)
+                .hasFieldOrPropertyWithValue("reviewer", 22);
+        verify(courseReviewRepository).existsByCourseAndReviewer(11, 22);
     }
 
+    @Test
+    void createFrom_courseAlreadyReviewed_unprocessableEntityException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+
+        final ReviewableCourse correspondingReviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(uuid));
+        ReflectionTestUtils.setField(correspondingReviewableCourse, "id", 11);
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.of(correspondingReviewableCourse));
+
+        final Reviewer correspondingReviewer = new Reviewer(new CreateReviewerCommand("username"));
+        ReflectionTestUtils.setField(correspondingReviewer, "id", 22);
+        when(currentUserAsReviewer.userAsReviewer()).thenReturn(correspondingReviewer);
+
+        when(courseReviewRepository.existsByCourseAndReviewer(11, 22)).thenReturn(true);
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(UnprocessableEntityException.class, createAction);
+    }
+
+    @Test
+    void createFrom_courseNotFound_relatedResourceIsNotResolvedException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.empty());
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(RelatedResourceIsNotResolvedException.class, createAction);
+        verify(currentUserAsReviewer, never()).userAsReviewer();
+        verify(courseReviewRepository, never()).existsByCourseAndReviewer(anyInt(), anyInt());
+    }
+
+    @Test
+    void createFrom_reviewerNotFound_relatedResourceIsNotResolvedException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ReviewCourseCommand command = new ReviewCourseCommand(uuid, 4.0, "comment");
+
+        final ReviewableCourse correspondingReviewableCourse = new ReviewableCourse(new CreateReviewableCourseCommand(uuid));
+        ReflectionTestUtils.setField(correspondingReviewableCourse, "id", 11);
+        when(reviewableCourseRepository.findByOriginalCourseId(uuid)).thenReturn(Optional.of(correspondingReviewableCourse));
+
+        when(currentUserAsReviewer.userAsReviewer()).thenThrow(new RelatedResourceIsNotResolvedException("Reviewer cannot be found by username = username"));
+
+        // when
+        final Executable createAction = () -> sut.createFrom(command);
+
+        // then
+        assertThrows(RelatedResourceIsNotResolvedException.class, createAction);
+        verify(courseReviewRepository, never()).existsByCourseAndReviewer(anyInt(), anyInt());
+    }
 
     @Test
     void createFrom_courseIdIsNull_constraintViolationException() {
