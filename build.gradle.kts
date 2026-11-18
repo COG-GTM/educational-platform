@@ -26,7 +26,9 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
+            mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}") {
+                bomProperty("jackson-2-bom.version", rootProject.libs.versions.jackson2.get())
+            }
         }
     }
 }
