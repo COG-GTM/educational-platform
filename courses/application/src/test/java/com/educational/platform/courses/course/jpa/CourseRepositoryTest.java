@@ -77,8 +77,9 @@ public class CourseRepositoryTest {
 		assertThat(result.get()).hasFieldOrPropertyWithValue("name", "name").hasFieldOrPropertyWithValue("description", "description");
 	}
 
-	@Test
-	void recalculateRating_previouslyRatedCourse_persistedRatingReplacedAndOtherFieldsKept() {
+	@ParameterizedTest
+	@CsvSource({"2.49, 2.0", "0.0, 0.0"})
+	void recalculateRating_previouslyRatedCourse_persistedRatingReplacedAndOtherFieldsKept(double rating, double expectedRating) {
 		// given
 		var teacher = teacherRepository.save(new Teacher(new CreateTeacherCommand(TEACHER)));
 		var command = CreateCourseCommand.builder().name("name").description("description").build();
@@ -87,15 +88,18 @@ public class CourseRepositoryTest {
 		listener.handleCourseRatingRecalculatedEvent(new CourseRatingRecalculatedIntegrationEvent(courseId, 4.5));
 		entityManager.flush();
 		entityManager.clear();
+		assertThat(courseRepository.findByUuid(courseId)).hasValueSatisfying(reloaded ->
+				assertThat(reloaded).hasFieldOrPropertyWithValue("rating", new CourseRating(5.0)));
+		entityManager.clear();
 
 		// when
-		listener.handleCourseRatingRecalculatedEvent(new CourseRatingRecalculatedIntegrationEvent(courseId, 2.49));
+		listener.handleCourseRatingRecalculatedEvent(new CourseRatingRecalculatedIntegrationEvent(courseId, rating));
 		entityManager.flush();
 		entityManager.clear();
 
 		// then
 		assertThat(courseRepository.findByUuid(courseId)).hasValueSatisfying(reloaded -> assertThat(reloaded)
-				.hasFieldOrPropertyWithValue("rating", new CourseRating(2.0))
+				.hasFieldOrPropertyWithValue("rating", new CourseRating(expectedRating))
 				.hasFieldOrPropertyWithValue("name", "name")
 				.hasFieldOrPropertyWithValue("description", "description"));
 	}
