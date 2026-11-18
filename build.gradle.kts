@@ -24,6 +24,10 @@ subprojects {
         targetCompatibility = JavaVersion.VERSION_25
     }
 
+    configurations.all {
+        exclude(group = "javax.xml.bind", module = "jaxb-api")
+    }
+
     dependencyManagement {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")

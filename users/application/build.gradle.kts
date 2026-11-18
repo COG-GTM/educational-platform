@@ -7,8 +7,9 @@ dependencies {
     implementation("org.springframework.boot", "spring-boot-starter-validation")
     implementation("org.springframework.boot", "spring-boot-starter-security")
     implementation("org.springframework.boot", "spring-boot-starter-data-jpa")
-    implementation("io.jsonwebtoken", "jjwt", libs.versions.jsonwebtoken.get())
-    implementation("javax.xml.bind", "jaxb-api", libs.versions.jaxbApi.get())
+    implementation("io.jsonwebtoken", "jjwt-api", libs.versions.jsonwebtoken.get())
+    runtimeOnly("io.jsonwebtoken", "jjwt-impl", libs.versions.jsonwebtoken.get())
+    runtimeOnly("io.jsonwebtoken", "jjwt-jackson", libs.versions.jsonwebtoken.get())
     implementation("org.passay", "passay", libs.versions.passay.get())
 
     testImplementation("org.springframework.boot", "spring-boot-starter-test")
