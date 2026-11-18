@@ -1,6 +1,7 @@
 package com.educational.platform.administration.course.approve;
 
 import com.educational.platform.administration.course.CourseProposal;
+import com.educational.platform.administration.course.CourseProposalAlreadyApprovedException;
 import com.educational.platform.administration.course.CourseProposalRepository;
 import com.educational.platform.administration.course.CourseProposalStatus;
 import com.educational.platform.administration.course.create.CreateCourseProposalCommand;
@@ -23,7 +24,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -75,6 +79,25 @@ class ApproveCourseProposalCommandHandlerTest {
         final CourseApprovedByAdminIntegrationEvent event = eventArgument.getValue();
         assertThat(event)
                 .hasFieldOrPropertyWithValue("courseId", uuid);
+    }
+
+    @Test
+    void handle_courseProposalAlreadyApproved_courseProposalAlreadyApprovedException() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final ApproveCourseProposalCommand command = new ApproveCourseProposalCommand(uuid);
+        final CreateCourseProposalCommand createCourseProposalCommand = new CreateCourseProposalCommand(uuid);
+        final CourseProposal correspondingCourseProposal = new CourseProposal(createCourseProposalCommand);
+        ReflectionTestUtils.setField(correspondingCourseProposal, "status", CourseProposalStatus.APPROVED);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(correspondingCourseProposal));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(CourseProposalAlreadyApprovedException.class).isThrownBy(handle);
+        verify(repository, never()).save(any(CourseProposal.class));
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
