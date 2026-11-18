@@ -1,6 +1,7 @@
 package com.educational.platform.courses.course.approve;
 
 import com.educational.platform.administration.integration.event.CourseApprovedByAdminIntegrationEvent;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Component;
  * Event listener for {@link CourseApprovedByAdminIntegrationEvent}.
  */
 @Component
+@ConditionalOnProperty(name = "courses.in-process-handlers.enabled", havingValue = "true", matchIfMissing = true)
 public class CourseApprovedByAdminIntegrationEventHandler {
 
     private final ApproveCourseCommandHandler approveCourseCommandHandler;

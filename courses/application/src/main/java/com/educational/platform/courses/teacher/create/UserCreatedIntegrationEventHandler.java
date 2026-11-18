@@ -2,6 +2,7 @@ package com.educational.platform.courses.teacher.create;
 
 import com.educational.platform.users.integration.event.UserCreatedIntegrationEvent;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Component;
  */
 // todo should be transactional?
 @Component
+@ConditionalOnProperty(name = "courses.in-process-handlers.enabled", havingValue = "true", matchIfMissing = true)
 public class UserCreatedIntegrationEventHandler {
 
     private final CreateTeacherCommandHandler createTeacherCommandHandler;

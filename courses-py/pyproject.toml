@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "courses-py"
+version = "0.0.1"
+description = "Courses bounded context of the educational platform, as a standalone Python service (strangler-fig port of the Java `courses` module)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.30,<1",
+    "sqlalchemy>=2.0,<3",
+    "alembic>=1.13,<2",
+    "pydantic>=2.5,<3",
+    "PyJWT>=2.8,<3",
+    "pika>=1.3,<2",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8",
+    "httpx>=0.27",
+]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "types-pika",
+]
+
+[project.scripts]
+courses-py-consumer = "courses_py.integration_events.consumer:main"
+
+[tool.setuptools.packages.find]
+include = ["courses_py*"]
+
+[tool.pytest.ini_options]
+testpaths = ["courses_py/tests"]
+filterwarnings = [
+    "error::DeprecationWarning:courses_py.*",
+    # Tests sign with the Java module's default `secret-key`, which is shorter than PyJWT's recommended 32 bytes.
+    "ignore::jwt.warnings.InsecureKeyLengthWarning",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "courses_py.tests.*"
+disable_error_code = ["arg-type", "no-any-return"]
