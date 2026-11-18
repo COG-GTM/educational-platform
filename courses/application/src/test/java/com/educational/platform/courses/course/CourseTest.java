@@ -44,6 +44,24 @@ public class CourseTest {
     }
 
     @ParameterizedTest
+    @CsvSource({"0.49, 0.0", "0.5, 1.0", "0.51, 1.0"})
+    void updateRating_nearFirstHalfStar_storesNearestWholeStar(double rating, double expectedRating) {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course sut = new Course(command, TEACHER_ID);
+
+        // when
+        sut.updateRating(rating);
+
+        // then
+        assertThat(sut)
+                .hasFieldOrPropertyWithValue("rating", new CourseRating(expectedRating));
+    }
+
+    @ParameterizedTest
     @CsvSource({"4.5, 2.49, 2.0", "2.49, 4.5, 5.0", "4.5, 0.0, 0.0"})
     void updateRating_previousRating_replacedWithRoundedRating(double previousRating, double rating, double expectedRating) {
         // given
