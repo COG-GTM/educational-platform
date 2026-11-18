@@ -3,6 +3,8 @@ package com.educational.platform.courses.course.jpa;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 
@@ -52,20 +54,22 @@ public class CourseRepositoryTest {
 		assertThat(result.get()).hasFieldOrPropertyWithValue("name", "name").hasFieldOrPropertyWithValue("description", "description");
 	}
 
-	@Test
-	void recalculateRating_existingCourse_fractionalRatingPersisted() {
+	@ParameterizedTest
+	@CsvSource({"3.49, 3.0", "3.50, 4.0"})
+	void recalculateRating_existingCourse_roundedRatingPersisted(double rating, double expectedRating) {
 		var teacher = teacherRepository.save(new Teacher(new CreateTeacherCommand(TEACHER)));
 		var command = CreateCourseCommand.builder().name("name").description("description").build();
 		var course = courseRepository.save(new Course(command, teacher.getId()));
 		var courseId = course.toIdentity();
-		var listener = new CourseRatingRecalculatedIntegrationEventHandler(new UpdateCourseRatingCommandHandler(courseRepository));
+		var handler = new UpdateCourseRatingCommandHandler(courseRepository);
+		var listener = new CourseRatingRecalculatedIntegrationEventHandler(handler);
 
-		listener.handleCourseRatingRecalculatedEvent(new CourseRatingRecalculatedIntegrationEvent(courseId, 3.7));
+		listener.handleCourseRatingRecalculatedEvent(new CourseRatingRecalculatedIntegrationEvent(courseId, rating));
 		entityManager.flush();
 		entityManager.clear();
 
 		assertThat(courseRepository.findByUuid(courseId)).hasValueSatisfying(reloaded ->
-				assertThat(reloaded).hasFieldOrPropertyWithValue("rating", new CourseRating(3.7)));
+				assertThat(reloaded).hasFieldOrPropertyWithValue("rating", new CourseRating(expectedRating)));
 	}
 
 }
