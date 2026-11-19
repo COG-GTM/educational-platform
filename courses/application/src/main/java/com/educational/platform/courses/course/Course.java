@@ -104,8 +104,7 @@ public class Course implements AggregateRoot {
 
 	//todo how it works in concurrency
 	public void increaseNumberOfStudents() {
-		int enrolled = numberOfStudents.number();
-		numberOfStudents = new NumberOfStudents(enrolled++);
+		numberOfStudents = new NumberOfStudents(numberOfStudents.number() + 1);
 	}
 
 	public UUID toIdentity() {
