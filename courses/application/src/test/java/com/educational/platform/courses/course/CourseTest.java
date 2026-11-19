@@ -33,6 +33,43 @@ public class CourseTest {
     }
 
     @Test
+    void increaseNumberOfStudents_calledThreeTimes_countIncreasedByThree() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course sut = new Course(command, TEACHER_ID);
+
+        // when
+        sut.increaseNumberOfStudents();
+        sut.increaseNumberOfStudents();
+        sut.increaseNumberOfStudents();
+
+        // then
+        assertThat(sut)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(3));
+    }
+
+    @Test
+    void increaseNumberOfStudents_nonZeroCount_countIncreasedByOne() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course sut = new Course(command, TEACHER_ID);
+        ReflectionTestUtils.setField(sut, "numberOfStudents", new NumberOfStudents(7));
+
+        // when
+        sut.increaseNumberOfStudents();
+
+        // then
+        assertThat(sut)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(8));
+    }
+
+    @Test
     void approve_approvedStatus() {
         // given
         final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
@@ -126,6 +163,7 @@ public class CourseTest {
         assertThat(course)
                 .hasFieldOrPropertyWithValue("name", "name")
                 .hasFieldOrPropertyWithValue("description", "description")
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(0))
                 .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT)
                 .hasFieldOrPropertyWithValue("approvalStatus", ApprovalStatus.NOT_SENT_FOR_APPROVAL);
     }
