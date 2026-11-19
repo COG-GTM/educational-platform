@@ -9,6 +9,7 @@ import java.util.UUID;
  * Represents course enrollment domain model.
  */
 @Entity
+@Table(indexes = @Index(name = "course_enrollment_student_idx", columnList = "student"))
 public class CourseEnrollment implements AggregateRoot {
 
     @Id

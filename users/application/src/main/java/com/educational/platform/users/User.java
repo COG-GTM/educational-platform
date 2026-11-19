@@ -9,6 +9,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
 import java.util.Collections;
@@ -17,7 +18,7 @@ import java.util.Collections;
  * Represents User domain model.
  */
 @Entity
-@Table(name="custom_user")
+@Table(name="custom_user", indexes = @Index(name = "custom_user_username_idx", columnList = "username"))
 public class User implements AggregateRoot {
 
     @Id

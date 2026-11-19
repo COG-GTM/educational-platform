@@ -7,11 +7,14 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
 
 /**
  * Represents Reviewer domain model.
  */
 @Entity
+@Table(indexes = @Index(name = "reviewer_username_idx", columnList = "username"))
 public class Reviewer implements AggregateRoot {
 
     @Id
