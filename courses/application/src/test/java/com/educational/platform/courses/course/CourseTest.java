@@ -16,6 +16,23 @@ public class CourseTest {
     private static final Integer TEACHER_ID = 15;
 
     @Test
+    void increaseNumberOfStudents_countIncreasedByOne() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(command, TEACHER_ID);
+
+        // when
+        course.increaseNumberOfStudents();
+
+        // then
+        assertThat(course)
+                .hasFieldOrPropertyWithValue("numberOfStudents", new NumberOfStudents(1));
+    }
+
+    @Test
     void approve_approvedStatus() {
         // given
         final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
