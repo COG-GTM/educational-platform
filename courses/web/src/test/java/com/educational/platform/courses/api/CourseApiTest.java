@@ -51,6 +51,23 @@ public class CourseApiTest {
     }
 
     @Test
+    @Sql(scripts = "classpath:insert_data.sql", statements =
+            "UPDATE course SET approval_status = 'NOT_SENT_FOR_APPROVAL', publish_status = 'DRAFT'")
+    void publish_notSentForApprovalCourse_conflict() {
+        // given
+        var token = SignUpHelper.signUpTeacher();
+
+        // when / then
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + token)
+                .when()
+                .put("/courses/{uuid}/publish-status", UUID.fromString("123e4567-e89b-12d3-a456-426655440001"))
+                .then()
+                .statusCode(HttpStatus.CONFLICT.value());
+    }
+
+    @Test
     void publish_alreadyApprovedCourse_noContent() {
         var token = SignUpHelper.signUpTeacher();
 
