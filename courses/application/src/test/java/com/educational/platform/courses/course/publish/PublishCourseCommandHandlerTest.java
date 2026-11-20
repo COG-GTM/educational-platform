@@ -22,6 +22,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -75,6 +77,69 @@ public class PublishCourseCommandHandlerTest {
                 .hasFieldOrPropertyWithValue("publishStatus", PublishStatus.PUBLISHED);
     }
 
+
+    @Test
+    void handle_unapprovedCourse_courseCannotBePublishedExceptionAndCourseNotSaved() {
+        // given
+        final UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426655440001");
+        final PublishCourseCommand command = new PublishCourseCommand(uuid);
+        final CreateCourseCommand createCourseCommand = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course course = new Course(createCourseCommand, 15);
+        course.sendToApprove();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(course));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(handle);
+        verify(repository, never()).save(any(Course.class));
+        assertThat(course).hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT);
+    }
+
+    @Test
+    void handle_notSentForApprovalCourse_courseCannotBePublishedExceptionAndCourseNotSaved() {
+        // given
+        final UUID uuid = UUID.randomUUID();
+        final PublishCourseCommand command = new PublishCourseCommand(uuid);
+        final Course course = new Course(CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build(), 15);
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(course));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(handle);
+        verify(repository, never()).save(any(Course.class));
+        assertThat(course).hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT);
+    }
+
+    @Test
+    void handle_declinedCourse_courseCannotBePublishedExceptionAndCourseNotSaved() {
+        // given
+        final UUID uuid = UUID.randomUUID();
+        final PublishCourseCommand command = new PublishCourseCommand(uuid);
+        final Course course = new Course(CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build(), 15);
+        course.decline();
+        when(repository.findByUuid(uuid)).thenReturn(Optional.of(course));
+
+        // when
+        final ThrowableAssert.ThrowingCallable handle = () -> sut.handle(command);
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(handle);
+        verify(repository, never()).save(any(Course.class));
+        assertThat(course).hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT);
+    }
 
     @Test
     void handle_invalidId_resourceNotFoundException() {

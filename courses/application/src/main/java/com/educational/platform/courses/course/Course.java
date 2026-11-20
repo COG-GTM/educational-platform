@@ -87,7 +87,7 @@ public class Course implements AggregateRoot {
 	}
 
 	public void publish() {
-		if (approvalStatus == ApprovalStatus.DECLINED) {
+		if (approvalStatus != ApprovalStatus.APPROVED) {
 			throw new CourseCannotBePublishedException(uuid);
 		}
 
