@@ -90,6 +90,43 @@ public class CourseTest {
 
         // then
         assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(publish);
+        assertThat(course).hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT);
+    }
+
+    @Test
+    void publish_waitingForApprovalCourse_courseCannotBePublishedException() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course sut = new Course(command, TEACHER_ID);
+        sut.sendToApprove();
+
+        // when
+        final ThrowableAssert.ThrowingCallable publish = sut::publish;
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(publish);
+        assertThat(sut).hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT);
+    }
+
+    @Test
+    void publish_declinedCourse_courseCannotBePublishedException() {
+        // given
+        final CreateCourseCommand command = CreateCourseCommand.builder()
+                .name("name")
+                .description("description")
+                .build();
+        final Course sut = new Course(command, TEACHER_ID);
+        sut.decline();
+
+        // when
+        final ThrowableAssert.ThrowingCallable publish = sut::publish;
+
+        // then
+        assertThatExceptionOfType(CourseCannotBePublishedException.class).isThrownBy(publish);
+        assertThat(sut).hasFieldOrPropertyWithValue("publishStatus", PublishStatus.DRAFT);
     }
 
     @Test
