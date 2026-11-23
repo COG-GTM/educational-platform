@@ -379,6 +379,8 @@ Communication between bounded contexts is performed via Spring's `ApplicationEve
 ### Run application
 `./gradlew bootRun`
 
+JWTs are signed with HS256 using `security.jwt.token.secret-key` (env `SECURITY_JWT_TOKEN_SECRET_KEY`), which must be at least 32 bytes. If it is not set, a random key is generated at startup, so tokens are invalidated on restart and are not shared between instances; set it for any multi-instance or persistent deployment.
+
 ### Sign up in educational platform
 ```http
 POST http://127.0.0.1:8080/users/sign-up
