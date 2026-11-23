@@ -28,5 +28,12 @@ subprojects {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
         }
+        dependencies {
+            dependencySet("org.codehaus.groovy:${rootProject.libs.versions.groovy3.get()}") {
+                entry("groovy")
+                entry("groovy-json")
+                entry("groovy-xml")
+            }
+        }
     }
 }
