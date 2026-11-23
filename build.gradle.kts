@@ -28,5 +28,10 @@ subprojects {
         imports {
             mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
         }
+        dependencies {
+            // CVE-2023-51074: json-path < 2.9.0
+            dependency("com.jayway.jsonpath:json-path:${rootProject.libs.versions.jsonPath.get()}")
+            dependency("com.jayway.jsonpath:json-path-assert:${rootProject.libs.versions.jsonPath.get()}")
+        }
     }
 }
