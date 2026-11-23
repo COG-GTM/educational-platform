@@ -26,7 +26,17 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}")
+            mavenBom("org.springframework.boot:spring-boot-dependencies:${rootProject.libs.versions.spring.get()}") {
+                bomProperty("slf4j.version", rootProject.libs.versions.slf4j.get())
+            }
+        }
+    }
+
+    dependencies {
+        constraints {
+            add("implementation", "org.slf4j:slf4j-api:${rootProject.libs.versions.slf4j.get()}") {
+                because("SNYK-JAVA-ORGSLF4J-5942503 (CWE-117) is fixed in slf4j-api 2.0.9")
+            }
         }
     }
 }
