@@ -42,6 +42,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RestApiErrorResponse'
+  /courses/search:
+    get:
+      tags:
+        - Courses
+      summary: Search courses
+      description: Search courses whose name or description contains the keyword
+      operationId: searchCourses
+      parameters:
+        - name: keyword
+          in: query
+          description: Keyword matched as a substring against course name and description
+          required: true
+          schema:
+            type: string
+          example: java
+      responses:
+        '200':
+          description: Matching courses (empty array if none match).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CourseLightResponse'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestApiErrorResponse'
   /courses/{courseUuid}/publish-status:
     put:
       tags:
@@ -110,6 +140,33 @@ components:
           format: uuid
           example: 123e4567-e89b-12d3-a456-426655440001
           description: UUID of the company.
+    CourseLightResponse:
+      description: Course search result model
+      type: object
+      required:
+        - uuid
+        - name
+        - description
+        - numberOfStudents
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426655440001
+          description: UUID of the course.
+        name:
+          type: string
+          description: Course name
+          example: Java 11 for beginners
+        description:
+          type: string
+          description: Course description
+          example: Course created for Java developers
+        numberOfStudents:
+          type: integer
+          format: int32
+          description: Number of enrolled students
+          example: 0
     RestApiError:
       type: object
       required:

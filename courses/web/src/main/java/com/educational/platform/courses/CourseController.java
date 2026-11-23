@@ -1,10 +1,13 @@
 package com.educational.platform.courses;
 
 import com.educational.platform.courses.course.CourseCannotBePublishedException;
+import com.educational.platform.courses.course.CourseLightDTO;
 import com.educational.platform.courses.course.create.CreateCourseCommand;
 import com.educational.platform.courses.course.create.CreateCourseCommandHandler;
 import com.educational.platform.courses.course.publish.PublishCourseCommand;
 import com.educational.platform.courses.course.publish.PublishCourseCommandHandler;
+import com.educational.platform.courses.course.query.SearchCourseQuery;
+import com.educational.platform.courses.course.query.SearchCourseQueryHandler;
 import com.educational.platform.web.handler.ErrorResponse;
 
 import org.springframework.http.HttpStatus;
@@ -13,6 +16,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
@@ -27,10 +31,12 @@ public class CourseController {
 
     private final CreateCourseCommandHandler createCourseCommandHandler;
     private final PublishCourseCommandHandler publishCourseCommandHandler;
+    private final SearchCourseQueryHandler searchCourseQueryHandler;
 
-    public CourseController(CreateCourseCommandHandler createCourseCommandHandler, PublishCourseCommandHandler publishCourseCommandHandler) {
+    public CourseController(CreateCourseCommandHandler createCourseCommandHandler, PublishCourseCommandHandler publishCourseCommandHandler, SearchCourseQueryHandler searchCourseQueryHandler) {
         this.createCourseCommandHandler = createCourseCommandHandler;
         this.publishCourseCommandHandler = publishCourseCommandHandler;
+        this.searchCourseQueryHandler = searchCourseQueryHandler;
     }
 
     @PostMapping(consumes = APPLICATION_JSON_VALUE, produces = APPLICATION_JSON_VALUE)
@@ -42,6 +48,11 @@ public class CourseController {
                 .build();
 
         return new CreatedCourseResponse(createCourseCommandHandler.handle(command));
+    }
+
+    @GetMapping(value = "/search", produces = APPLICATION_JSON_VALUE)
+    List<CourseLightDTO> search(@RequestParam("keyword") String keyword) {
+        return searchCourseQueryHandler.handle(new SearchCourseQuery(keyword));
     }
 
     @PutMapping(value = "/{uuid}/publish-status", produces = APPLICATION_JSON_VALUE)
