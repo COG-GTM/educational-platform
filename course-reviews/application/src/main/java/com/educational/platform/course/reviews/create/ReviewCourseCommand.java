@@ -9,7 +9,7 @@ import java.util.UUID;
 /**
  * Review Course Command.
  */
-public record ReviewCourseCommand(@NotNull UUID courseId, @Max(5) @PositiveOrZero @NotNull Double rating,
+public record ReviewCourseCommand(@NotNull UUID courseId, @Max(10) @PositiveOrZero @NotNull Double rating,
                                   String comment) {
 
 }
