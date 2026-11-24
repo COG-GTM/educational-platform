@@ -69,7 +69,7 @@ class ReviewCourseCommandHandlerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(doubles = {0.0, 4.5, 5.0})
+    @ValueSource(doubles = {0.0, 4.5, 4.999999999999999, 5.0})
     void handle_validRating_savesReviewAndReturnsItsIdentifier(double rating) {
         // given
         var course = new ReviewableCourse(new CreateReviewableCourseCommand(COURSE_ID));
@@ -94,7 +94,7 @@ class ReviewCourseCommandHandlerTest {
 
     @ParameterizedTest
     @NullSource
-    @ValueSource(doubles = {-0.01, 5.01, 6.0})
+    @ValueSource(doubles = {-0.01, -Double.MIN_VALUE, 5.000000000000001, 5.01, 6.0})
     void handle_invalidRating_rejectsBeforeLookupOrSave(Double rating) {
         // given
         var command = new ReviewCourseCommand(COURSE_ID, rating, "comment");
